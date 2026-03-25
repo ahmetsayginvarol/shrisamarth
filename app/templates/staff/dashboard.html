@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard · SHRISAMARTH{% endblock %}
+
+{% block content %}
+<header class="topbar">
+    <div class="brand">
+        <span class="brand-mark">श्री</span>
+        <div>
+            <div class="brand-name">SHRISAMARTH</div>
+            <div class="brand-sub">{{ role|capitalize }} Portal</div>
+        </div>
+    </div>
+    <div class="topbar-right">
+        <span class="muted">{{ current_user.full_name }}</span>
+        <a href="{{ url_for('auth.logout') }}" class="btn btn-ghost">Sign out</a>
+    </div>
+</header>
+
+{% if voyage %}
+<div class="voyage-bar">
+    <div>
+        <div class="meta-label">Voyage</div>
+        <div class="route-cities">{{ voyage.origin }} <span class="route-arrow">—</span> {{ voyage.destination }}</div>
+    </div>
+    <div class="voyage-meta">
+        <div class="meta-item">
+            <div class="meta-label">Departure</div>
+            <div class="meta-value">{{ voyage.departure_at.strftime('%d %b · %H:%M') }}</div>
+        </div>
+        <div class="meta-item">
+            <div class="meta-label">Bus</div>
+            <div class="meta-value mono">{{ voyage.bus.registration }}</div>
+        </div>
+        <div class="meta-item">
+            <div class="meta-label">Occupancy</div>
+            <div class="meta-value">{{ seat_map|length }} / {{ voyage.bus.total_seats }}</div>
+        </div>
+    </div>
+</div>
+
+<main class="staff-main">
+    <section class="seat-section">
+        <h2 class="serif">Seat Map</h2>
+        <div class="bus" id="seatMap">
+            <div class="bus-front"><div class="steering"></div><span class="muted">Front · Door</span></div>
+
+            {% set rows = [
+                ['D','C','B','A'], ['F','E','G','H'],
+                ['2','1','3','4'], ['6','5','7','8'],
+                ['10','9','11','12'], ['14','13','15','16'],
+                ['18','17','19','20'], ['22','21','23','24'],
+                ['26','25','27','28'], ['30','29','31','32'],
+                ['34','33','35','36']
+            ] %}
+
+            {% for row in rows %}
+            <div class="seat-row">
+                {% for seat_id in row %}
+                    {% set b = seat_map.get(seat_id) %}
+                    <div class="seat
+                        {% if b %}booked-{{ b.gender|lower }}{% endif %}"
+                        data-seat="{{ seat_id }}"
+                        title="{% if b %}{{ b.passenger_name }}{% else %}Available{% endif %}">
+                        {{ seat_id }}
+                    </div>
+                    {% if loop.index == 2 %}<div class="aisle"></div>{% endif %}
+                {% endfor %}
+            </div>
+            {% endfor %}
+
+            <div class="seat-row back-row">
+                {% for seat_id in ['37','38','39','40','41'] %}
+                    {% set b = seat_map.get(seat_id) %}
+                    <div class="seat {% if b %}booked-{{ b.gender|lower }}{% endif %}"
+                         data-seat="{{ seat_id }}"
+                         title="{% if b %}{{ b.passenger_name }}{% else %}Available{% endif %}">
+                        {{ seat_id }}
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </section>
+
+    <aside class="side-panel">
+        <h3 class="serif">Manifest</h3>
+        {% if seat_map %}
+            <div class="manifest-list">
+                {% for seat_id, b in seat_map.items() %}
+                <div class="manifest-item">
+                    <div class="manifest-seat">{{ seat_id }}</div>
+                    <div>
+                        <div class="manifest-name">{{ b.passenger_name }}</div>
+                        <div class="manifest-sub">{{ b.passenger_phone }} · {{ b.boarding_point }} → {{ b.dropping_point }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="muted">No bookings yet for this voyage.</p>
+        {% endif %}
+    </aside>
+</main>
+{% else %}
+<div class="empty">
+    <h2 class="serif">No scheduled voyages</h2>
+    <p class="muted">An admin needs to create a voyage to see the dashboard.</p>
+</div>
+{% endif %}
+{% endblock %}
