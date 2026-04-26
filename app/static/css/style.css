@@ -86,3 +86,67 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
 
 .empty { padding: 80px; text-align: center; }
 .empty h2 { font-size: 32px; margin-bottom: 8px; }
+
+/* ===== Seat section header & legend ===== */
+.seat-section-header { width: 100%; max-width: 380px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.legend { display: flex; gap: 12px; font-size: 11px; color: var(--muted); }
+.legend-item { display: flex; align-items: center; gap: 5px; }
+.legend-swatch { width: 11px; height: 11px; border-radius: 3px; border: 1px solid var(--line); }
+.legend-swatch.available { background: var(--cream); }
+.legend-swatch.booked-m { background: var(--male); border-color: var(--male); }
+.legend-swatch.booked-f { background: var(--female); border-color: var(--female); }
+
+/* ===== Seat states ===== */
+.seat.window { box-shadow: inset 3px 0 0 var(--marigold); }
+.seat.selected { background: var(--gold); border-color: var(--marigold); transform: translateY(-3px); box-shadow: 0 0 0 3px rgba(212,168,76,0.25), 0 8px 16px -4px rgba(200,118,26,0.4); }
+
+/* ===== Side panel views ===== */
+.panel-view.hidden { display: none; }
+.panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.panel-header h3 { font-size: 22px; }
+.seat-badge { font-family: 'JetBrains Mono', monospace; background: var(--ink); color: var(--cream); padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+
+/* ===== Empty state ===== */
+.empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+.empty-state .serif { display: block; font-size: 28px; color: var(--ink); margin-bottom: 10px; }
+.empty-state p { font-size: 13px; max-width: 240px; margin: 0 auto; }
+
+/* ===== Form rows ===== */
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-select { width: 100%; padding: 11px 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--cream); font-family: inherit; font-size: 14px; color: var(--ink); }
+.form-select:focus { outline: none; border-color: var(--marigold); box-shadow: 0 0 0 3px rgba(200,118,26,0.12); }
+
+/* ===== Gender choice ===== */
+.gender-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.gender-btn { padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--cream); cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.gender-btn input[type="radio"] { display: none; }
+.gender-btn:has(input:checked) { background: var(--ink); color: var(--cream); border-color: var(--ink); }
+.gender-dot { width: 8px; height: 8px; border-radius: 50%; }
+.gender-dot.male-dot { background: var(--male); }
+.gender-dot.female-dot { background: var(--female); }
+.gender-btn:has(input:checked) .gender-dot { background: var(--cream); }
+
+/* ===== Warning ===== */
+.warning { padding: 12px 14px; background: rgba(200,118,26,0.08); border-left: 3px solid var(--marigold); border-radius: 4px; font-size: 12px; color: var(--ink-2); margin-bottom: 16px; }
+.warning.hidden { display: none; }
+.warning strong { color: var(--marigold); }
+
+/* ===== Form actions ===== */
+.form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.form-actions .btn { width: auto; flex: 0 0 auto; }
+.btn-danger { background: var(--ruby); color: var(--cream); }
+.btn-danger:hover { background: var(--ink); }
+
+/* ===== Passenger details card ===== */
+.passenger-card { padding: 4px 0; }
+.passenger-name { font-family: 'Instrument Serif', serif; font-size: 24px; line-height: 1.1; margin-bottom: 4px; }
+.passenger-details { margin-top: 18px; display: grid; gap: 8px; }
+.detail-row { display: flex; justify-content: space-between; font-size: 13px; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+.detail-row:last-child { border-bottom: none; }
+
+/* ===== Toast ===== */
+.toast { position: fixed; bottom: 30px; right: 30px; background: var(--ink); color: var(--cream); padding: 14px 20px; border-radius: 8px; font-size: 13px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); opacity: 0; transform: translateY(20px); transition: all 0.3s; z-index: 200; }
+.toast.show { opacity: 1; transform: translateY(0); }
+
+/* ===== Side panel container ===== */
+.side-panel { padding: 28px 32px; overflow-y: auto; }

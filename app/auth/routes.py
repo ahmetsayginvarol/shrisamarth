@@ -28,7 +28,6 @@ def login():
 
         login_user(user, remember=form.remember_me.data)
 
-        # Redirect to wherever they were trying to go, or to their dashboard
         next_page = request.args.get('next')
         if not next_page or urlparse(next_page).netloc != '':
             next_page = url_for('staff.dashboard')

@@ -33,14 +33,26 @@
         </div>
         <div class="meta-item">
             <div class="meta-label">Occupancy</div>
-            <div class="meta-value">{{ seat_map|length }} / {{ voyage.bus.total_seats }}</div>
+            <div class="meta-value"><span id="occupancyCount">{{ seat_map|length }}</span> / {{ voyage.bus.total_seats }}</div>
+        </div>
+        <div class="meta-item">
+            <div class="meta-label">Base Fare</div>
+            <div class="meta-value">₹ {{ voyage.base_fare }}</div>
         </div>
     </div>
 </div>
 
-<main class="staff-main">
+<main class="staff-main" data-voyage-id="{{ voyage.id }}" data-base-fare="{{ voyage.base_fare }}">
     <section class="seat-section">
-        <h2 class="serif">Seat Map</h2>
+        <div class="seat-section-header">
+            <h2 class="serif">Seat Map</h2>
+            <div class="legend">
+                <span class="legend-item"><span class="legend-swatch available"></span> Open</span>
+                <span class="legend-item"><span class="legend-swatch booked-m"></span> Male</span>
+                <span class="legend-item"><span class="legend-swatch booked-f"></span> Female</span>
+            </div>
+        </div>
+
         <div class="bus" id="seatMap">
             <div class="bus-front"><div class="steering"></div><span class="muted">Front · Door</span></div>
 
@@ -58,9 +70,10 @@
                 {% for seat_id in row %}
                     {% set b = seat_map.get(seat_id) %}
                     <div class="seat
+                        {% if seat_id in window_seats %}window{% endif %}
                         {% if b %}booked-{{ b.gender|lower }}{% endif %}"
                         data-seat="{{ seat_id }}"
-                        title="{% if b %}{{ b.passenger_name }}{% else %}Available{% endif %}">
+                        title="{% if b %}{{ b.passenger_name }}{% else %}Seat {{ seat_id }}{% endif %}">
                         {{ seat_id }}
                     </div>
                     {% if loop.index == 2 %}<div class="aisle"></div>{% endif %}
@@ -71,9 +84,11 @@
             <div class="seat-row back-row">
                 {% for seat_id in ['37','38','39','40','41'] %}
                     {% set b = seat_map.get(seat_id) %}
-                    <div class="seat {% if b %}booked-{{ b.gender|lower }}{% endif %}"
-                         data-seat="{{ seat_id }}"
-                         title="{% if b %}{{ b.passenger_name }}{% else %}Available{% endif %}">
+                    <div class="seat
+                        {% if seat_id in window_seats %}window{% endif %}
+                        {% if b %}booked-{{ b.gender|lower }}{% endif %}"
+                        data-seat="{{ seat_id }}"
+                        title="{% if b %}{{ b.passenger_name }}{% else %}Seat {{ seat_id }}{% endif %}">
                         {{ seat_id }}
                     </div>
                 {% endfor %}
@@ -81,23 +96,120 @@
         </div>
     </section>
 
-    <aside class="side-panel">
-        <h3 class="serif">Manifest</h3>
-        {% if seat_map %}
-            <div class="manifest-list">
-                {% for seat_id, b in seat_map.items() %}
-                <div class="manifest-item">
-                    <div class="manifest-seat">{{ seat_id }}</div>
-                    <div>
-                        <div class="manifest-name">{{ b.passenger_name }}</div>
-                        <div class="manifest-sub">{{ b.passenger_phone }} · {{ b.boarding_point }} → {{ b.dropping_point }}</div>
+    <aside class="side-panel" id="sidePanel">
+        <!-- Empty state -->
+        <div class="panel-view" id="panel-empty">
+            <div class="empty-state">
+                <span class="serif">Select a seat</span>
+                <p>Tap any open seat to begin a booking, or a booked seat to view the passenger.</p>
+            </div>
+        </div>
+
+        <!-- Booking form -->
+        <div class="panel-view hidden" id="panel-booking">
+            <div class="panel-header">
+                <h3 class="serif">New Booking</h3>
+                <span class="seat-badge">Seat <span id="bookingSeatLabel">—</span></span>
+            </div>
+
+            <div class="warning hidden" id="genderWarning">
+                <strong>Heads up:</strong>
+                <span id="genderWarningText"></span>
+            </div>
+
+            <form id="bookingForm">
+                <input type="hidden" name="voyage_id" value="{{ voyage.id }}">
+                <input type="hidden" name="seat_id" id="formSeatId">
+                <input type="hidden" name="confirm_gender_conflict" id="confirmConflict" value="no">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <div class="form-group">
+                    <label class="form-label">Passenger Name</label>
+                    <input type="text" name="passenger_name" class="form-input" required>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Contact</label>
+                        <input type="text" name="passenger_phone" class="form-input" placeholder="+91 98XXX XXXXX" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Gender</label>
+                        <div class="gender-choice">
+                            <label class="gender-btn">
+                                <input type="radio" name="gender" value="M" required>
+                                <span class="gender-dot male-dot"></span> Male
+                            </label>
+                            <label class="gender-btn">
+                                <input type="radio" name="gender" value="F">
+                                <span class="gender-dot female-dot"></span> Female
+                            </label>
+                        </div>
                     </div>
                 </div>
-                {% endfor %}
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Boarding</label>
+                        <select name="boarding_point" class="form-select" required>
+                            <option value="Dadar">Dadar</option>
+                            <option value="Andheri">Andheri</option>
+                            <option value="Borivali">Borivali</option>
+                            <option value="Thane">Thane</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Dropping</label>
+                        <select name="dropping_point" class="form-select" required>
+                            <option value="Shivajinagar">Shivajinagar</option>
+                            <option value="Swargate">Swargate</option>
+                            <option value="Katraj">Katraj</option>
+                            <option value="Hinjewadi">Hinjewadi</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Fare (₹)</label>
+                        <input type="number" name="fare" class="form-input" value="{{ voyage.base_fare }}" min="0" step="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Advance (₹)</label>
+                        <input type="number" name="advance_paid" class="form-input" value="0" min="0" step="1">
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-ghost" onclick="closePanel()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Confirm Booking</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Passenger details -->
+        <div class="panel-view hidden" id="panel-details">
+            <div class="panel-header">
+                <h3 class="serif">Passenger</h3>
+                <span class="seat-badge">Seat <span id="detailsSeatLabel">—</span></span>
             </div>
-        {% else %}
-            <p class="muted">No bookings yet for this voyage.</p>
-        {% endif %}
+            <div class="passenger-card">
+                <div class="passenger-name" id="detailsName">—</div>
+                <div class="muted" id="detailsPhone">—</div>
+                <div class="passenger-details">
+                    <div class="detail-row"><span class="muted">Boarding</span> <span id="detailsBoarding">—</span></div>
+                    <div class="detail-row"><span class="muted">Dropping</span> <span id="detailsDropping">—</span></div>
+                    <div class="detail-row"><span class="muted">Fare</span> <span id="detailsFare">—</span></div>
+                    <div class="detail-row"><span class="muted">Advance</span> <span id="detailsAdvance">—</span></div>
+                    <div class="detail-row"><span class="muted">Balance</span> <span id="detailsBalance">—</span></div>
+                    <div class="detail-row"><span class="muted">Booking ID</span> <span class="mono" id="detailsCode">—</span></div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-ghost" onclick="closePanel()">Close</button>
+                    <button type="button" class="btn btn-danger" id="cancelBookingBtn">Cancel Booking</button>
+                </div>
+            </div>
+        </div>
     </aside>
 </main>
 {% else %}
@@ -106,4 +218,8 @@
     <p class="muted">An admin needs to create a voyage to see the dashboard.</p>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 {% endblock %}

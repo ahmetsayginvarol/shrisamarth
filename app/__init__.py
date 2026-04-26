@@ -3,7 +3,7 @@ from flask import Flask, redirect, url_for
 from flask_login import current_user
 
 from config import Config
-from app.extensions import db, migrate, login_manager, bcrypt, socketio, babel
+from app.extensions import db, migrate, login_manager, bcrypt, socketio, babel, csrf
 
 
 def create_app(config_class=Config):
@@ -20,6 +20,7 @@ def create_app(config_class=Config):
     bcrypt.init_app(app)
     socketio.init_app(app)
     babel.init_app(app)
+    csrf.init_app(app)
 
     # Register blueprints
     from app.auth.routes import auth_bp
