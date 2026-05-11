@@ -1,8 +1,8 @@
-"""initial schema
+"""initial schema with all fields
 
-Revision ID: 443a95dd051b
+Revision ID: 13a79cb6165c
 Revises: 
-Create Date: 2026-03-25 19:09:21.007039
+Create Date: 2026-05-11 18:00:38.747068
 
 """
 from alembic import op
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '443a95dd051b'
+revision = '13a79cb6165c'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -21,10 +21,12 @@ def upgrade():
     op.create_table('buses',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('registration', sa.String(length=20), nullable=False),
+    sa.Column('name', sa.String(length=80), nullable=True),
     sa.Column('layout_name', sa.String(length=50), nullable=True),
     sa.Column('total_seats', sa.Integer(), nullable=True),
     sa.Column('is_active', sa.Boolean(), nullable=True),
     sa.Column('notes', sa.Text(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('registration')
     )
@@ -49,10 +51,18 @@ def upgrade():
     sa.Column('origin', sa.String(length=80), nullable=False),
     sa.Column('destination', sa.String(length=80), nullable=False),
     sa.Column('departure_at', sa.DateTime(), nullable=False),
+    sa.Column('arrival_at', sa.DateTime(), nullable=True),
     sa.Column('base_fare', sa.Numeric(precision=10, scale=2), nullable=False),
     sa.Column('driver_id', sa.Integer(), nullable=True),
     sa.Column('status', sa.String(length=20), nullable=True),
+    sa.Column('notes', sa.Text(), nullable=True),
+    sa.Column('cancelled_at', sa.DateTime(), nullable=True),
+    sa.Column('cancelled_by_id', sa.Integer(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=True),
+    sa.Column('created_by_id', sa.Integer(), nullable=True),
     sa.ForeignKeyConstraint(['bus_id'], ['buses.id'], ),
+    sa.ForeignKeyConstraint(['cancelled_by_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['created_by_id'], ['users.id'], ),
     sa.ForeignKeyConstraint(['driver_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )

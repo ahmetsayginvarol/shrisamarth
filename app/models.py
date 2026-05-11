@@ -46,17 +46,18 @@ class Bus(db.Model):
     __tablename__ = 'buses'
 
     id = db.Column(db.Integer, primary_key=True)
-    registration = db.Column(db.String(20), unique=True, nullable=False)  # MH-12-DK-4721
-    layout_name = db.Column(db.String(50), default='shrisamarth_49')      # which seat layout to use
+    registration = db.Column(db.String(20), unique=True, nullable=False)
+    name = db.Column(db.String(80), nullable=True)  # e.g. "Pune Express 1"
+    layout_name = db.Column(db.String(50), default='shrisamarth_49')
     total_seats = db.Column(db.Integer, default=49)
     is_active = db.Column(db.Boolean, default=True)
-    notes = db.Column(db.Text)
+    notes = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     voyages = db.relationship('Voyage', backref='bus', lazy=True)
 
     def __repr__(self):
         return f'<Bus {self.registration}>'
-
 
 class Voyage(db.Model):
     __tablename__ = 'voyages'
@@ -66,20 +67,41 @@ class Voyage(db.Model):
     origin = db.Column(db.String(80), nullable=False)
     destination = db.Column(db.String(80), nullable=False)
     departure_at = db.Column(db.DateTime, nullable=False, index=True)
+    arrival_at = db.Column(db.DateTime, nullable=True)
     base_fare = db.Column(db.Numeric(10, 2), nullable=False, default=0)
     driver_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    status = db.Column(db.String(20), default='scheduled')  # scheduled, departed, completed, cancelled
+    status = db.Column(db.String(20), default='scheduled')
+    # status values: scheduled, departed, completed, cancelled
+    notes = db.Column(db.Text, nullable=True)
+    cancelled_at = db.Column(db.DateTime, nullable=True)
+    cancelled_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
 
     driver = db.relationship('User', foreign_keys=[driver_id])
-    bookings = db.relationship('Booking', backref='voyage', lazy=True, cascade='all, delete-orphan')
+    cancelled_by = db.relationship('User', foreign_keys=[cancelled_by_id])
+    created_by = db.relationship('User', foreign_keys=[created_by_id])
+    bookings = db.relationship('Booking', backref='voyage', lazy=True,
+                               cascade='all, delete-orphan')
 
     @property
     def seats_booked(self):
-        return Booking.query.filter_by(voyage_id=self.id, status='confirmed').count()
+        return Booking.query.filter_by(
+            voyage_id=self.id, status='confirmed'
+        ).count()
+
+    @property
+    def is_cancellable(self):
+        return self.status == 'scheduled'
+
+    @property
+    def occupancy_pct(self):
+        if not self.bus or self.bus.total_seats == 0:
+            return 0
+        return round((self.seats_booked / self.bus.total_seats) * 100)
 
     def __repr__(self):
         return f'<Voyage {self.origin}→{self.destination} {self.departure_at}>'
-
 
 # ============================================================
 # BOOKINGS
