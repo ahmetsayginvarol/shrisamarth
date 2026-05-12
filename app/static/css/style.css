@@ -319,3 +319,4 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
 
 /* ===== Admin form width ===== */
 .admin-form { max-width: 600px; }
+.voyage-picker { font-size: 13px; cursor: pointer; min-width: 260px; }

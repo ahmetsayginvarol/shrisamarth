@@ -23,26 +23,45 @@ def restrict_to_staff():
 
 @staff_bp.route('/')
 @staff_bp.route('/dashboard')
+@staff_bp.route('/')
+@staff_bp.route('/dashboard')
 def dashboard():
-    voyage = (Voyage.query
-              .filter_by(status='scheduled')
-              .order_by(Voyage.departure_at.asc())
-              .first())
+    # All scheduled voyages for the picker
+    scheduled = (Voyage.query
+                 .filter_by(status='scheduled')
+                 .order_by(Voyage.departure_at.asc())
+                 .all())
+
+    # Which voyage is selected — from query param or default to next upcoming
+    voyage_id = request.args.get('voyage_id', type=int)
+    if voyage_id:
+        voyage = Voyage.query.get_or_404(voyage_id)
+    else:
+        voyage = scheduled[0] if scheduled else None
+
+    # Driver restriction — can only see their assigned voyage
+    if current_user.role == 'driver' and voyage:
+        if voyage.driver_id != current_user.id:
+            # Find their assigned voyage instead
+            voyage = next((v for v in scheduled
+                           if v.driver_id == current_user.id), None)
 
     bookings = []
     if voyage:
-        bookings = Booking.query.filter_by(voyage_id=voyage.id, status='confirmed').all()
+        bookings = Booking.query.filter_by(
+            voyage_id=voyage.id, status='confirmed'
+        ).all()
 
     seat_map = {b.seat_id: b for b in bookings}
 
     return render_template(
         'staff/dashboard.html',
         voyage=voyage,
+        scheduled=scheduled,
         seat_map=seat_map,
         window_seats=WINDOW_SEATS,
         role=current_user.role,
     )
-
 
 # ============================================================
 # BOOKING JSON API (called by JS)

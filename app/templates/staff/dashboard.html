@@ -20,10 +20,27 @@
 <div class="voyage-bar">
     <div>
         <div class="meta-label">Voyage</div>
-        <div class="route-cities">{{ voyage.origin }} <span class="route-arrow">—</span> {{ voyage.destination }}</div>
+        <div class="route-cities">
+            {{ voyage.origin }} <span class="route-arrow">—</span> {{ voyage.destination }}
+        </div>
     </div>
+
     <div class="voyage-meta">
+        <!-- Voyage picker — reservation and admin only -->
+        {% if role in ['admin', 'reservation'] and scheduled|length > 1 %}
         <div class="meta-item">
+            <div class="meta-label">Switch Voyage</div>
+            <select class="form-select voyage-picker"
+                    onchange="window.location.href='/staff/dashboard?voyage_id=' + this.value"
+                    style="width:auto; padding: 8px 12px;">
+                {% for v in scheduled %}
+                <option value="{{ v.id }}" {% if v.id == voyage.id %}selected{% endif %}>
+                    {{ v.origin }} → {{ v.destination }} · {{ v.departure_at.strftime('%d %b %H:%M') }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}        <div class="meta-item">
             <div class="meta-label">Departure</div>
             <div class="meta-value">{{ voyage.departure_at.strftime('%d %b · %H:%M') }}</div>
         </div>
