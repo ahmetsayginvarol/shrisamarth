@@ -1,0 +1,43 @@
+{% extends 'admin/base_admin.html' %}
+{% block admin_content %}
+<div class="page-header">
+    <div>
+        <div class="page-title serif">{{ title }}</div>
+    </div>
+    <a href="{{ url_for('admin.buses') }}" class="btn btn-ghost">← Back</a>
+</div>
+
+<form method="POST" class="admin-form">
+    {{ form.hidden_tag() }}
+
+    <div class="form-group">
+        {{ form.registration.label(class="form-label") }}
+        {{ form.registration(class="form-input", placeholder="e.g. MH-12-DK-4721") }}
+    </div>
+
+    <div class="form-group">
+        {{ form.name.label(class="form-label") }}
+        {{ form.name(class="form-input", placeholder="e.g. Pune Express 1") }}
+    </div>
+
+    <div class="form-group">
+        {{ form.total_seats.label(class="form-label") }}
+        {{ form.total_seats(class="form-input") }}
+    </div>
+
+    <div class="form-group">
+        {{ form.notes.label(class="form-label") }}
+        {{ form.notes(class="form-input", rows=3) }}
+    </div>
+
+    <div class="form-group form-check">
+        {{ form.is_active() }}
+        <label>{{ form.is_active.label.text }}</label>
+    </div>
+
+    <div class="form-actions">
+        <a href="{{ url_for('admin.buses') }}" class="btn btn-ghost">Cancel</a>
+        {{ form.submit(class="btn btn-primary", style="width:auto;") }}
+    </div>
+</form>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends 'admin/base_admin.html' %}
+{% block admin_content %}
+<div class="page-header">
+    <div>
+        <div class="page-title serif">Buses</div>
+        <div class="page-subtitle">{{ buses|length }} bus(es) in fleet</div>
+    </div>
+    <a href="{{ url_for('admin.bus_new') }}" class="btn btn-primary" style="width:auto;">+ Add Bus</a>
+</div>
+
+{% if buses %}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Registration</th>
+            <th>Name</th>
+            <th>Seats</th>
+            <th>Status</th>
+            <th>Notes</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for bus in buses %}
+        <tr>
+            <td class="mono">{{ bus.registration }}</td>
+            <td>{{ bus.name or '—' }}</td>
+            <td>{{ bus.total_seats }}</td>
+            <td>
+                <span class="badge {% if bus.is_active %}badge-active{% else %}badge-inactive{% endif %}">
+                    {{ 'Active' if bus.is_active else 'Inactive' }}
+                </span>
+            </td>
+            <td class="muted">{{ bus.notes or '—' }}</td>
+            <td>
+                <a href="{{ url_for('admin.bus_edit', bus_id=bus.id) }}"
+                   class="btn btn-ghost" style="padding: 6px 14px; font-size:12px;">Edit</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+    <span class="serif">No buses yet</span>
+    <p>Add your first bus to get started.</p>
+</div>
+{% endif %}
+{% endblock %}

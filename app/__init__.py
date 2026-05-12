@@ -10,10 +10,9 @@ def create_app(config_class=Config):
     app = Flask(__name__, instance_relative_config=True)
     app.config.from_object(config_class)
 
-    # Make sure instance folder exists (for SQLite dev DB)
     os.makedirs(app.instance_path, exist_ok=True)
 
-    # Initialize extensions with the app
+    # Initialize extensions
     db.init_app(app)
     migrate.init_app(app, db)
     login_manager.init_app(app)
@@ -25,17 +24,20 @@ def create_app(config_class=Config):
     # Register blueprints
     from app.auth.routes import auth_bp
     from app.staff.routes import staff_bp
+    from app.admin.routes import admin_bp
+
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(staff_bp, url_prefix='/staff')
+    app.register_blueprint(admin_bp, url_prefix='/admin')
 
-    # Root route — sends people where they belong
+    # Root route
     @app.route('/')
     def index():
         if current_user.is_authenticated:
             return redirect(url_for('staff.dashboard'))
         return redirect(url_for('auth.login'))
 
-    # Make sure models are imported so migrations detect them
+    # Import models so migrations detect them
     from app import models  # noqa: F401
 
     return app

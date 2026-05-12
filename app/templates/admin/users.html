@@ -1,0 +1,36 @@
+{% extends 'admin/base_admin.html' %}
+{% block admin_content %}
+<div class="page-header">
+    <div>
+        <div class="page-title serif">Users</div>
+        <div class="page-subtitle">{{ users|length }} user(s)</div>
+    </div>
+</div>
+
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Username</th>
+            <th>Role</th>
+            <th>Email</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for u in users %}
+        <tr>
+            <td>{{ u.full_name }}</td>
+            <td class="mono">{{ u.username }}</td>
+            <td><span class="badge badge-active">{{ u.role|capitalize }}</span></td>
+            <td class="muted">{{ u.email or '—' }}</td>
+            <td>
+                <span class="badge {% if u.is_active_account %}badge-active{% else %}badge-inactive{% endif %}">
+                    {{ 'Active' if u.is_active_account else 'Disabled' }}
+                </span>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="admin-layout">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="sidebar-brand">
+            <span class="brand-mark">श्री</span>
+            <div>
+                <div class="brand-name">SHRISAMARTH</div>
+                <div class="brand-sub">Admin Panel</div>
+            </div>
+        </div>
+
+        <nav class="sidebar-nav">
+            <a href="{{ url_for('staff.dashboard') }}"
+               class="nav-item {% if request.endpoint == 'staff.dashboard' %}active{% endif %}">
+                <span class="nav-icon">⬡</span>
+                <span data-en="Dashboard" data-hi="डैशबोर्ड">Dashboard</span>
+            </a>
+            <a href="{{ url_for('admin.voyages') }}"
+               class="nav-item {% if 'voyage' in request.endpoint %}active{% endif %}">
+                <span class="nav-icon">⊛</span>
+                <span data-en="Voyages" data-hi="यात्राएं">Voyages</span>
+            </a>
+            <a href="{{ url_for('admin.buses') }}"
+               class="nav-item {% if 'bus' in request.endpoint %}active{% endif %}">
+                <span class="nav-icon">⬕</span>
+                <span data-en="Buses" data-hi="बसें">Buses</span>
+            </a>
+            <a href="{{ url_for('admin.users') }}"
+               class="nav-item {% if 'user' in request.endpoint %}active{% endif %}">
+                <span class="nav-icon">◎</span>
+                <span data-en="Users" data-hi="उपयोगकर्ता">Users</span>
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="sidebar-user">
+                <div class="avatar">{{ current_user.full_name[0] }}</div>
+                <div>
+                    <div style="font-size:13px; font-weight:500;">{{ current_user.full_name }}</div>
+                    <div style="font-size:11px; color:var(--muted);">{{ current_user.role|capitalize }}</div>
+                </div>
+            </div>
+            <a href="{{ url_for('auth.logout') }}" class="btn btn-ghost" style="width:100%; margin-top:12px; text-align:center;">
+                Sign out
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main content area -->
+    <div class="admin-main">
+        <div class="admin-content">
+            {% block admin_content %}{% endblock %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}
