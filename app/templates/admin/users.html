@@ -5,8 +5,10 @@
         <div class="page-title serif">Users</div>
         <div class="page-subtitle">{{ users|length }} user(s)</div>
     </div>
+    <a href="{{ url_for('admin.user_new') }}" class="btn btn-primary" style="width:auto;">+ Add User</a>
 </div>
 
+{% if users %}
 <table class="data-table">
     <thead>
         <tr>
@@ -15,22 +17,37 @@
             <th>Role</th>
             <th>Email</th>
             <th>Status</th>
+            <th></th>
         </tr>
     </thead>
     <tbody>
         {% for u in users %}
         <tr>
-            <td>{{ u.full_name }}</td>
+            <td><strong>{{ u.full_name }}</strong></td>
             <td class="mono">{{ u.username }}</td>
-            <td><span class="badge badge-active">{{ u.role|capitalize }}</span></td>
+            <td>
+                <span class="badge badge-{{ 'active' if u.role == 'admin' else 'scheduled' if u.role == 'reservation' else 'departed' }}">
+                    {{ u.role|capitalize }}
+                </span>
+            </td>
             <td class="muted">{{ u.email or '—' }}</td>
             <td>
                 <span class="badge {% if u.is_active_account %}badge-active{% else %}badge-inactive{% endif %}">
                     {{ 'Active' if u.is_active_account else 'Disabled' }}
                 </span>
             </td>
+            <td>
+                <a href="{{ url_for('admin.user_edit', user_id=u.id) }}"
+                   class="btn btn-ghost" style="padding: 6px 14px; font-size:12px;">Edit</a>
+            </td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
+{% else %}
+<div class="empty-state">
+    <span class="serif">No users yet</span>
+    <p>Add your first user to get started.</p>
+</div>
+{% endif %}
 {% endblock %}

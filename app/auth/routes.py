@@ -30,7 +30,10 @@ def login():
 
         next_page = request.args.get('next')
         if not next_page or urlparse(next_page).netloc != '':
-            next_page = url_for('staff.dashboard')
+            if user.role == 'admin':
+                next_page = url_for('admin.dashboard')
+            else:
+                next_page = url_for('staff.dashboard')
 
         flash(f'Welcome back, {user.full_name}.', 'success')
         return redirect(next_page)

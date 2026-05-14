@@ -137,6 +137,11 @@ class Booking(db.Model):
         db.UniqueConstraint('voyage_id', 'seat_id', name='uq_voyage_seat'),
     )
 
+    @property
+    def is_window(self):
+        from app.models import WINDOW_SEATS
+        return self.seat_id in WINDOW_SEATS
+
     def __repr__(self):
         return f'<Booking {self.booking_code} seat {self.seat_id}>'
 

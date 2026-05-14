@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="{{ session.get('lang', 'en') }}">
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,16 +10,128 @@
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
+<script>
+// ===== Language toggle =====
+const TRANSLATIONS = {
+    en: {
+        'nav.dashboard': 'Dashboard',
+        'nav.voyages': 'Voyages',
+        'nav.buses': 'Buses',
+        'nav.users': 'Users',
+        'nav.signout': 'Sign out',
+        'dash.seatmap': 'Seat Map',
+        'dash.manifest': 'Manifest',
+        'dash.newbooking': 'New Booking',
+        'dash.passenger': 'Passenger',
+        'dash.selectseat': 'Select a seat',
+        'dash.selectseat.sub': 'Tap any open seat to begin a booking, or a booked seat to view the passenger.',
+        'dash.name': 'Passenger Name',
+        'dash.contact': 'Contact',
+        'dash.gender': 'Gender',
+        'dash.male': 'Male',
+        'dash.female': 'Female',
+        'dash.boarding': 'Boarding',
+        'dash.dropping': 'Dropping',
+        'dash.fare': 'Fare (₹)',
+        'dash.advance': 'Advance (₹)',
+        'dash.confirm': 'Confirm Booking',
+        'dash.cancel': 'Cancel',
+        'dash.close': 'Close',
+        'dash.cancelbooking': 'Cancel Booking',
+        'dash.open': 'Open',
+        'dash.window': 'Window',
+        'dash.voyage': 'Voyage',
+        'dash.departure': 'Departure',
+        'dash.bus': 'Bus',
+        'dash.occupancy': 'Occupancy',
+        'dash.fare.base': 'Base Fare',
+        'dash.switch': 'Switch Voyage',
+    },
+    hi: {
+        'nav.dashboard': 'डैशबोर्ड',
+        'nav.voyages': 'यात्राएं',
+        'nav.buses': 'बसें',
+        'nav.users': 'उपयोगकर्ता',
+        'nav.signout': 'साइन आउट',
+        'dash.seatmap': 'सीट मानचित्र',
+        'dash.manifest': 'यात्री सूची',
+        'dash.newbooking': 'नई बुकिंग',
+        'dash.passenger': 'यात्री',
+        'dash.selectseat': 'सीट चुनें',
+        'dash.selectseat.sub': 'बुकिंग शुरू करने के लिए कोई भी खाली सीट चुनें।',
+        'dash.name': 'यात्री का नाम',
+        'dash.contact': 'संपर्क',
+        'dash.gender': 'लिंग',
+        'dash.male': 'पुरुष',
+        'dash.female': 'महिला',
+        'dash.boarding': 'बोर्डिंग',
+        'dash.dropping': 'ड्रॉपिंग',
+        'dash.fare': 'किराया (₹)',
+        'dash.advance': 'अग्रिम (₹)',
+        'dash.confirm': 'पुष्टि करें',
+        'dash.cancel': 'रद्द करें',
+        'dash.close': 'बंद करें',
+        'dash.cancelbooking': 'बुकिंग रद्द करें',
+        'dash.open': 'खाली',
+        'dash.window': 'खिड़की',
+        'dash.voyage': 'यात्रा',
+        'dash.departure': 'प्रस्थान',
+        'dash.bus': 'बस',
+        'dash.occupancy': 'भरण',
+        'dash.fare.base': 'मूल किराया',
+        'dash.switch': 'यात्रा बदलें',
+    }
+};
+
+function applyLanguage(lang) {
+    document.documentElement.lang = lang;
+    localStorage.setItem('lang', lang);
+
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.dataset.i18n;
+        const val = TRANSLATIONS[lang][key];
+        if (val) {
+            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                el.placeholder = val;
+            } else {
+                el.textContent = val;
+            }
+        }
+    });
+
+    // Update toggle button
+    document.querySelectorAll('.lang-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.lang === lang);
+    });
+}
+
+function initLanguage() {
+    const saved = localStorage.getItem('lang') || 'en';
+    applyLanguage(saved);
+}
+
+document.addEventListener('DOMContentLoaded', initLanguage);
+</script>
 <body>
     {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            <div class="flash-container">
-                {% for category, message in messages %}
-                    <div class="flash flash-{{ category }}">{{ message }}</div>
-                {% endfor %}
-            </div>
-        {% endif %}
-    {% endwith %}
+    {% if messages %}
+        <div class="flash-container" id="flashContainer">
+            {% for category, message in messages %}
+                <div class="flash flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+        <script>
+            setTimeout(function() {
+                var fc = document.getElementById('flashContainer');
+                if (fc) {
+                    fc.style.transition = 'opacity 0.5s';
+                    fc.style.opacity = '0';
+                    setTimeout(function() { fc.remove(); }, 500);
+                }
+            }, 3000);
+        </script>
+    {% endif %}
+{% endwith %}
 
     {% block content %}{% endblock %}
 

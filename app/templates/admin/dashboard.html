@@ -1,0 +1,141 @@
+{% extends 'admin/base_admin.html' %}
+{% block admin_content %}
+
+<div class="page-header">
+    <div>
+        <div class="page-title serif">Dashboard</div>
+        <div class="page-subtitle">Revenue & operations overview</div>
+    </div>
+    <a href="{{ url_for('staff.dashboard') }}" class="btn btn-ghost">← Seat Map</a>
+</div>
+
+<!-- ===== Stats cards ===== -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-card-label">Total Revenue</div>
+        <div class="stat-card-value serif">₹ {{ '{:,.0f}'.format(total_revenue) }}</div>
+        <div class="stat-card-sub">{{ total_bookings }} booking(s)</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-label">Collected</div>
+        <div class="stat-card-value serif" style="color: var(--sage);">
+            ₹ {{ '{:,.0f}'.format(total_collected) }}
+        </div>
+        <div class="stat-card-sub">
+            {{ '{:.0f}'.format(total_collected / total_revenue * 100 if total_revenue > 0 else 0) }}% of total
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-label">Outstanding</div>
+        <div class="stat-card-value serif" style="color: var(--marigold);">
+            ₹ {{ '{:,.0f}'.format(total_outstanding) }}
+        </div>
+        <div class="stat-card-sub">
+            {{ '{:.0f}'.format(total_outstanding / total_revenue * 100 if total_revenue > 0 else 0) }}% pending
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-label">Today</div>
+        <div class="stat-card-value serif">₹ {{ '{:,.0f}'.format(today_revenue) }}</div>
+        <div class="stat-card-sub">{{ today_bookings }} booking(s) today</div>
+    </div>
+</div>
+
+<!-- ===== Voyage Revenue Breakdown ===== -->
+<div class="report-section">
+    <h3 class="serif">Voyage Revenue</h3>
+
+    {% if voyage_stats %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Route</th>
+                <th>Departure</th>
+                <th>Bookings</th>
+                <th>Revenue</th>
+                <th>Collected</th>
+                <th>Outstanding</th>
+                <th>Occupancy</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for vs in voyage_stats %}
+            <tr>
+                <td><strong>{{ vs.voyage.origin }}</strong> → {{ vs.voyage.destination }}</td>
+                <td class="mono">{{ vs.voyage.departure_at.strftime('%d %b · %H:%M') }}</td>
+                <td>{{ vs.bookings }}</td>
+                <td>₹ {{ '{:,.0f}'.format(vs.fare) }}</td>
+                <td style="color: var(--sage);">₹ {{ '{:,.0f}'.format(vs.collected) }}</td>
+                <td>
+                    {% if vs.outstanding > 0 %}
+                    <span style="color: var(--marigold);">₹ {{ '{:,.0f}'.format(vs.outstanding) }}</span>
+                    {% else %}
+                    <span style="color: var(--sage);">✓ Clear</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <div class="occupancy-bar">
+                        <div class="occupancy-fill"
+                             style="width: {{ vs.voyage.occupancy_pct }}%"></div>
+                        <span>{{ vs.voyage.occupancy_pct }}%</span>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No upcoming voyages.</p>
+    {% endif %}
+</div>
+
+<!-- ===== Recent Bookings ===== -->
+<div class="report-section">
+    <h3 class="serif">Recent Bookings</h3>
+
+    {% if recent %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Code</th>
+                <th>Passenger</th>
+                <th>Seat</th>
+                <th>Route</th>
+                <th>Fare</th>
+                <th>Balance</th>
+                <th>Booked</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for b in recent %}
+            <tr>
+                <td class="mono" style="font-size: 11px;">{{ b.booking_code }}</td>
+                <td>
+                    <span style="color: {{ '#3f6da8' if b.gender == 'M' else '#b85685' }};">
+                        {{ '♂' if b.gender == 'M' else '♀' }}
+                    </span>
+                    {{ b.passenger_name }}
+                </td>
+                <td class="mono">{{ b.seat_id }}</td>
+                <td>{{ b.voyage.origin }} → {{ b.voyage.destination }}</td>
+                <td>₹ {{ '{:,.0f}'.format(b.fare) }}</td>
+                <td>
+                    {% if b.balance_due > 0 %}
+                    <span style="color: var(--marigold);">₹ {{ '{:,.0f}'.format(b.balance_due) }}</span>
+                    {% else %}
+                    <span style="color: var(--sage);">✓</span>
+                    {% endif %}
+                </td>
+                <td class="muted" style="font-size: 11px;">
+                    {{ b.created_at.strftime('%d %b %H:%M') }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No bookings yet.</p>
+    {% endif %}
+</div>
+
+{% endblock %}

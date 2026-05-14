@@ -2,6 +2,13 @@
 {% block title %}Dashboard · SHRISAMARTH{% endblock %}
 
 {% block content %}
+
+{% if role == 'admin' %}
+<div class="admin-layout">
+    {% include 'admin/_sidebar.html' %}
+    <div class="admin-main" style="padding: 0;">
+{% endif %}
+
 <header class="topbar">
     <div class="brand">
         <span class="brand-mark">श्री</span>
@@ -11,25 +18,30 @@
         </div>
     </div>
     <div class="topbar-right">
+        <div class="pill-group">
+            <button class="pill lang-btn active" data-lang="en" onclick="applyLanguage('en')">EN</button>
+            <button class="pill lang-btn" data-lang="hi" onclick="applyLanguage('hi')">हिं</button>
+        </div>
         <span class="muted">{{ current_user.full_name }}</span>
-        <a href="{{ url_for('auth.logout') }}" class="btn btn-ghost">Sign out</a>
+        {% if role != 'admin' %}
+        <a href="{{ url_for('auth.logout') }}" class="btn btn-ghost" data-i18n="nav.signout">Sign out</a>
+        {% endif %}
     </div>
 </header>
 
 {% if voyage %}
 <div class="voyage-bar">
     <div>
-        <div class="meta-label">Voyage</div>
+        <div class="meta-label" data-i18n="dash.voyage">Voyage</div>
         <div class="route-cities">
             {{ voyage.origin }} <span class="route-arrow">—</span> {{ voyage.destination }}
         </div>
     </div>
 
     <div class="voyage-meta">
-        <!-- Voyage picker — reservation and admin only -->
         {% if role in ['admin', 'reservation'] and scheduled|length > 1 %}
         <div class="meta-item">
-            <div class="meta-label">Switch Voyage</div>
+            <div class="meta-label" data-i18n="dash.switch">Switch Voyage</div>
             <select class="form-select voyage-picker"
                     onchange="window.location.href='/staff/dashboard?voyage_id=' + this.value"
                     style="width:auto; padding: 8px 12px;">
@@ -40,21 +52,31 @@
                 {% endfor %}
             </select>
         </div>
-        {% endif %}        <div class="meta-item">
-            <div class="meta-label">Departure</div>
+        {% endif %}
+
+        <div class="meta-item">
+            <div class="meta-label" data-i18n="dash.departure">Departure</div>
             <div class="meta-value">{{ voyage.departure_at.strftime('%d %b · %H:%M') }}</div>
         </div>
         <div class="meta-item">
-            <div class="meta-label">Bus</div>
+            <div class="meta-label" data-i18n="dash.bus">Bus</div>
             <div class="meta-value mono">{{ voyage.bus.registration }}</div>
         </div>
         <div class="meta-item">
-            <div class="meta-label">Occupancy</div>
-            <div class="meta-value"><span id="occupancyCount">{{ seat_map|length }}</span> / {{ voyage.bus.total_seats }}</div>
+            <div class="meta-label" data-i18n="dash.occupancy">Occupancy</div>
+            <div class="meta-value">
+                <span id="occupancyCount">{{ seat_map|length }}</span> / {{ voyage.bus.total_seats }}
+            </div>
         </div>
         <div class="meta-item">
-            <div class="meta-label">Base Fare</div>
+            <div class="meta-label" data-i18n="dash.fare.base">Base Fare</div>
             <div class="meta-value">₹ {{ voyage.base_fare }}</div>
+        </div>
+        <div class="meta-item">
+            <a href="{{ url_for('staff.download_manifest', voyage_id=voyage.id) }}"
+               class="btn btn-ghost" style="margin-top: 14px; font-size: 12px;">
+                ↓ Print Manifest
+            </a>
         </div>
     </div>
 </div>
@@ -62,16 +84,32 @@
 <main class="staff-main" data-voyage-id="{{ voyage.id }}" data-base-fare="{{ voyage.base_fare }}">
     <section class="seat-section">
         <div class="seat-section-header">
-            <h2 class="serif">Seat Map</h2>
+            <h2 class="serif" data-i18n="dash.seatmap">Seat Map</h2>
             <div class="legend">
-                <span class="legend-item"><span class="legend-swatch available"></span> Open</span>
-                <span class="legend-item"><span class="legend-swatch booked-m"></span> Male</span>
-                <span class="legend-item"><span class="legend-swatch booked-f"></span> Female</span>
+                <span class="legend-item">
+                    <span class="legend-swatch available"></span>
+                    <span data-i18n="dash.open">Open</span>
+                </span>
+                <span class="legend-item">
+                    <span class="legend-swatch window"></span>
+                    <span data-i18n="dash.window">Window</span>
+                </span>
+                <span class="legend-item">
+                    <span class="legend-swatch booked-m"></span>
+                    <span>M</span>
+                </span>
+                <span class="legend-item">
+                    <span class="legend-swatch booked-f"></span>
+                    <span>F</span>
+                </span>
             </div>
         </div>
 
         <div class="bus" id="seatMap">
-            <div class="bus-front"><div class="steering"></div><span class="muted">Front · Door</span></div>
+            <div class="bus-front">
+                <div class="steering"></div>
+                <span class="muted">Front · Door</span>
+            </div>
 
             {% set rows = [
                 ['D','C','B','A'], ['F','E','G','H'],
@@ -114,19 +152,63 @@
     </section>
 
     <aside class="side-panel" id="sidePanel">
-        <!-- Empty state -->
+
+        {% if role != 'driver' %}
         <div class="panel-view" id="panel-empty">
             <div class="empty-state">
-                <span class="serif">Select a seat</span>
-                <p>Tap any open seat to begin a booking, or a booked seat to view the passenger.</p>
+                <span class="serif" data-i18n="dash.selectseat">Select a seat</span>
+                <p data-i18n="dash.selectseat.sub">
+                    Tap any open seat to begin a booking, or a booked seat to view the passenger.
+                </p>
             </div>
         </div>
+        {% endif %}
 
-        <!-- Booking form -->
+        <div class="panel-view {% if role != 'driver' %}hidden{% endif %}" id="panel-manifest">
+            <div class="panel-header" style="margin-bottom: 16px;">
+                <h3 class="serif" data-i18n="dash.manifest">Manifest</h3>
+                <span class="seat-badge">{{ seat_map|length }} / {{ voyage.bus.total_seats }}</span>
+            </div>
+            {% if seat_map %}
+            <div class="manifest-list">
+                {% for seat_id, b in seat_map.items()|sort %}
+                <div class="manifest-item" data-seat="{{ seat_id }}"
+                     style="cursor: pointer;"
+                     onclick="manifestClick('{{ seat_id }}')">
+                    <div class="manifest-seat"
+                         style="background: {{ '#3f6da8' if b.gender == 'M' else '#b85685' }};">
+                        {{ seat_id }}
+                    </div>
+                    <div>
+                        <div class="manifest-name">{{ b.passenger_name }}</div>
+                        <div class="manifest-sub">{{ b.passenger_phone }}</div>
+                        <div class="manifest-sub">{{ b.boarding_point }} → {{ b.dropping_point }}</div>
+                    </div>
+                    <div style="font-size:11px; color:var(--muted); text-align:right; line-height:1.6;">
+                        <div>₹ {{ b.fare }}</div>
+                        {% if b.balance_due > 0 %}
+                        <div style="color:var(--marigold);">bal ₹ {{ b.balance_due }}</div>
+                        {% else %}
+                        <div style="color:var(--sage);">paid ✓</div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state" style="padding: 40px 0;">
+                <span class="serif" style="font-size:20px;">No bookings yet</span>
+            </div>
+            {% endif %}
+        </div>
+
+        {% if role != 'driver' %}
         <div class="panel-view hidden" id="panel-booking">
             <div class="panel-header">
-                <h3 class="serif">New Booking</h3>
-                <span class="seat-badge">Seat <span id="bookingSeatLabel">—</span></span>
+                <h3 class="serif" data-i18n="dash.newbooking">New Booking</h3>
+                <span class="seat-badge">
+                    Seat <span id="bookingSeatLabel">—</span>
+                </span>
             </div>
 
             <div class="warning hidden" id="genderWarning">
@@ -141,25 +223,28 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                 <div class="form-group">
-                    <label class="form-label">Passenger Name</label>
+                    <label class="form-label" data-i18n="dash.name">Passenger Name</label>
                     <input type="text" name="passenger_name" class="form-input" required>
                 </div>
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">Contact</label>
-                        <input type="text" name="passenger_phone" class="form-input" placeholder="+91 98XXX XXXXX" required>
+                        <label class="form-label" data-i18n="dash.contact">Contact</label>
+                        <input type="text" name="passenger_phone" class="form-input"
+                               placeholder="+91 98XXX XXXXX" required>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Gender</label>
+                        <label class="form-label" data-i18n="dash.gender">Gender</label>
                         <div class="gender-choice">
                             <label class="gender-btn">
                                 <input type="radio" name="gender" value="M" required>
-                                <span class="gender-dot male-dot"></span> Male
+                                <span class="gender-dot male-dot"></span>
+                                <span data-i18n="dash.male">Male</span>
                             </label>
                             <label class="gender-btn">
                                 <input type="radio" name="gender" value="F">
-                                <span class="gender-dot female-dot"></span> Female
+                                <span class="gender-dot female-dot"></span>
+                                <span data-i18n="dash.female">Female</span>
                             </label>
                         </div>
                     </div>
@@ -167,7 +252,7 @@
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">Boarding</label>
+                        <label class="form-label" data-i18n="dash.boarding">Boarding</label>
                         <select name="boarding_point" class="form-select" required>
                             <option value="Dadar">Dadar</option>
                             <option value="Andheri">Andheri</option>
@@ -176,7 +261,7 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Dropping</label>
+                        <label class="form-label" data-i18n="dash.dropping">Dropping</label>
                         <select name="dropping_point" class="form-select" required>
                             <option value="Shivajinagar">Shivajinagar</option>
                             <option value="Swargate">Swargate</option>
@@ -188,53 +273,101 @@
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">Fare (₹)</label>
-                        <input type="number" name="fare" class="form-input" value="{{ voyage.base_fare }}" min="0" step="1" required>
+                        <label class="form-label" data-i18n="dash.fare">Fare (₹)</label>
+                        <input type="number" name="fare" class="form-input"
+                               value="{{ voyage.base_fare }}" min="0" step="1" required>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Advance (₹)</label>
-                        <input type="number" name="advance_paid" class="form-input" value="0" min="0" step="1">
+                        <label class="form-label" data-i18n="dash.advance">Advance (₹)</label>
+                        <input type="number" name="advance_paid" class="form-input"
+                               value="0" min="0" step="1">
                     </div>
                 </div>
 
                 <div class="form-actions">
-                    <button type="button" class="btn btn-ghost" onclick="closePanel()">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Confirm Booking</button>
+                    <button type="button" class="btn btn-ghost"
+                            onclick="closePanel()"
+                            data-i18n="dash.cancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary"
+                            data-i18n="dash.confirm">Confirm Booking</button>
                 </div>
             </form>
         </div>
+        {% endif %}
 
-        <!-- Passenger details -->
         <div class="panel-view hidden" id="panel-details">
             <div class="panel-header">
-                <h3 class="serif">Passenger</h3>
-                <span class="seat-badge">Seat <span id="detailsSeatLabel">—</span></span>
+                <h3 class="serif" data-i18n="dash.passenger">Passenger</h3>
+                <span class="seat-badge">
+                    Seat <span id="detailsSeatLabel">—</span>
+                </span>
             </div>
             <div class="passenger-card">
                 <div class="passenger-name" id="detailsName">—</div>
                 <div class="muted" id="detailsPhone">—</div>
                 <div class="passenger-details">
-                    <div class="detail-row"><span class="muted">Boarding</span> <span id="detailsBoarding">—</span></div>
-                    <div class="detail-row"><span class="muted">Dropping</span> <span id="detailsDropping">—</span></div>
-                    <div class="detail-row"><span class="muted">Fare</span> <span id="detailsFare">—</span></div>
-                    <div class="detail-row"><span class="muted">Advance</span> <span id="detailsAdvance">—</span></div>
-                    <div class="detail-row"><span class="muted">Balance</span> <span id="detailsBalance">—</span></div>
-                    <div class="detail-row"><span class="muted">Booking ID</span> <span class="mono" id="detailsCode">—</span></div>
+                    <div class="detail-row">
+                        <span class="muted" data-i18n="dash.boarding">Boarding</span>
+                        <span id="detailsBoarding">—</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="muted" data-i18n="dash.dropping">Dropping</span>
+                        <span id="detailsDropping">—</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="muted">Fare</span>
+                        <span id="detailsFare">—</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="muted">Advance</span>
+                        <span id="detailsAdvance">—</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="muted">Balance</span>
+                        <span id="detailsBalance">—</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="muted">Booking ID</span>
+                        <span class="mono" id="detailsCode">—</span>
+                    </div>
                 </div>
-                <div class="form-actions">
-                    <button type="button" class="btn btn-ghost" onclick="closePanel()">Close</button>
-                    <button type="button" class="btn btn-danger" id="cancelBookingBtn">Cancel Booking</button>
+                <div class="form-actions" style="flex-wrap: wrap; gap: 8px;">
+                    <button type="button" class="btn btn-ghost"
+                            onclick="closePanel()"
+                            data-i18n="dash.close">Close</button>
+                    <button type="button" id="ticketDownloadBtn"
+                            data-booking-id=""
+                            class="btn btn-ghost"
+                            style="color: var(--marigold); border-color: var(--marigold);">
+                        ↓ Save Ticket
+                    </button>
+                    <button type="button" id="whatsappBtn"
+                            class="btn btn-ghost"
+                            style="color: #25D366; border-color: #25D366;">
+                        ↗ WhatsApp
+                    </button>
+                    <button type="button" class="btn btn-danger"
+                            id="cancelBookingBtn"
+                            data-i18n="dash.cancelbooking">Cancel Booking</button>
                 </div>
             </div>
         </div>
+
     </aside>
 </main>
+
 {% else %}
 <div class="empty">
     <h2 class="serif">No scheduled voyages</h2>
     <p class="muted">An admin needs to create a voyage to see the dashboard.</p>
 </div>
 {% endif %}
+
+{% if role == 'admin' %}
+    </div>
+</div>
+{% endif %}
+
 {% endblock %}
 
 {% block scripts %}

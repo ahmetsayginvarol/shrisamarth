@@ -4,7 +4,10 @@ from flask_login import login_required, current_user
 
 from app.extensions import db
 from app.models import Bus, Voyage, Booking, User
-from app.admin.forms import BusForm, VoyageForm
+from datetime import datetime, timedelta
+from sqlalchemy import func, and_
+from app.admin.forms import BusForm, VoyageForm, UserForm, UserEditForm
+
 
 admin_bp = Blueprint('admin', __name__, template_folder='../templates/admin')
 
@@ -15,7 +18,83 @@ def restrict_to_admin():
     if not current_user.has_role('admin'):
         abort(403)
 
+# ============================================================
+# DASHBOARD / REPORTS
+# ============================================================
 
+@admin_bp.route('/')
+@admin_bp.route('/dashboard')
+def dashboard():
+    today = datetime.utcnow().date()
+    week_ago = today - timedelta(days=7)
+
+    # All confirmed bookings
+    all_bookings = Booking.query.filter_by(status='confirmed').all()
+
+    # Today's voyages
+    today_voyages = Voyage.query.filter(
+        func.date(Voyage.departure_at) == today
+    ).all()
+    today_voyage_ids = [v.id for v in today_voyages]
+
+    # Today's bookings
+    today_bookings = [b for b in all_bookings if b.voyage_id in today_voyage_ids]
+
+    # This week's voyages
+    week_voyages = Voyage.query.filter(
+        func.date(Voyage.departure_at) >= week_ago,
+        func.date(Voyage.departure_at) <= today
+    ).all()
+
+    # Stats
+    total_revenue = sum(float(b.fare or 0) for b in all_bookings)
+    total_collected = sum(float(b.advance_paid or 0) for b in all_bookings)
+    total_outstanding = sum(float(b.balance_due or 0) for b in all_bookings)
+
+    today_revenue = sum(float(b.fare or 0) for b in today_bookings)
+    today_collected = sum(float(b.advance_paid or 0) for b in today_bookings)
+
+    # Upcoming voyages with occupancy
+    upcoming = (Voyage.query
+                .filter_by(status='scheduled')
+                .order_by(Voyage.departure_at.asc())
+                .limit(10)
+                .all())
+
+    # Recent bookings
+    recent = (Booking.query
+              .filter_by(status='confirmed')
+              .order_by(Booking.created_at.desc())
+              .limit(20)
+              .all())
+
+    # Per-voyage revenue breakdown
+    voyage_stats = []
+    for v in upcoming:
+        v_bookings = [b for b in all_bookings if b.voyage_id == v.id]
+        v_fare = sum(float(b.fare or 0) for b in v_bookings)
+        v_collected = sum(float(b.advance_paid or 0) for b in v_bookings)
+        v_outstanding = sum(float(b.balance_due or 0) for b in v_bookings)
+        voyage_stats.append({
+            'voyage': v,
+            'bookings': len(v_bookings),
+            'fare': v_fare,
+            'collected': v_collected,
+            'outstanding': v_outstanding,
+        })
+
+    return render_template('admin/dashboard.html',
+        total_revenue=total_revenue,
+        total_collected=total_collected,
+        total_outstanding=total_outstanding,
+        today_revenue=today_revenue,
+        today_collected=today_collected,
+        today_bookings=len(today_bookings),
+        total_bookings=len(all_bookings),
+        upcoming=upcoming,
+        voyage_stats=voyage_stats,
+        recent=recent,
+    )
 # ============================================================
 # BUSES
 # ============================================================
@@ -166,10 +245,70 @@ def voyage_cancel(voyage_id):
 
 
 # ============================================================
-# USERS (stub for now)
+# USERS
 # ============================================================
 
 @admin_bp.route('/users')
 def users():
     all_users = User.query.order_by(User.role, User.full_name).all()
     return render_template('admin/users.html', users=all_users)
+
+
+@admin_bp.route('/users/new', methods=['GET', 'POST'])
+def user_new():
+    form = UserForm()
+    if form.validate_on_submit():
+        # Check if username already exists
+        existing = User.query.filter_by(username=form.username.data.strip()).first()
+        if existing:
+            flash('Username already taken.', 'error')
+            return render_template('admin/user_form.html', form=form, title='Add User')
+
+        user = User(
+            username=form.username.data.strip().lower(),
+            full_name=form.full_name.data.strip(),
+            email=form.email.data.strip() if form.email.data else None,
+            role=form.role.data,
+            is_active_account=form.is_active_account.data,
+        )
+        user.set_password(form.password.data)
+        db.session.add(user)
+        db.session.commit()
+        flash(f'User {user.username} created.', 'success')
+        return redirect(url_for('admin.users'))
+
+    return render_template('admin/user_form.html', form=form, title='Add User')
+
+
+@admin_bp.route('/users/<int:user_id>/edit', methods=['GET', 'POST'])
+def user_edit(user_id):
+    user = User.query.get_or_404(user_id)
+    form = UserEditForm(obj=user)
+
+    if form.validate_on_submit():
+        # Check username uniqueness (excluding current user)
+        existing = User.query.filter(
+            User.username == form.username.data.strip(),
+            User.id != user.id
+        ).first()
+        if existing:
+            flash('Username already taken.', 'error')
+            return render_template('admin/user_form.html', form=form,
+                                   title='Edit User', user=user)
+
+        user.username = form.username.data.strip().lower()
+        user.full_name = form.full_name.data.strip()
+        user.email = form.email.data.strip() if form.email.data else None
+        user.role = form.role.data
+        user.is_active_account = form.is_active_account.data
+
+        # Only update password if provided
+        if form.new_password.data:
+            user.set_password(form.new_password.data)
+
+        db.session.commit()
+        flash(f'User {user.username} updated.', 'success')
+        return redirect(url_for('admin.users'))
+
+    return render_template('admin/user_form.html', form=form,
+                           title='Edit User', user=user)
