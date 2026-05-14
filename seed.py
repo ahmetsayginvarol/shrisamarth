@@ -8,6 +8,8 @@ from app.models import User, Bus, Voyage, Booking
 app = create_app()
 
 with app.app_context():
+    db.create_all()
+
     if User.query.first():
         print("Database already has data. Skipping seed.")
         print("To force reseed, delete all users first.")
