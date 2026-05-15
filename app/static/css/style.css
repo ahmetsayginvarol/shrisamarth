@@ -436,3 +436,18 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
     font-weight: 600;
     color: var(--ink);
 }
+/* ===== Date picker ===== */
+.date-picker {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--cream);
+}
+
+.date-picker:focus {
+    outline: none;
+    border-color: var(--marigold);
+    box-shadow: 0 0 0 3px rgba(200,118,26,0.12);
+}

@@ -2,8 +2,9 @@
 // SHRISAMARTH Dashboard — seat grid interactivity
 // ============================================================
 
-const VOYAGE_ID = document.querySelector('.staff-main').dataset.voyageId;
-const BASE_FARE = parseFloat(document.querySelector('.staff-main').dataset.baseFare);
+const staffMain = document.querySelector('.staff-main');
+const VOYAGE_ID = staffMain ? staffMain.dataset.voyageId : null;
+const BASE_FARE = staffMain ? parseFloat(staffMain.dataset.baseFare) : 0;
 
 let currentSeatId = null;
 let currentBookingId = null;
@@ -370,7 +371,28 @@ socket.on('seat_booked', (data) => {
 
     toast(`Seat ${data.seat_id} just booked by another agent`);
 });
+// ============================================================
+// DATE PICKER + VOYAGE PICKER
+// ============================================================
 
+const datePicker = document.getElementById('datePicker');
+if (datePicker) {
+    datePicker.addEventListener('change', function() {
+        const date = this.value;
+        if (date) {
+            window.location.href = `/staff/dashboard?date=${date}`;
+        }
+    });
+}
+
+const voyagePicker = document.getElementById('voyagePicker');
+if (voyagePicker) {
+    voyagePicker.addEventListener('change', function() {
+        const voyageId = this.value;
+        const date = datePicker ? datePicker.value : '';
+        window.location.href = `/staff/dashboard?date=${date}&voyage_id=${voyageId}`;
+    });
+}
 socket.on('seat_freed', (data) => {
     if (parseInt(data.voyage_id) !== parseInt(VOYAGE_ID)) return;
 

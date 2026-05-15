@@ -29,30 +29,105 @@
     </div>
 </header>
 
-{% if voyage %}
+
 <div class="voyage-bar">
     <div>
         <div class="meta-label" data-i18n="dash.voyage">Voyage</div>
+        {% if voyage %}
         <div class="route-cities">
             {{ voyage.origin }} <span class="route-arrow">—</span> {{ voyage.destination }}
         </div>
+        {% else %}
+        <div class="route-cities" style="font-size: 20px; color: var(--muted);">
+            No voyages on this date
+        </div>
+        {% endif %}
     </div>
 
     <div class="voyage-meta">
-        {% if role in ['admin', 'reservation'] and scheduled|length > 1 %}
+        <!-- Date picker — ALWAYS visible -->
+        <div class="meta-item">
+            <div class="meta-label">Date</div>
+            <input type="date" class="form-input date-picker"
+                   id="datePicker"
+                   value="{{ selected_date }}"
+                   style="width: auto; padding: 8px 12px; cursor: pointer;">
+        </div>
+
+        <!-- Voyage picker for selected date -->
+        {% if role in ['admin', 'reservation'] and day_voyages|length > 1 %}
         <div class="meta-item">
             <div class="meta-label" data-i18n="dash.switch">Switch Voyage</div>
             <select class="form-select voyage-picker"
-                    onchange="window.location.href='/staff/dashboard?voyage_id=' + this.value"
+                    id="voyagePicker"
                     style="width:auto; padding: 8px 12px;">
-                {% for v in scheduled %}
-                <option value="{{ v.id }}" {% if v.id == voyage.id %}selected{% endif %}>
-                    {{ v.origin }} → {{ v.destination }} · {{ v.departure_at.strftime('%d %b %H:%M') }}
+                {% for v in day_voyages %}
+                <option value="{{ v.id }}" {% if voyage and v.id == voyage.id %}selected{% endif %}>
+                    {{ v.origin }} → {{ v.destination }} · {{ v.departure_at.strftime('%H:%M') }}
                 </option>
                 {% endfor %}
             </select>
         </div>
         {% endif %}
+
+        {% if voyage %}
+        <div class="meta-item">
+            <div class="meta-label" data-i18n="dash.departure">Departure</div>
+            <div class="meta-value">{{ voyage.departure_at.strftime('%d %b · %H:%M') }}</div>
+        </div>
+        <div class="meta-item">
+            <div class="meta-label" data-i18n="dash.bus">Bus</div>
+            <div class="meta-value mono">{{ voyage.bus.registration }}</div>
+        </div>
+        <div class="meta-item">
+            <div class="meta-label" data-i18n="dash.occupancy">Occupancy</div>
+            <div class="meta-value">
+                <span id="occupancyCount">{{ seat_map|length }}</span> / {{ voyage.bus.total_seats }}
+            </div>
+        </div>
+        <div class="meta-item">
+            <div class="meta-label" data-i18n="dash.fare.base">Base Fare</div>
+            <div class="meta-value">₹ {{ voyage.base_fare }}</div>
+        </div>
+        <div class="meta-item">
+            <a href="{{ url_for('staff.download_manifest', voyage_id=voyage.id) }}"
+               class="btn btn-ghost" style="margin-top: 14px; font-size: 12px;">
+                ↓ Print Manifest
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if voyage %}
+
+    <div class="voyage-meta">
+        <!-- Date picker -->
+        <div class="meta-item">
+            <div class="meta-label">Date</div>
+            <input type="date" class="form-input date-picker"
+                   id="datePicker"
+                   value="{{ selected_date }}"
+                   style="width: auto; padding: 8px 12px; cursor: pointer;">
+        </div>
+
+        <!-- Voyage picker for selected date -->
+        {% if role in ['admin', 'reservation'] and day_voyages|length > 1 %}
+        <div class="meta-item">
+            <div class="meta-label" data-i18n="dash.switch">Switch Voyage</div>
+            <select class="form-select voyage-picker"
+                    id="voyagePicker"
+                    style="width:auto; padding: 8px 12px;">
+                {% for v in day_voyages %}
+                <option value="{{ v.id }}" {% if voyage and v.id == voyage.id %}selected{% endif %}>
+                    {{ v.origin }} → {{ v.destination }} · {{ v.departure_at.strftime('%H:%M') }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+
+        {% if voyage %}
 
         <div class="meta-item">
             <div class="meta-label" data-i18n="dash.departure">Departure</div>
@@ -78,6 +153,7 @@
                 ↓ Print Manifest
             </a>
         </div>
+        {% endif %}
     </div>
 </div>
 
@@ -358,8 +434,8 @@
 
 {% else %}
 <div class="empty">
-    <h2 class="serif">No scheduled voyages</h2>
-    <p class="muted">An admin needs to create a voyage to see the dashboard.</p>
+    <h2 class="serif">No voyages on this date</h2>
+    <p class="muted">Select a different date or create a new voyage in the admin panel.</p>
 </div>
 {% endif %}
 

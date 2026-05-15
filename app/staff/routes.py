@@ -24,30 +24,53 @@ def restrict_to_staff():
 # ============================================================
 # DASHBOARD
 # ============================================================
-
-@staff_bp.route('/')
-@staff_bp.route('/dashboard')
 @staff_bp.route('/')
 @staff_bp.route('/dashboard')
 def dashboard():
-    # All scheduled voyages for the picker
-    scheduled = (Voyage.query
-                 .filter_by(status='scheduled')
-                 .order_by(Voyage.departure_at.asc())
-                 .all())
+    from datetime import datetime, date
 
-    # Which voyage is selected — from query param or default to next upcoming
+    # Get date from query param, default to today
+    date_str = request.args.get('date')
+    if date_str:
+        try:
+            selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            selected_date = date.today()
+    else:
+        selected_date = date.today()
+
+    # All scheduled voyages (for checking which dates have voyages)
+    all_scheduled = (Voyage.query
+                     .filter_by(status='scheduled')
+                     .order_by(Voyage.departure_at.asc())
+                     .all())
+
+    # Filter voyages for the selected date
+    day_voyages = [v for v in all_scheduled
+                   if v.departure_at.date() == selected_date]
+
+    # If no voyages on selected date, try to find the next date with voyages
+    if not day_voyages and not date_str:
+        for v in all_scheduled:
+            if v.departure_at.date() >= date.today():
+                selected_date = v.departure_at.date()
+                day_voyages = [vv for vv in all_scheduled
+                               if vv.departure_at.date() == selected_date]
+                break
+
+    # Which voyage is selected
     voyage_id = request.args.get('voyage_id', type=int)
     if voyage_id:
         voyage = Voyage.query.get_or_404(voyage_id)
+    elif day_voyages:
+        voyage = day_voyages[0]
     else:
-        voyage = scheduled[0] if scheduled else None
+        voyage = None
 
-    # Driver restriction — can only see their assigned voyage
+    # Driver restriction
     if current_user.role == 'driver' and voyage:
         if voyage.driver_id != current_user.id:
-            # Find their assigned voyage instead
-            voyage = next((v for v in scheduled
+            voyage = next((v for v in day_voyages
                            if v.driver_id == current_user.id), None)
 
     bookings = []
@@ -58,20 +81,28 @@ def dashboard():
 
     seat_map = {b.seat_id: b for b in bookings}
 
+    # Collect dates that have voyages (for highlighting in date picker)
+    voyage_dates = list(set(
+        v.departure_at.strftime('%Y-%m-%d') for v in all_scheduled
+    ))
+
     return render_template(
         'staff/dashboard.html',
         voyage=voyage,
-        scheduled=scheduled,
+        day_voyages=day_voyages,
+        scheduled=all_scheduled,
         seat_map=seat_map,
         window_seats=WINDOW_SEATS,
         role=current_user.role,
+        selected_date=selected_date.strftime('%Y-%m-%d'),
+        voyage_dates=voyage_dates,
     )
+
 
 # ============================================================
 # BOOKING JSON API (called by JS)
 # ============================================================
 
-@staff_bp.route('/api/seat/<int:voyage_id>/<seat_id>')
 @staff_bp.route('/api/seat/<int:voyage_id>/<seat_id>')
 def seat_info(voyage_id, seat_id):
     """Return JSON for a clicked seat."""
