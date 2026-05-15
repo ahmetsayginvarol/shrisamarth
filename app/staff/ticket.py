@@ -135,7 +135,7 @@ def generate_ticket(booking) -> io.BytesIO:
     ]], colWidths=[third, third, third])
 
     # ===== QR + footer =====
-    verify_url = f"http://localhost:5000/verify/{booking.booking_code}"
+    verify_url = f"https://shrisamarth.onrender.com/verify/{booking.booking_code}"
     qr_buf = generate_qr(verify_url)
     qr_img = RLImage(qr_buf, width=20*mm, height=20*mm)
 
