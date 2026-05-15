@@ -451,3 +451,44 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
     border-color: var(--marigold);
     box-shadow: 0 0 0 3px rgba(200,118,26,0.12);
 }
+/* ===== Log filters ===== */
+.log-filters { margin-bottom: 24px; }
+.filter-form { display: flex; gap: 16px; }
+.filter-group { display: flex; flex-direction: column; gap: 4px; }
+.filter-group .form-select { min-width: 180px; }
+
+/* ===== Pagination ===== */
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 24px 0;
+}
+/* ===== Seat map inside admin layout ===== */
+.admin-layout .staff-main {
+    grid-template-columns: 1fr 320px;
+}
+
+.admin-layout .seat-section {
+    padding: 24px 16px;
+}
+
+.admin-layout .bus {
+    max-width: 340px;
+}
+
+.admin-layout .voyage-bar {
+    padding: 20px 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.admin-layout .voyage-meta {
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.admin-layout .topbar {
+    padding: 14px 24px;
+}

@@ -3,11 +3,11 @@ from flask import Blueprint, render_template, redirect, url_for, flash, abort, r
 from flask_login import login_required, current_user
 
 from app.extensions import db
-from app.models import Bus, Voyage, Booking, User
+from app.models import Bus, Voyage, Booking, User, ActivityLog
 from datetime import datetime, timedelta
 from sqlalchemy import func, and_
 from app.admin.forms import BusForm, VoyageForm, UserForm, UserEditForm
-
+from app.logging import log_activity
 
 admin_bp = Blueprint('admin', __name__, template_folder='../templates/admin')
 
@@ -95,6 +95,38 @@ def dashboard():
         voyage_stats=voyage_stats,
         recent=recent,
     )
+
+# ============================================================
+# ACTIVITY LOG
+# ============================================================
+
+@admin_bp.route('/logs')
+def logs():
+    page = request.args.get('page', 1, type=int)
+    action_filter = request.args.get('action', 'all')
+    user_filter = request.args.get('user', 0, type=int)
+
+    query = ActivityLog.query.order_by(ActivityLog.created_at.desc())
+
+    if action_filter != 'all':
+        query = query.filter_by(action=action_filter)
+    if user_filter:
+        query = query.filter_by(user_id=user_filter)
+
+    logs = query.paginate(page=page, per_page=50, error_out=False)
+
+    # Get unique actions and users for filter dropdowns
+    all_actions = db.session.query(ActivityLog.action).distinct().all()
+    all_actions = sorted([a[0] for a in all_actions])
+    all_users = User.query.order_by(User.full_name).all()
+
+    return render_template('admin/logs.html',
+        logs=logs,
+        action_filter=action_filter,
+        user_filter=user_filter,
+        all_actions=all_actions,
+        all_users=all_users,
+    )
 # ============================================================
 # BUSES
 # ============================================================
@@ -118,6 +150,8 @@ def bus_new():
         )
         db.session.add(bus)
         db.session.commit()
+        log_activity('bus_created', f'Added bus {bus.registration}', 'bus', bus.id)
+        flash(f'Bus {bus.registration} added.', 'success')
         flash(f'Bus {bus.registration} added.', 'success')
         return redirect(url_for('admin.buses'))
     return render_template('admin/bus_form.html', form=form, title='Add Bus')
@@ -134,6 +168,8 @@ def bus_edit(bus_id):
         bus.notes = form.notes.data
         bus.is_active = form.is_active.data
         db.session.commit()
+        log_activity('bus_edited', f'Edited bus {bus.registration}', 'bus', bus.id)
+        flash(f'Bus {bus.registration} updated.', 'success')
         flash(f'Bus {bus.registration} updated.', 'success')
         return redirect(url_for('admin.buses'))
     return render_template('admin/bus_form.html', form=form, title='Edit Bus', bus=bus)
@@ -181,6 +217,10 @@ def voyage_new():
         )
         db.session.add(voyage)
         db.session.commit()
+        log_activity('voyage_created',
+                     f'Created voyage {voyage.origin}→{voyage.destination} on {voyage.departure_at.strftime("%d %b %Y")}',
+                     'voyage', voyage.id)
+        flash(f'Voyage {voyage.origin} → {voyage.destination} created.', 'success')
         flash(f'Voyage {voyage.origin} → {voyage.destination} created.', 'success')
         return redirect(url_for('admin.voyages'))
 
@@ -214,6 +254,10 @@ def voyage_edit(voyage_id):
         voyage.base_fare = form.base_fare.data
         voyage.notes = form.notes.data
         db.session.commit()
+        log_activity('voyage_edited',
+                     f'Edited voyage {voyage.origin}→{voyage.destination}',
+                     'voyage', voyage.id)
+        flash('Voyage updated.', 'success')
         flash('Voyage updated.', 'success')
         return redirect(url_for('admin.voyages'))
 
@@ -239,7 +283,10 @@ def voyage_cancel(voyage_id):
     voyage.cancelled_at = datetime.utcnow()
     voyage.cancelled_by_id = current_user.id
     db.session.commit()
-
+    log_activity('voyage_cancelled',
+                 f'Cancelled voyage {voyage.origin}→{voyage.destination} ({len(confirmed_bookings)} bookings cancelled)',
+                 'voyage', voyage.id)
+    flash(f'Voyage cancelled. {len(confirmed_bookings)} booking(s) also cancelled.', 'success')
     flash(f'Voyage cancelled. {len(confirmed_bookings)} booking(s) also cancelled.', 'success')
     return redirect(url_for('admin.voyages'))
 
@@ -274,6 +321,8 @@ def user_new():
         user.set_password(form.password.data)
         db.session.add(user)
         db.session.commit()
+        log_activity('user_created', f'Created user {user.username} ({user.role})', 'user', user.id)
+        flash(f'User {user.username} created.', 'success')
         flash(f'User {user.username} created.', 'success')
         return redirect(url_for('admin.users'))
 
@@ -307,6 +356,8 @@ def user_edit(user_id):
             user.set_password(form.new_password.data)
 
         db.session.commit()
+        log_activity('user_edited', f'Edited user {user.username} ({user.role})', 'user', user.id)
+        flash(f'User {user.username} updated.', 'success')
         flash(f'User {user.username} updated.', 'success')
         return redirect(url_for('admin.users'))
 

@@ -33,6 +33,12 @@
             <span class="nav-icon">◎</span>
             <span>Users</span>
         </a>
+
+        <a href="{{ url_for('admin.logs') }}"
+   class="nav-item {% if 'logs' in request.endpoint %}active{% endif %}">
+    <span class="nav-icon">☰</span>
+    <span>Activity Log</span>
+</a>
     </nav>
 
     <div class="sidebar-footer">

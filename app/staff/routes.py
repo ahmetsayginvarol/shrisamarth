@@ -10,6 +10,7 @@ from flask import send_file
 from app.staff.ticket import generate_ticket
 import secrets
 from app.staff.manifest import generate_manifest
+from app.logging import log_activity
 
 staff_bp = Blueprint('staff', __name__, template_folder='../templates/staff')
 
@@ -240,7 +241,19 @@ def create_booking():
             'status': 'error',
             'message': 'This seat was just booked by someone else. Please refresh and try again.'
         }), 409
+    try:
+        db.session.add(booking)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({
+            'status': 'error',
+            'message': 'This seat was just booked by someone else. Please refresh and try again.'
+        }), 409
 
+    log_activity('booking_created',
+                 f'Booked seat {booking.seat_id} for {booking.passenger_name} on {voyage.origin}→{voyage.destination}',
+                 'booking', booking.id)
     # Broadcast to all connected clients
     socketio.emit('seat_booked', {
         'voyage_id': voyage.id,
@@ -267,7 +280,12 @@ def cancel_booking(booking_id):
     booking = Booking.query.get_or_404(booking_id)
     booking.status = 'cancelled'
     db.session.commit()
+    booking.status = 'cancelled'
+    db.session.commit()
 
+    log_activity('booking_cancelled',
+                 f'Cancelled seat {seat_id} ({booking.passenger_name}) on voyage {voyage_id}',
+                 'booking', booking_id)
     socketio.emit('seat_freed', {
         'voyage_id': booking.voyage_id,
         'seat_id': booking.seat_id,

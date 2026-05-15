@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 from app.extensions import db
 from app.models import User
 from app.auth.forms import LoginForm
+from app.logging import log_activity
 
 auth_bp = Blueprint('auth', __name__, template_folder='../templates/auth')
 
@@ -27,6 +28,7 @@ def login():
             return redirect(url_for('auth.login'))
 
         login_user(user, remember=form.remember_me.data)
+        log_activity('user_login', f'{user.full_name} signed in', 'user', user.id)
 
         next_page = request.args.get('next')
         if not next_page or urlparse(next_page).netloc != '':
@@ -44,6 +46,8 @@ def login():
 @auth_bp.route('/logout')
 @login_required
 def logout():
+    log_activity('user_logout', f'{current_user.full_name} signed out', 'user', current_user.id)
+
     logout_user()
     flash('You have been signed out.', 'info')
     return redirect(url_for('auth.login'))

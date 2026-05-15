@@ -144,7 +144,29 @@ class Booking(db.Model):
 
     def __repr__(self):
         return f'<Booking {self.booking_code} seat {self.seat_id}>'
+# ============================================================
+# ACTIVITY LOG
+# ============================================================
 
+class ActivityLog(db.Model):
+    __tablename__ = 'activity_log'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    action = db.Column(db.String(50), nullable=False, index=True)
+    # action values: booking_created, booking_cancelled, voyage_created,
+    # voyage_edited, voyage_cancelled, bus_created, bus_edited,
+    # user_created, user_edited, user_login, user_logout
+    description = db.Column(db.Text, nullable=False)
+    target_type = db.Column(db.String(30), nullable=True)  # booking, voyage, bus, user
+    target_id = db.Column(db.Integer, nullable=True)
+    ip_address = db.Column(db.String(45), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    user = db.relationship('User', foreign_keys=[user_id])
+
+    def __repr__(self):
+        return f'<Log {self.action} by user {self.user_id}>'
 # ============================================================
     # SEAT LAYOUT HELPERS
     # ============================================================

@@ -1,0 +1,98 @@
+{% extends 'admin/base_admin.html' %}
+{% block admin_content %}
+
+<div class="page-header">
+    <div>
+        <div class="page-title serif">Activity Log</div>
+        <div class="page-subtitle">{{ logs.total }} event(s) recorded</div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="log-filters">
+    <form method="GET" action="{{ url_for('admin.logs') }}" class="filter-form">
+        <div class="filter-group">
+            <label class="form-label">Action</label>
+            <select name="action" class="form-select" onchange="this.form.submit()">
+                <option value="all" {% if action_filter == 'all' %}selected{% endif %}>All Actions</option>
+                {% for a in all_actions %}
+                <option value="{{ a }}" {% if action_filter == a %}selected{% endif %}>
+                    {{ a|replace('_', ' ')|title }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="filter-group">
+            <label class="form-label">User</label>
+            <select name="user" class="form-select" onchange="this.form.submit()">
+                <option value="0" {% if user_filter == 0 %}selected{% endif %}>All Users</option>
+                {% for u in all_users %}
+                <option value="{{ u.id }}" {% if user_filter == u.id %}selected{% endif %}>
+                    {{ u.full_name }} ({{ u.role }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+</div>
+
+{% if logs.items %}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Time</th>
+            <th>User</th>
+            <th>Action</th>
+            <th>Details</th>
+            <th>IP</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for log in logs.items %}
+        <tr>
+            <td class="mono" style="font-size: 11px; white-space: nowrap;">
+                {{ log.created_at.strftime('%d %b %Y · %H:%M') }}
+            </td>
+            <td>
+                {% if log.user %}
+                <strong>{{ log.user.full_name }}</strong>
+                <div style="font-size: 11px; color: var(--muted);">{{ log.user.role }}</div>
+                {% else %}
+                <span class="muted">System</span>
+                {% endif %}
+            </td>
+            <td>
+                <span class="badge badge-{{ 'cancelled' if 'cancel' in log.action else 'scheduled' if 'create' in log.action else 'departed' if 'edit' in log.action else 'active' if 'login' in log.action else 'completed' }}">
+                    {{ log.action|replace('_', ' ')|title }}
+                </span>
+            </td>
+            <td>{{ log.description }}</td>
+            <td class="mono muted" style="font-size: 11px;">{{ log.ip_address or '—' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<!-- Pagination -->
+{% if logs.pages > 1 %}
+<div class="pagination">
+    {% if logs.has_prev %}
+    <a href="{{ url_for('admin.logs', page=logs.prev_num, action=action_filter, user=user_filter) }}"
+       class="btn btn-ghost">&larr; Newer</a>
+    {% endif %}
+    <span class="muted">Page {{ logs.page }} of {{ logs.pages }}</span>
+    {% if logs.has_next %}
+    <a href="{{ url_for('admin.logs', page=logs.next_num, action=action_filter, user=user_filter) }}"
+       class="btn btn-ghost">Older &rarr;</a>
+    {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="empty-state">
+    <span class="serif">No activity yet</span>
+    <p>Actions will appear here as users interact with the system.</p>
+</div>
+{% endif %}
+
+{% endblock %}
