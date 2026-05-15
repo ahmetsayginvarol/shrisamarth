@@ -1,6 +1,23 @@
 {% extends 'base.html' %}
 
 {% block content %}
+<!-- Mobile-only topbar with hamburger (hidden ≥ 769px via CSS) -->
+<div class="admin-mobile-bar" id="adminMobileBar">
+    <button class="hamburger-btn" onclick="toggleSidebar()" aria-label="Open menu">
+        <span></span>
+        <span></span>
+        <span></span>
+    </button>
+    <span style="font-family:'Instrument Serif',serif;font-size:16px;letter-spacing:0.1em;">SHRISAMARTH</span>
+    <a href="{{ url_for('auth.logout') }}" class="btn btn-ghost"
+       style="padding:6px 12px;font-size:12px;border-color:rgba(255,255,255,0.2);color:rgba(255,255,255,0.7);">
+        Sign out
+    </a>
+</div>
+
+<!-- Tap-outside overlay to close sidebar -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
 <div class="admin-layout">
     {% include 'admin/_sidebar.html' %}
     <div class="admin-main">
@@ -9,4 +26,20 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleSidebar() {
+    document.querySelector('.sidebar').classList.toggle('open');
+    document.getElementById('sidebarOverlay').classList.toggle('active');
+}
+// Close sidebar on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        document.querySelector('.sidebar').classList.remove('open');
+        document.getElementById('sidebarOverlay').classList.remove('active');
+    }
+});
+</script>
 {% endblock %}
