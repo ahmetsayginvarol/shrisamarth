@@ -573,6 +573,24 @@ socket.on('seat_freed', (data) => {
     toast(`Seat ${data.seat_id} is now available`);
 });
 
+socket.on('seat_locked', (data) => {
+    if (parseInt(data.voyage_id) !== parseInt(VOYAGE_ID)) return;
+    const seat = document.querySelector(`.seat[data-seat="${data.seat_id}"]`);
+    if (seat && !seat.classList.contains('booked-m') && !seat.classList.contains('booked-f')) {
+        seat.classList.add('locked');
+        seat.title = 'Being reserved by a customer';
+    }
+});
+
+socket.on('seat_unlocked', (data) => {
+    if (parseInt(data.voyage_id) !== parseInt(VOYAGE_ID)) return;
+    const seat = document.querySelector(`.seat[data-seat="${data.seat_id}"]`);
+    if (seat && !seat.classList.contains('booked-m') && !seat.classList.contains('booked-f')) {
+        seat.classList.remove('locked');
+        seat.title = `Seat ${data.seat_id}`;
+    }
+});
+
 // ============================================================
 // DATE PICKER + VOYAGE PICKER
 // ============================================================

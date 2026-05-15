@@ -1,0 +1,219 @@
+{% extends 'customer/base_customer.html' %}
+{% block title %}Book Seats · {{ voyage.origin }} → {{ voyage.destination }} · SHRISAMARTH{% endblock %}
+
+{% block customer_content %}
+<div id="bookApp" data-voyage-id="{{ voyage.id }}" data-base-fare="{{ voyage.base_fare }}">
+
+    <div class="c-book-header">
+        <div class="c-book-route serif">{{ voyage.origin }} → {{ voyage.destination }}</div>
+        <div class="c-book-meta">
+            {{ voyage.departure_at.strftime('%d %B %Y · %H:%M') }}
+            &nbsp;·&nbsp; Bus {{ voyage.bus.registration }}
+            &nbsp;·&nbsp; Base Fare ₹ {{ voyage.base_fare }}
+        </div>
+    </div>
+
+    <div class="c-book-layout">
+
+        <!-- LEFT: Seat grid -->
+        <section class="c-book-seat-section">
+
+            <div class="seat-section-header" style="max-width:380px; width:100%; margin-bottom:16px;">
+                <h2 class="serif" style="font-size:20px;">Select Seats</h2>
+                <div class="legend">
+                    <span class="legend-item">
+                        <span class="legend-swatch available"></span> Open
+                    </span>
+                    <span class="legend-item">
+                        <span class="legend-swatch" style="background:rgba(200,118,26,0.25);border-color:var(--marigold);"></span> Locked
+                    </span>
+                    <span class="legend-item">
+                        <span class="legend-swatch booked-m"></span> M
+                    </span>
+                    <span class="legend-item">
+                        <span class="legend-swatch booked-f"></span> F
+                    </span>
+                </div>
+            </div>
+
+            <div class="bus" style="max-width:380px; width:100%;">
+                <div class="bus-front">
+                    <div class="steering"></div>
+                    <span class="muted">Front · Door</span>
+                </div>
+
+                {% set rows = [
+                    ['D','C','B','A'], ['F','E','G','H'],
+                    ['2','1','3','4'], ['6','5','7','8'],
+                    ['10','9','11','12'], ['14','13','15','16'],
+                    ['18','17','19','20'], ['22','21','23','24'],
+                    ['26','25','27','28'], ['30','29','31','32'],
+                    ['34','33','35','36']
+                ] %}
+
+                {% for row in rows %}
+                <div class="seat-row">
+                    {% for seat_id in row %}
+                        {% set b = seat_map.get(seat_id) %}
+                        <div class="seat
+                            {% if seat_id in window_seats %}window{% endif %}
+                            {% if b %}booked-{{ b.gender|lower }}{% endif %}
+                            {% if seat_id in locked_other %}locked{% endif %}
+                            {% if seat_id in locked_mine %}active-single{% endif %}"
+                            data-seat="{{ seat_id }}"
+                            title="{% if b %}{{ b.passenger_name }}{% elif seat_id in locked_other %}Being reserved by another passenger{% else %}Seat {{ seat_id }}{% endif %}">
+                            {{ seat_id }}
+                        </div>
+                        {% if loop.index == 2 %}<div class="aisle"></div>{% endif %}
+                    {% endfor %}
+                </div>
+                {% endfor %}
+
+                <div class="seat-row back-row">
+                    {% for seat_id in ['37','38','39','40','41'] %}
+                        {% set b = seat_map.get(seat_id) %}
+                        <div class="seat
+                            {% if seat_id in window_seats %}window{% endif %}
+                            {% if b %}booked-{{ b.gender|lower }}{% endif %}
+                            {% if seat_id in locked_other %}locked{% endif %}
+                            {% if seat_id in locked_mine %}active-single{% endif %}"
+                            data-seat="{{ seat_id }}"
+                            title="{% if b %}{{ b.passenger_name }}{% elif seat_id in locked_other %}Being reserved by another passenger{% else %}Seat {{ seat_id }}{% endif %}">
+                            {{ seat_id }}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+        </section>
+
+        <!-- RIGHT: Selection / Booking panel -->
+        <aside class="c-book-panel">
+
+            <!-- State 1: No seats selected -->
+            <div id="panel-empty" class="c-panel-empty">
+                <div style="font-size:48px; margin-bottom:16px;">🪑</div>
+                <div class="serif" style="font-size:22px; color:var(--ink); margin-bottom:8px;">Select a seat</div>
+                <p style="font-size:13px; color:var(--muted); max-width:220px; margin:0 auto;">
+                    Click any open seat on the bus diagram to begin your booking.
+                </p>
+            </div>
+
+            <!-- State 2: Seats selected, show summary -->
+            <div id="panel-selected" class="hidden">
+                <div style="margin-bottom:24px;">
+                    <div class="form-label" style="margin-bottom:8px;">Selected Seats</div>
+                    <div id="selectedSeatsList" class="mono" style="font-size:20px; font-weight:600; color:var(--ink);"></div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:24px;">
+                    <div>
+                        <div class="form-label">Count</div>
+                        <div id="seatCountDisplay" style="font-size:16px; font-weight:500;"></div>
+                    </div>
+                    <div>
+                        <div class="form-label">Total Fare</div>
+                        <div id="totalFareDisplay" style="font-size:16px; font-weight:500; color:var(--marigold);"></div>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-primary" onclick="showBookingForm()">
+                    Book Now →
+                </button>
+            </div>
+
+            <!-- State 3: Booking form -->
+            <div id="panel-form" class="hidden">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <div>
+                        <div class="form-label">Seats</div>
+                        <div id="formSeatSummary" class="mono" style="font-weight:600;"></div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div class="form-label">Fare</div>
+                        <div id="formFareSummary" style="font-weight:600; color:var(--marigold);"></div>
+                    </div>
+                </div>
+
+                <form id="customerBookingForm" method="POST" action="{{ url_for('customer.customer_book') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="voyage_id" value="{{ voyage.id }}">
+                    <div id="seatInputsContainer"></div>
+
+                    <div class="form-group">
+                        <label class="form-label">Passenger Name</label>
+                        <input type="text" name="passenger_name" class="form-input" placeholder="Full name" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Phone Number</label>
+                        <input type="tel" name="passenger_phone" class="form-input" placeholder="+91 98XXX XXXXX" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Email (optional)</label>
+                        <input type="email" name="passenger_email" class="form-input" placeholder="you@email.com">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Gender</label>
+                        <div class="gender-choice">
+                            <label class="gender-btn">
+                                <input type="radio" name="gender" value="M" required>
+                                <span class="gender-dot male-dot"></span>
+                                <span>Male</span>
+                            </label>
+                            <label class="gender-btn">
+                                <input type="radio" name="gender" value="F">
+                                <span class="gender-dot female-dot"></span>
+                                <span>Female</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Boarding Point</label>
+                            {% if boarding_stops %}
+                            <select name="boarding_point" class="form-select" required>
+                                {% for s in boarding_stops %}
+                                <option value="{{ s.stop_name }}">{{ s.stop_name }}{% if s.stop_time %} · {{ s.stop_time }}{% endif %}</option>
+                                {% endfor %}
+                            </select>
+                            {% else %}
+                            <input type="text" name="boarding_point" class="form-input" placeholder="e.g. Dadar" required>
+                            {% endif %}
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Dropping Point</label>
+                            {% if dropping_stops %}
+                            <select name="dropping_point" class="form-select" required>
+                                {% for s in dropping_stops %}
+                                <option value="{{ s.stop_name }}">{{ s.stop_name }}{% if s.stop_time %} · {{ s.stop_time }}{% endif %}</option>
+                                {% endfor %}
+                            </select>
+                            {% else %}
+                            <input type="text" name="dropping_point" class="form-input" placeholder="e.g. Shivajinagar" required>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div style="background:var(--cream-2); border:1px solid var(--line); border-radius:6px; padding:14px; margin-bottom:16px; font-size:13px; color:var(--muted);">
+                        Balance due on boarding — no advance payment required online.
+                    </div>
+
+                    <div class="form-actions" style="justify-content:space-between;">
+                        <button type="button" class="btn btn-ghost" onclick="cancelForm()">← Back</button>
+                        <button type="submit" class="btn btn-primary" style="width:auto; flex:1; margin-left:10px;">
+                            Confirm Booking
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+        </aside>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/book.js') }}"></script>
+{% endblock %}

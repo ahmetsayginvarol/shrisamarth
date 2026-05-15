@@ -1140,6 +1140,79 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
     .c-bar-arrow { display: none; }
 }
 
+/* ===== Seat lock — pulsing amber ===== */
+.seat.locked {
+    background: rgba(200, 118, 26, 0.25);
+    border-color: var(--marigold);
+    cursor: not-allowed;
+    animation: seat-pulse 1.5s ease-in-out infinite;
+}
+@keyframes seat-pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1.0; }
+}
+
+/* ===== Customer booking page layout ===== */
+.c-book-layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    min-height: calc(100vh - 60px);
+}
+.c-book-seat-section {
+    padding: 28px 32px;
+    border-right: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.c-book-panel {
+    padding: 28px 32px;
+    background: #fff;
+    overflow-y: auto;
+}
+
+/* ===== Booking page header bar ===== */
+.c-book-header {
+    background: var(--ink);
+    color: var(--cream);
+    padding: 14px 24px;
+}
+.c-book-route {
+    font-family: 'Instrument Serif', serif;
+    font-size: 18px;
+}
+.c-book-meta {
+    font-size: 12px;
+    color: rgba(255,255,255,0.55);
+    margin-top: 4px;
+}
+
+/* ===== Panel states ===== */
+.c-panel-empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+}
+
+/* ===== Confirmation page ===== */
+.c-confirm-hero {
+    text-align: center;
+    padding: 48px 24px 32px;
+}
+
+/* ===== Page header layout (for my-bookings) ===== */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+@media (max-width: 768px) {
+    .c-book-layout { grid-template-columns: 1fr; }
+    .c-book-seat-section { border-right: none; border-bottom: 1px solid var(--line); padding: 20px 16px; }
+    .c-book-panel { padding: 20px 16px; }
+}
+
 @media (max-width: 480px) {
     .c-hero { padding: 40px 16px 60px; }
     .c-hero-title { font-size: 38px; }

@@ -74,6 +74,8 @@ def dashboard():
             voyage = next((v for v in day_voyages
                            if v.driver_id == current_user.id), None)
 
+    from app.models import SeatLock
+
     bookings = []
     if voyage:
         bookings = Booking.query.filter_by(
@@ -81,6 +83,15 @@ def dashboard():
         ).all()
 
     seat_map = {b.seat_id: b for b in bookings}
+
+    # Cleanup expired seat locks and get active ones for display
+    SeatLock.query.filter(SeatLock.expires_at < datetime.utcnow()).delete()
+    db.session.commit()
+    locked_seats = []
+    if voyage:
+        locked_seats = [l.seat_id for l in
+                        SeatLock.query.filter_by(voyage_id=voyage.id)
+                        .filter(SeatLock.expires_at > datetime.utcnow()).all()]
 
     # Collect dates that have voyages (for highlighting in date picker)
     voyage_dates = list(set(
@@ -101,6 +112,7 @@ def dashboard():
         scheduled=all_scheduled,
         seat_map=seat_map,
         window_seats=WINDOW_SEATS,
+        locked_seats=locked_seats,
         role=current_user.role,
         selected_date=selected_date.strftime('%Y-%m-%d'),
         voyage_dates=voyage_dates,

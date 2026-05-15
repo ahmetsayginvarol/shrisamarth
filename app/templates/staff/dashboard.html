@@ -154,9 +154,9 @@
                     {% set b = seat_map.get(seat_id) %}
                     <div class="seat
                         {% if seat_id in window_seats %}window{% endif %}
-                        {% if b %}booked-{{ b.gender|lower }}{% endif %}"
+                        {% if b %}booked-{{ b.gender|lower }}{% elif seat_id in locked_seats %}locked{% endif %}"
                         data-seat="{{ seat_id }}"
-                        title="{% if b %}{{ b.passenger_name }}{% else %}Seat {{ seat_id }}{% endif %}">
+                        title="{% if b %}{{ b.passenger_name }}{% elif seat_id in locked_seats %}Being reserved by a customer{% else %}Seat {{ seat_id }}{% endif %}">
                         {{ seat_id }}
                     </div>
                     {% if loop.index == 2 %}<div class="aisle"></div>{% endif %}
@@ -169,9 +169,9 @@
                     {% set b = seat_map.get(seat_id) %}
                     <div class="seat
                         {% if seat_id in window_seats %}window{% endif %}
-                        {% if b %}booked-{{ b.gender|lower }}{% endif %}"
+                        {% if b %}booked-{{ b.gender|lower }}{% elif seat_id in locked_seats %}locked{% endif %}"
                         data-seat="{{ seat_id }}"
-                        title="{% if b %}{{ b.passenger_name }}{% else %}Seat {{ seat_id }}{% endif %}">
+                        title="{% if b %}{{ b.passenger_name }}{% elif seat_id in locked_seats %}Being reserved by a customer{% else %}Seat {{ seat_id }}{% endif %}">
                         {{ seat_id }}
                     </div>
                 {% endfor %}

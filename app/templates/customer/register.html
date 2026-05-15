@@ -1,0 +1,87 @@
+{% extends 'customer/base_customer.html' %}
+{% block title %}Create Account · SHRISAMARTH{% endblock %}
+
+{% block customer_content %}
+<div class="login-page">
+    <div class="login-card" style="max-width:480px;">
+        <div class="login-brand">
+            <span class="brand-mark serif">श्री</span>
+            <div>
+                <div class="brand-name">SHRISAMARTH</div>
+                <div class="brand-sub">Passenger Portal</div>
+            </div>
+        </div>
+
+        <h1 class="serif" style="font-size:28px; margin-bottom:6px;">Create account</h1>
+        <p style="color:var(--muted); font-size:13px; margin-bottom:24px;">
+            Book seats and access your tickets anytime.
+        </p>
+
+        <form method="POST" action="{{ url_for('customer.register') }}" class="login-form">
+            {{ form.hidden_tag() }}
+
+            <div class="form-group">
+                {{ form.full_name.label(class='form-label') }}
+                {{ form.full_name(class='form-input', placeholder='Your full name', autocomplete='name') }}
+                {% if form.full_name.errors %}
+                    {% for e in form.full_name.errors %}
+                    <div style="color:var(--ruby); font-size:12px; margin-top:4px;">{{ e }}</div>
+                    {% endfor %}
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                {{ form.email.label(class='form-label') }}
+                {{ form.email(class='form-input', placeholder='you@email.com', autocomplete='email') }}
+                {% if form.email.errors %}
+                    {% for e in form.email.errors %}
+                    <div style="color:var(--ruby); font-size:12px; margin-top:4px;">{{ e }}</div>
+                    {% endfor %}
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                {{ form.phone.label(class='form-label') }}
+                {{ form.phone(class='form-input', placeholder='+91 98XXX XXXXX', autocomplete='tel') }}
+                {% if form.phone.errors %}
+                    {% for e in form.phone.errors %}
+                    <div style="color:var(--ruby); font-size:12px; margin-top:4px;">{{ e }}</div>
+                    {% endfor %}
+                {% endif %}
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    {{ form.password.label(class='form-label') }}
+                    {{ form.password(class='form-input', placeholder='Min. 6 characters', autocomplete='new-password') }}
+                    {% if form.password.errors %}
+                        {% for e in form.password.errors %}
+                        <div style="color:var(--ruby); font-size:12px; margin-top:4px;">{{ e }}</div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+                <div class="form-group">
+                    {{ form.confirm.label(class='form-label') }}
+                    {{ form.confirm(class='form-input', placeholder='Repeat password', autocomplete='new-password') }}
+                    {% if form.confirm.errors %}
+                        {% for e in form.confirm.errors %}
+                        <div style="color:var(--ruby); font-size:12px; margin-top:4px;">{{ e }}</div>
+                        {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top:24px;">
+                {{ form.submit(class='btn btn-primary') }}
+            </div>
+        </form>
+
+        <div style="text-align:center; margin-top:20px; font-size:13px; color:var(--muted);">
+            Already have an account?
+            <a href="{{ url_for('customer.login') }}" style="color:var(--marigold); text-decoration:none; font-weight:500;">
+                Sign in
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

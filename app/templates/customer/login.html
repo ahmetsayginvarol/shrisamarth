@@ -1,0 +1,56 @@
+{% extends 'customer/base_customer.html' %}
+{% block title %}Sign In · SHRISAMARTH{% endblock %}
+
+{% block customer_content %}
+<div class="login-page">
+    <div class="login-card">
+        <div class="login-brand">
+            <span class="brand-mark serif">श्री</span>
+            <div>
+                <div class="brand-name">SHRISAMARTH</div>
+                <div class="brand-sub">Passenger Portal</div>
+            </div>
+        </div>
+
+        <h1 class="serif" style="font-size:28px; margin-bottom:6px;">Welcome back</h1>
+        <p style="color:var(--muted); font-size:13px; margin-bottom:24px;">
+            Sign in to view your bookings and tickets.
+        </p>
+
+        <form method="POST" action="{{ url_for('customer.login') }}" class="login-form">
+            {{ form.hidden_tag() }}
+
+            <div class="form-group">
+                {{ form.email.label(class='form-label') }}
+                {{ form.email(class='form-input', placeholder='you@email.com', autocomplete='email') }}
+                {% if form.email.errors %}
+                    {% for e in form.email.errors %}
+                    <div style="color:var(--ruby); font-size:12px; margin-top:4px;">{{ e }}</div>
+                    {% endfor %}
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                {{ form.password.label(class='form-label') }}
+                {{ form.password(class='form-input', placeholder='••••••••', autocomplete='current-password') }}
+                {% if form.password.errors %}
+                    {% for e in form.password.errors %}
+                    <div style="color:var(--ruby); font-size:12px; margin-top:4px;">{{ e }}</div>
+                    {% endfor %}
+                {% endif %}
+            </div>
+
+            <div class="form-group" style="margin-top:24px;">
+                {{ form.submit(class='btn btn-primary') }}
+            </div>
+        </form>
+
+        <div style="text-align:center; margin-top:20px; font-size:13px; color:var(--muted);">
+            New to SHRISAMARTH?
+            <a href="{{ url_for('customer.register') }}" style="color:var(--marigold); text-decoration:none; font-weight:500;">
+                Create an account
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
