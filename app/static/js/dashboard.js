@@ -9,6 +9,10 @@ const BASE_FARE = staffMain ? parseFloat(staffMain.dataset.baseFare) : 0;
 let currentSeatId = null;
 let currentBookingId = null;
 
+// Multi-seat selection state
+let multiSeatMode = false;
+const selectedSeats = new Set();  // seat IDs pending group booking
+
 // ============================================================
 // PANEL SWITCHING
 // ============================================================
@@ -21,14 +25,13 @@ function showPanel(name) {
 
 function closePanel() {
     const isDriver = !document.getElementById('panel-booking');
-
     if (isDriver) {
         showPanel('manifest');
     } else {
         showPanel('empty');
     }
-
-    document.querySelectorAll('.seat.selected').forEach(s => s.classList.remove('selected'));
+    // Only deselect seats not part of the pending multi-select set
+    document.querySelectorAll('.seat.active-single').forEach(s => s.classList.remove('active-single'));
     currentSeatId = null;
     currentBookingId = null;
 }
@@ -37,8 +40,8 @@ function closePanel() {
 function manifestClick(seatId) {
     const seat = document.querySelector(`.seat[data-seat="${seatId}"]`);
     if (seat) {
-        document.querySelectorAll('.seat.selected').forEach(s => s.classList.remove('selected'));
-        seat.classList.add('selected');
+        document.querySelectorAll('.seat.active-single').forEach(s => s.classList.remove('active-single'));
+        seat.classList.add('active-single');
         seat.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
     fetch(`/staff/api/seat/${VOYAGE_ID}/${seatId}`)
@@ -51,16 +54,119 @@ function manifestClick(seatId) {
 }
 
 // ============================================================
+// MULTI-SEAT SELECTION
+// ============================================================
+
+function toggleMultiSeat() {
+    multiSeatMode = !multiSeatMode;
+    const toggleBtn = document.getElementById('multiSeatToggle');
+    const bookBtn   = document.getElementById('multiSeatBook');
+    const clearBtn  = document.getElementById('multiSeatClear');
+    const badge     = document.getElementById('multiSeatBadge');
+
+    if (multiSeatMode) {
+        toggleBtn.classList.add('btn-primary');
+        toggleBtn.classList.remove('btn-ghost');
+        toggleBtn.textContent = '✓ Multi-seat ON';
+    } else {
+        clearMultiSelect();
+        toggleBtn.classList.remove('btn-primary');
+        toggleBtn.classList.add('btn-ghost');
+        toggleBtn.textContent = '+ Multi-seat';
+        bookBtn.classList.add('hidden');
+        clearBtn.classList.add('hidden');
+        badge.classList.add('hidden');
+    }
+}
+
+function clearMultiSelect() {
+    selectedSeats.forEach(sid => {
+        const el = document.querySelector(`.seat[data-seat="${sid}"]`);
+        if (el) el.classList.remove('multi-selected');
+    });
+    selectedSeats.clear();
+    updateMultiSeatUI();
+}
+
+function updateMultiSeatUI() {
+    const bookBtn  = document.getElementById('multiSeatBook');
+    const clearBtn = document.getElementById('multiSeatClear');
+    const badge    = document.getElementById('multiSeatBadge');
+    if (!bookBtn) return;
+
+    if (selectedSeats.size > 0) {
+        badge.textContent = selectedSeats.size + ' selected';
+        badge.classList.remove('hidden');
+        bookBtn.textContent = `Book ${selectedSeats.size} Seat${selectedSeats.size > 1 ? 's' : ''}`;
+        bookBtn.classList.remove('hidden');
+        clearBtn.classList.remove('hidden');
+    } else {
+        badge.classList.add('hidden');
+        bookBtn.classList.add('hidden');
+        clearBtn.classList.add('hidden');
+    }
+}
+
+function openGroupBookingForm() {
+    if (selectedSeats.size === 0) return;
+    const seats = Array.from(selectedSeats).sort();
+
+    // Populate hidden seat inputs for group form
+    const container = document.getElementById('groupSeatInputs');
+    if (container) {
+        container.innerHTML = '';
+        seats.forEach(sid => {
+            const inp = document.createElement('input');
+            inp.type = 'hidden';
+            inp.name = 'seat_ids[]';
+            inp.value = sid;
+            container.appendChild(inp);
+        });
+    }
+
+    // Hide the single seat_id field — group uses seat_ids[] instead
+    const singleSeatInput = document.getElementById('formSeatId');
+    if (singleSeatInput) singleSeatInput.value = '';
+
+    document.getElementById('bookingSeatLabel').textContent = seats.join(', ');
+    document.getElementById('bookingForm').reset();
+    document.querySelector('input[name="fare"]').value = BASE_FARE;
+    document.querySelector('input[name="advance_paid"]').value = 0;
+    document.getElementById('genderWarning').classList.add('hidden');
+    window._adjacentGenders = [];
+    window._isGroupBooking = true;
+
+    showPanel('booking');
+}
+
+// ============================================================
 // SEAT CLICK HANDLER
 // ============================================================
 
 document.querySelectorAll('.seat').forEach(seat => {
     seat.addEventListener('click', async () => {
         const seatId = seat.dataset.seat;
-        currentSeatId = seatId;
 
-        document.querySelectorAll('.seat.selected').forEach(s => s.classList.remove('selected'));
-        seat.classList.add('selected');
+        // In multi-seat mode: only toggle available seats
+        if (multiSeatMode) {
+            const isBooked = seat.classList.contains('booked-m') || seat.classList.contains('booked-f');
+            if (isBooked) return;  // can't multi-select booked seats
+
+            if (selectedSeats.has(seatId)) {
+                selectedSeats.delete(seatId);
+                seat.classList.remove('multi-selected');
+            } else {
+                selectedSeats.add(seatId);
+                seat.classList.add('multi-selected');
+            }
+            updateMultiSeatUI();
+            return;
+        }
+
+        // Single-seat mode — normal flow
+        currentSeatId = seatId;
+        document.querySelectorAll('.seat.active-single').forEach(s => s.classList.remove('active-single'));
+        seat.classList.add('active-single');
 
         try {
             const res = await fetch(`/staff/api/seat/${VOYAGE_ID}/${seatId}`);
@@ -76,7 +182,7 @@ document.querySelectorAll('.seat').forEach(seat => {
                 if (data.status === 'booked') {
                     showBookingDetails(data.booking, false);
                 } else {
-                    showBookingForm(data);
+                    showSingleBookingForm(data);
                 }
             }
         } catch (err) {
@@ -90,7 +196,12 @@ document.querySelectorAll('.seat').forEach(seat => {
 // BOOKING FORM (only exists for reservation/admin)
 // ============================================================
 
-function showBookingForm(data) {
+function showSingleBookingForm(data) {
+    // Clear any leftover group inputs
+    const container = document.getElementById('groupSeatInputs');
+    if (container) container.innerHTML = '';
+    window._isGroupBooking = false;
+
     document.getElementById('bookingSeatLabel').textContent = data.seat_id;
     document.getElementById('formSeatId').value = data.seat_id;
     document.getElementById('confirmConflict').value = 'no';
@@ -111,6 +222,7 @@ function showBookingForm(data) {
 const genderRadios = document.querySelectorAll('input[name="gender"]');
 genderRadios.forEach(radio => {
     radio.addEventListener('change', () => {
+        if (window._isGroupBooking) return;  // skip conflict check for group bookings
         const selectedGender = radio.value;
         const conflicts = (window._adjacentGenders || [])
             .filter(a => a.gender !== selectedGender);
@@ -130,44 +242,95 @@ genderRadios.forEach(radio => {
     });
 });
 
-// Submit booking — only attach if form exists
+// Submit booking — handles both single and group modes
 const bookingForm = document.getElementById('bookingForm');
 if (bookingForm) {
     bookingForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(e.target);
 
-        try {
-            const res = await fetch('/staff/booking/create', {
-                method: 'POST',
-                body: formData,
-            });
-            const data = await res.json();
-
-            if (data.status === 'success') {
-                const seat = document.querySelector(`.seat[data-seat="${data.booking.seat_id}"]`);
-                seat.classList.remove('selected');
-                seat.classList.add('booked-' + data.booking.gender.toLowerCase());
-                seat.title = data.booking.name;
-
-                const oc = document.getElementById('occupancyCount');
-                if (oc) oc.textContent = parseInt(oc.textContent) + 1;
-
-                closePanel();
-                toast(`Seat ${data.booking.seat_id} booked for ${data.booking.name}`);
-
-            } else if (data.status === 'gender_conflict') {
-                alert(data.message);
-
-            } else if (data.status === 'error') {
-                const msg = data.message || JSON.stringify(data.errors);
-                alert('Error: ' + msg);
-            }
-        } catch (err) {
-            console.error('Booking failed:', err);
-            alert('Booking failed. Please try again.');
+        if (window._isGroupBooking) {
+            await submitGroupBooking(formData);
+        } else {
+            await submitSingleBooking(formData);
         }
     });
+}
+
+async function submitSingleBooking(formData) {
+    try {
+        const res = await fetch('/staff/booking/create', {
+            method: 'POST',
+            body: formData,
+        });
+        const data = await res.json();
+
+        if (data.status === 'success') {
+            const seat = document.querySelector(`.seat[data-seat="${data.booking.seat_id}"]`);
+            seat.classList.remove('active-single');
+            seat.classList.add('booked-' + data.booking.gender.toLowerCase());
+            seat.title = data.booking.name;
+
+            const oc = document.getElementById('occupancyCount');
+            if (oc) oc.textContent = parseInt(oc.textContent) + 1;
+
+            closePanel();
+            toast(`Seat ${data.booking.seat_id} booked for ${data.booking.name}`);
+
+        } else if (data.status === 'gender_conflict') {
+            alert(data.message);
+
+        } else if (data.status === 'error') {
+            alert('Error: ' + (data.message || JSON.stringify(data.errors)));
+        }
+    } catch (err) {
+        console.error('Booking failed:', err);
+        alert('Booking failed. Please try again.');
+    }
+}
+
+async function submitGroupBooking(formData) {
+    // seat_ids[] already injected into formData via hidden inputs
+    try {
+        const res = await fetch('/staff/booking/create-group', {
+            method: 'POST',
+            body: formData,
+        });
+        const data = await res.json();
+
+        if (data.status === 'success') {
+            const gender = data.gender.toLowerCase();
+            data.seat_ids.forEach(sid => {
+                const seat = document.querySelector(`.seat[data-seat="${sid}"]`);
+                if (seat) {
+                    seat.classList.remove('multi-selected', 'active-single');
+                    seat.classList.add('booked-' + gender);
+                    seat.title = data.name;
+                }
+            });
+
+            const oc = document.getElementById('occupancyCount');
+            if (oc) oc.textContent = parseInt(oc.textContent) + data.seat_ids.length;
+
+            selectedSeats.clear();
+            updateMultiSeatUI();
+
+            // Offer group ticket download
+            closePanel();
+            toast(`${data.seat_ids.length} seats booked for ${data.name}`);
+
+            // Show a quick follow-up prompt for group ticket
+            if (confirm(`Group booking confirmed!\nSeats: ${data.seat_ids.join(', ')}\nBooking ID: ${data.group_code}\n\nDownload group e-ticket?`)) {
+                window.open(`/staff/booking/group/${data.group_code}/ticket`, '_blank');
+            }
+
+        } else if (data.status === 'error') {
+            alert('Error: ' + (data.message || 'Unknown error'));
+        }
+    } catch (err) {
+        console.error('Group booking failed:', err);
+        alert('Group booking failed. Please try again.');
+    }
 }
 
 // ============================================================
@@ -177,7 +340,11 @@ if (bookingForm) {
 function showBookingDetails(booking, readonly) {
     currentBookingId = booking.id;
 
-    document.getElementById('detailsSeatLabel').textContent = booking.seat || currentSeatId;
+    const seatLabel = booking.group_seats && booking.group_seats.length > 1
+        ? booking.group_seats.sort().join(', ')
+        : (booking.seat || currentSeatId);
+
+    document.getElementById('detailsSeatLabel').textContent = seatLabel;
     document.getElementById('detailsName').textContent = booking.name;
     document.getElementById('detailsPhone').textContent = booking.phone;
     document.getElementById('detailsBoarding').textContent = booking.boarding;
@@ -187,7 +354,17 @@ function showBookingDetails(booking, readonly) {
     document.getElementById('detailsBalance').textContent = '₹ ' + booking.balance;
     document.getElementById('detailsCode').textContent = booking.code;
 
-    // Store booking info for ticket download
+    // Show group seats info if this is a group booking
+    const groupSeatsDiv = document.getElementById('detailsGroupSeats');
+    const groupSeatsList = document.getElementById('detailsGroupSeatsList');
+    if (booking.group_code && booking.group_seats && booking.group_seats.length > 1) {
+        groupSeatsList.textContent = booking.group_seats.sort().join(', ');
+        groupSeatsDiv.classList.remove('hidden');
+    } else {
+        groupSeatsDiv.classList.add('hidden');
+    }
+
+    // Individual ticket button
     const ticketBtn = document.getElementById('ticketDownloadBtn');
     if (ticketBtn) {
         ticketBtn.dataset.bookingId = booking.id;
@@ -196,13 +373,24 @@ function showBookingDetails(booking, readonly) {
         ticketBtn.dataset.bookingSeat = booking.seat || currentSeatId;
     }
 
-    // Store booking info for WhatsApp
+    // Group ticket button
+    const groupTicketBtn = document.getElementById('groupTicketDownloadBtn');
+    if (groupTicketBtn) {
+        if (booking.group_code && booking.group_seats && booking.group_seats.length > 1) {
+            groupTicketBtn.dataset.groupCode = booking.group_code;
+            groupTicketBtn.classList.remove('hidden');
+        } else {
+            groupTicketBtn.classList.add('hidden');
+        }
+    }
+
+    // WhatsApp button
     const waBtn = document.getElementById('whatsappBtn');
     if (waBtn) {
         waBtn.dataset.phone = booking.phone || '';
         waBtn.dataset.name = booking.name;
-        waBtn.dataset.seat = booking.seat || currentSeatId;
-        waBtn.dataset.code = booking.code;
+        waBtn.dataset.seat = seatLabel;
+        waBtn.dataset.code = booking.group_code || booking.code;
         waBtn.dataset.boarding = booking.boarding;
         waBtn.dataset.dropping = booking.dropping;
         waBtn.dataset.fare = booking.fare;
@@ -214,10 +402,12 @@ function showBookingDetails(booking, readonly) {
     const cancelBtn = document.getElementById('cancelBookingBtn');
     if (cancelBtn) cancelBtn.style.display = readonly ? 'none' : 'inline-block';
     if (ticketBtn) ticketBtn.style.display = readonly ? 'none' : 'inline-block';
+    if (groupTicketBtn) groupTicketBtn.style.display = readonly ? 'none' : '';
     if (waBtn) waBtn.style.display = readonly ? 'none' : 'inline-block';
 
     showPanel('details');
 }
+
 // ============================================================
 // TICKET DOWNLOAD
 // ============================================================
@@ -227,23 +417,28 @@ if (ticketBtn) {
     ticketBtn.addEventListener('click', function(e) {
         e.preventDefault();
         e.stopPropagation();
-
-        const id = this.dataset.bookingId;
+        const id   = this.dataset.bookingId;
         const name = this.dataset.bookingName;
         const code = this.dataset.bookingCode;
         const seat = this.dataset.bookingSeat;
-
         if (!id) return;
-
-        const confirmed = confirm(
-            `Download e-ticket for ${name}?\n\nSeat ${seat} · ${code}`
-        );
-
-        if (confirmed) {
+        if (confirm(`Download e-ticket for ${name}?\n\nSeat ${seat} · ${code}`)) {
             window.open(`/staff/booking/${id}/ticket`, '_blank');
         }
     });
 }
+
+const groupTicketBtn = document.getElementById('groupTicketDownloadBtn');
+if (groupTicketBtn) {
+    groupTicketBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        const code = this.dataset.groupCode;
+        if (!code) return;
+        window.open(`/staff/booking/group/${code}/ticket`, '_blank');
+    });
+}
+
 // ============================================================
 // WHATSAPP TICKET SHARE
 // ============================================================
@@ -254,25 +449,24 @@ if (waBtn) {
         e.preventDefault();
         e.stopPropagation();
 
-        const name = this.dataset.name;
-        const seat = this.dataset.seat;
-        const code = this.dataset.code;
+        const name     = this.dataset.name;
+        const seat     = this.dataset.seat;
+        const code     = this.dataset.code;
         const boarding = this.dataset.boarding;
         const dropping = this.dataset.dropping;
-        const fare = this.dataset.fare;
-        const balance = this.dataset.balance;
-        const phone = this.dataset.phone;
+        const fare     = this.dataset.fare;
+        const balance  = this.dataset.balance;
+        const phone    = this.dataset.phone;
 
         if (!name) return;
 
-        // Build WhatsApp message
         const message =
             `🚌 *SHRISAMARTH TRAVELS*\n` +
             `━━━━━━━━━━━━━━━━\n\n` +
             `Dear *${name}*,\n\n` +
             `Your booking is confirmed! ✅\n\n` +
             `🎫 *Booking ID:* ${code}\n` +
-            `💺 *Seat:* ${seat}\n` +
+            `💺 *Seat(s):* ${seat}\n` +
             `📍 *Boarding:* ${boarding}\n` +
             `📍 *Dropping:* ${dropping}\n` +
             `💰 *Fare:* ₹${fare}\n` +
@@ -281,19 +475,14 @@ if (waBtn) {
             `Show this message at boarding.\n` +
             `Thank you for travelling with us! 🙏`;
 
-        // Clean phone number for WhatsApp URL
         let cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
-        if (cleanPhone.startsWith('+')) {
-            cleanPhone = cleanPhone.substring(1);
-        }
-        if (!cleanPhone.startsWith('91') && cleanPhone.length === 10) {
-            cleanPhone = '91' + cleanPhone;
-        }
+        if (cleanPhone.startsWith('+')) cleanPhone = cleanPhone.substring(1);
+        if (!cleanPhone.startsWith('91') && cleanPhone.length === 10) cleanPhone = '91' + cleanPhone;
 
-        const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
-        window.open(waUrl, '_blank');
+        window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
     });
 }
+
 // ============================================================
 // CANCEL BOOKING
 // ============================================================
@@ -317,7 +506,7 @@ if (cancelBtn) {
 
             if (data.status === 'success') {
                 const seat = document.querySelector(`.seat[data-seat="${data.seat_id}"]`);
-                seat.classList.remove('booked-m', 'booked-f', 'selected');
+                seat.classList.remove('booked-m', 'booked-f', 'active-single', 'multi-selected');
                 seat.title = `Seat ${data.seat_id}`;
 
                 const oc = document.getElementById('occupancyCount');
@@ -358,19 +547,32 @@ const socket = io();
 
 socket.on('seat_booked', (data) => {
     if (parseInt(data.voyage_id) !== parseInt(VOYAGE_ID)) return;
-
     const seat = document.querySelector(`.seat[data-seat="${data.seat_id}"]`);
-    if (!seat || seat.classList.contains('selected')) return;
-
-    seat.classList.remove('booked-m', 'booked-f');
+    if (!seat || seat.classList.contains('active-single')) return;
+    seat.classList.remove('booked-m', 'booked-f', 'multi-selected');
     seat.classList.add('booked-' + data.gender.toLowerCase());
     seat.title = data.name;
-
+    // Remove from pending multi-select if it got booked by another agent
+    if (selectedSeats.has(data.seat_id)) {
+        selectedSeats.delete(data.seat_id);
+        updateMultiSeatUI();
+    }
     const oc = document.getElementById('occupancyCount');
     if (oc) oc.textContent = parseInt(oc.textContent) + 1;
-
     toast(`Seat ${data.seat_id} just booked by another agent`);
 });
+
+socket.on('seat_freed', (data) => {
+    if (parseInt(data.voyage_id) !== parseInt(VOYAGE_ID)) return;
+    const seat = document.querySelector(`.seat[data-seat="${data.seat_id}"]`);
+    if (!seat) return;
+    seat.classList.remove('booked-m', 'booked-f', 'active-single', 'multi-selected');
+    seat.title = `Seat ${data.seat_id}`;
+    const oc = document.getElementById('occupancyCount');
+    if (oc) oc.textContent = parseInt(oc.textContent) - 1;
+    toast(`Seat ${data.seat_id} is now available`);
+});
+
 // ============================================================
 // DATE PICKER + VOYAGE PICKER
 // ============================================================
@@ -379,9 +581,7 @@ const datePicker = document.getElementById('datePicker');
 if (datePicker) {
     datePicker.addEventListener('change', function() {
         const date = this.value;
-        if (date) {
-            window.location.href = `/staff/dashboard?date=${date}`;
-        }
+        if (date) window.location.href = `/staff/dashboard?date=${date}`;
     });
 }
 
@@ -393,17 +593,3 @@ if (voyagePicker) {
         window.location.href = `/staff/dashboard?date=${date}&voyage_id=${voyageId}`;
     });
 }
-socket.on('seat_freed', (data) => {
-    if (parseInt(data.voyage_id) !== parseInt(VOYAGE_ID)) return;
-
-    const seat = document.querySelector(`.seat[data-seat="${data.seat_id}"]`);
-    if (!seat) return;
-
-    seat.classList.remove('booked-m', 'booked-f', 'selected');
-    seat.title = `Seat ${data.seat_id}`;
-
-    const oc = document.getElementById('occupancyCount');
-    if (oc) oc.textContent = parseInt(oc.textContent) - 1;
-
-    toast(`Seat ${data.seat_id} is now available`);
-});

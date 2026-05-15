@@ -119,6 +119,18 @@
                     <span>F</span>
                 </span>
             </div>
+            {% if role != 'driver' %}
+            <div class="multi-seat-controls">
+                <button type="button" id="multiSeatToggle" class="btn btn-ghost"
+                        onclick="toggleMultiSeat()"
+                        data-i18n="dash.multiselect">+ Multi-seat</button>
+                <span id="multiSeatBadge" class="seat-badge hidden"></span>
+                <button type="button" id="multiSeatBook" class="btn btn-primary hidden"
+                        onclick="openGroupBookingForm()">Book Selected</button>
+                <button type="button" id="multiSeatClear" class="btn btn-ghost hidden"
+                        onclick="clearMultiSelect()" style="color:var(--muted);">✕ Clear</button>
+            </div>
+            {% endif %}
         </div>
 
         <div class="bus" id="seatMap">
@@ -222,7 +234,7 @@
         <div class="panel-view hidden" id="panel-booking">
             <div class="panel-header">
                 <h3 class="serif" data-i18n="dash.newbooking">New Booking</h3>
-                <span class="seat-badge">
+                <span class="seat-badge" id="bookingSeatBadge">
                     Seat <span id="bookingSeatLabel">—</span>
                 </span>
             </div>
@@ -235,6 +247,7 @@
             <form id="bookingForm">
                 <input type="hidden" name="voyage_id" value="{{ voyage.id }}">
                 <input type="hidden" name="seat_id" id="formSeatId">
+                <div id="groupSeatInputs"></div>
                 <input type="hidden" name="confirm_gender_conflict" id="confirmConflict" value="no">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
@@ -314,13 +327,16 @@
         <div class="panel-view hidden" id="panel-details">
             <div class="panel-header">
                 <h3 class="serif" data-i18n="dash.passenger">Passenger</h3>
-                <span class="seat-badge">
+                <span class="seat-badge" id="detailsSeatBadge">
                     Seat <span id="detailsSeatLabel">—</span>
                 </span>
             </div>
             <div class="passenger-card">
                 <div class="passenger-name" id="detailsName">—</div>
                 <div class="muted" id="detailsPhone">—</div>
+                <div id="detailsGroupSeats" class="hidden" style="margin: 4px 0; font-size: 12px; color: var(--muted);">
+                    Group seats: <span id="detailsGroupSeatsList">—</span>
+                </div>
                 <div class="passenger-details">
                     <div class="detail-row">
                         <span class="muted" data-i18n="dash.boarding">Boarding</span>
@@ -356,6 +372,12 @@
                             class="btn btn-ghost"
                             style="color: var(--marigold); border-color: var(--marigold);">
                         ↓ Save Ticket
+                    </button>
+                    <button type="button" id="groupTicketDownloadBtn"
+                            data-group-code=""
+                            class="btn btn-ghost hidden"
+                            style="color: var(--marigold); border-color: var(--marigold);">
+                        ↓ Group Ticket
                     </button>
                     <button type="button" id="whatsappBtn"
                             class="btn btn-ghost"

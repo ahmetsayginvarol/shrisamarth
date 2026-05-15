@@ -99,7 +99,12 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
 
 /* ===== Seat states ===== */
 .seat.window { box-shadow: inset 3px 0 0 var(--marigold); }
-.seat.selected { background: var(--gold); border-color: var(--marigold); transform: translateY(-3px); box-shadow: 0 0 0 3px rgba(212,168,76,0.25), 0 8px 16px -4px rgba(200,118,26,0.4); }
+.seat.active-single { background: var(--gold); border-color: var(--marigold); transform: translateY(-3px); box-shadow: 0 0 0 3px rgba(212,168,76,0.25), 0 8px 16px -4px rgba(200,118,26,0.4); }
+.seat.multi-selected { background: var(--sage, #4a7c59); border-color: #2d5a3d; color: var(--cream); transform: translateY(-3px); box-shadow: 0 0 0 3px rgba(74,124,89,0.3), 0 8px 16px -4px rgba(45,90,61,0.4); }
+
+/* ===== Multi-seat controls ===== */
+.seat-section-header { flex-wrap: wrap; gap: 8px; }
+.multi-seat-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 /* ===== Side panel views ===== */
 .panel-view.hidden { display: none; }

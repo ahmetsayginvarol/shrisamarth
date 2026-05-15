@@ -186,3 +186,183 @@ def generate_ticket(booking) -> io.BytesIO:
     doc.build(story)
     buf.seek(0)
     return buf
+
+
+def generate_group_ticket(bookings) -> io.BytesIO:
+    """Generate a single e-ticket PDF for a multi-seat group booking."""
+    if not bookings:
+        raise ValueError("No bookings provided")
+
+    first = bookings[0]
+    voyage = first.voyage
+
+    # Taller page for multiple seats
+    per_seat_extra = max(0, len(bookings) - 1) * 10 * mm
+    ticket_h = TICKET_H + per_seat_extra
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=(TICKET_W, ticket_h),
+        leftMargin=8*mm, rightMargin=8*mm,
+        topMargin=6*mm, bottomMargin=6*mm,
+    )
+
+    s_brand = ParagraphStyle('brand', fontSize=14, textColor=CREAM,
+        fontName='Helvetica-Bold', alignment=TA_LEFT, leading=16)
+    s_pass = ParagraphStyle('pass', fontSize=7, textColor=GOLD,
+        fontName='Helvetica-Bold', alignment=TA_RIGHT, leading=9)
+    s_route = ParagraphStyle('route', fontSize=14, textColor=INK,
+        fontName='Helvetica-Bold', alignment=TA_LEFT, leading=17)
+    s_dep = ParagraphStyle('dep', fontSize=8, textColor=MUTED,
+        fontName='Helvetica', alignment=TA_LEFT, leading=10)
+    s_label = ParagraphStyle('label', fontSize=6, textColor=GOLD,
+        fontName='Helvetica-Bold', alignment=TA_LEFT, leading=8)
+    s_val = ParagraphStyle('val', fontSize=9, textColor=INK,
+        fontName='Helvetica-Bold', alignment=TA_LEFT, leading=11)
+    s_val_sm = ParagraphStyle('val_sm', fontSize=8, textColor=INK,
+        fontName='Helvetica', alignment=TA_LEFT, leading=10)
+    s_center = ParagraphStyle('center', fontSize=7, textColor=MUTED,
+        fontName='Helvetica', alignment=TA_CENTER, leading=9)
+    s_code = ParagraphStyle('code', fontSize=6, textColor=MUTED,
+        fontName='Courier', alignment=TA_CENTER, leading=8)
+
+    half = CONTENT_W / 2
+    third = CONTENT_W / 3
+
+    def field_sm(label, value):
+        return Table(
+            [[Paragraph(label, s_label)], [Paragraph(str(value), s_val_sm)]],
+            colWidths=[CONTENT_W],
+        )
+
+    header = Table(
+        [[Paragraph('SHRISAMARTH', s_brand),
+          Paragraph('GROUP BOARDING PASS', s_pass)]],
+        colWidths=[half, half],
+    )
+    header.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), INK),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ('LEFTPADDING', (0,0), (0,-1), 5),
+        ('RIGHTPADDING', (-1,0), (-1,-1), 5),
+    ]))
+
+    route = f"{voyage.origin}  —  {voyage.destination}"
+    dep = voyage.departure_at.strftime('%d %B %Y · %H:%M')
+    gender_label = 'Male' if first.gender == 'M' else 'Female'
+
+    # Seats table — one row per seat
+    seat_rows = [[
+        Paragraph('SEAT', s_label),
+        Paragraph('TYPE', s_label),
+        Paragraph('FARE', s_label),
+        Paragraph('ADVANCE', s_label),
+        Paragraph('BALANCE', s_label),
+    ]]
+    col_w = [CONTENT_W * f for f in (0.14, 0.18, 0.22, 0.23, 0.23)]
+    for b in bookings:
+        window_label = 'Window' if b.is_window else 'Aisle'
+        seat_rows.append([
+            Paragraph(b.seat_id, s_val),
+            Paragraph(window_label, s_val_sm),
+            Paragraph(f'₹ {int(b.fare)}', s_val_sm),
+            Paragraph(f'₹ {int(b.advance_paid or 0)}', s_val_sm),
+            Paragraph(f'₹ {int(b.balance_due or 0)}', s_val_sm),
+        ])
+
+    seats_table = Table(seat_rows, colWidths=col_w)
+    seats_table.setStyle(TableStyle([
+        ('LINEBELOW', (0,0), (-1,0), 0.4, LINE),
+        ('TOPPADDING', (0,0), (-1,-1), 2),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+        ('RIGHTPADDING', (0,0), (-1,-1), 2),
+    ]))
+
+    total_fare = sum(int(b.fare) for b in bookings)
+    total_advance = sum(int(b.advance_paid or 0) for b in bookings)
+    total_balance = sum(int(b.balance_due or 0) for b in bookings)
+
+    totals_row = Table([[
+        Paragraph('', s_label),
+        Paragraph('TOTAL', s_label),
+        Paragraph(f'₹ {total_fare}', s_val_sm),
+        Paragraph(f'₹ {total_advance}', s_val_sm),
+        Paragraph(f'₹ {total_balance}', s_val_sm),
+    ]], colWidths=col_w)
+    totals_row.setStyle(TableStyle([
+        ('LINEABOVE', (0,0), (-1,0), 0.4, LINE),
+        ('TOPPADDING', (0,0), (-1,-1), 2),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+        ('RIGHTPADDING', (0,0), (-1,-1), 2),
+    ]))
+
+    row_board_drop = Table([[
+        Table([[Paragraph('BOARDING', s_label)], [Paragraph(first.boarding_point, s_val)]],
+              colWidths=[half]),
+        Table([[Paragraph('DROPPING', s_label)], [Paragraph(first.dropping_point, s_val)]],
+              colWidths=[half]),
+    ]], colWidths=[half, half])
+
+    verify_url = f"https://shrisamarth.onrender.com/verify/{first.group_booking_code}"
+    qr_buf = generate_qr(verify_url)
+    qr_img = RLImage(qr_buf, width=20*mm, height=20*mm)
+
+    footer = Table([[
+        qr_img,
+        Table([
+            [Paragraph('GROUP BOOKING ID', s_label)],
+            [Paragraph(first.group_booking_code, s_code)],
+            [Spacer(1, 2)],
+            [Paragraph('Show QR at boarding', s_center)],
+        ], colWidths=[CONTENT_W - 24*mm]),
+    ]], colWidths=[24*mm, CONTENT_W - 24*mm])
+    footer.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('LEFTPADDING', (0,0), (-1,-1), 0),
+        ('RIGHTPADDING', (0,0), (-1,-1), 0),
+    ]))
+
+    sp = Spacer(1, 2*mm)
+    hr = HRFlowable(width='100%', thickness=0.4, color=LINE, spaceAfter=2*mm)
+    hr_dash = HRFlowable(width='100%', thickness=0.4, color=LINE,
+                         lineCap='round', spaceAfter=2*mm, dash=[2,3])
+
+    story = [
+        header,
+        Spacer(1, 3*mm),
+        Paragraph(route, s_route),
+        Paragraph(dep, s_dep),
+        sp,
+        hr,
+        Table([[Paragraph('PASSENGER', s_label)], [Paragraph(first.passenger_name, s_val)]],
+              colWidths=[CONTENT_W]),
+        sp,
+        Table([[
+            Table([[Paragraph('GENDER', s_label)], [Paragraph(gender_label, s_val)]],
+                  colWidths=[half]),
+            Table([[Paragraph('CONTACT', s_label)], [Paragraph(first.passenger_phone, s_val_sm)]],
+                  colWidths=[half]),
+        ]], colWidths=[half, half]),
+        sp,
+        hr,
+        Table([[Paragraph(f'SEATS ({len(bookings)})', s_label)]], colWidths=[CONTENT_W]),
+        Spacer(1, 1*mm),
+        seats_table,
+        totals_row,
+        sp,
+        row_board_drop,
+        sp,
+        field_sm('BUS', voyage.bus.registration),
+        Spacer(1, 3*mm),
+        hr_dash,
+        footer,
+    ]
+
+    doc.build(story)
+    buf.seek(0)
+    return buf

@@ -7,7 +7,7 @@ from app.extensions import db, socketio
 from app.models import Voyage, Booking, SEAT_ADJACENCY, WINDOW_SEATS
 from app.staff.forms import BookingForm
 from flask import send_file
-from app.staff.ticket import generate_ticket
+from app.staff.ticket import generate_ticket, generate_group_ticket
 import secrets
 from app.staff.manifest import generate_manifest
 from app.logging import log_activity
@@ -140,6 +140,13 @@ def seat_info(voyage_id, seat_id):
     ).first()
 
     if booking:
+        group_seats = []
+        if booking.group_booking_code:
+            siblings = Booking.query.filter_by(
+                group_booking_code=booking.group_booking_code, status='confirmed'
+            ).all()
+            group_seats = [b.seat_id for b in siblings]
+
         return jsonify({
             'status': 'booked',
             'seat_id': seat_id,
@@ -147,6 +154,8 @@ def seat_info(voyage_id, seat_id):
             'booking': {
                 'id': booking.id,
                 'code': booking.booking_code,
+                'group_code': booking.group_booking_code,
+                'group_seats': group_seats,
                 'name': booking.passenger_name,
                 'phone': booking.passenger_phone,
                 'gender': booking.gender,
@@ -241,20 +250,10 @@ def create_booking():
             'status': 'error',
             'message': 'This seat was just booked by someone else. Please refresh and try again.'
         }), 409
-    try:
-        db.session.add(booking)
-        db.session.commit()
-    except IntegrityError:
-        db.session.rollback()
-        return jsonify({
-            'status': 'error',
-            'message': 'This seat was just booked by someone else. Please refresh and try again.'
-        }), 409
 
     log_activity('booking_created',
                  f'Booked seat {booking.seat_id} for {booking.passenger_name} on {voyage.origin}→{voyage.destination}',
                  'booking', booking.id)
-    # Broadcast to all connected clients
     socketio.emit('seat_booked', {
         'voyage_id': voyage.id,
         'seat_id': booking.seat_id,
@@ -272,6 +271,104 @@ def create_booking():
             'gender': booking.gender,
         }
     })
+
+
+@staff_bp.route('/booking/create-group', methods=['POST'])
+def create_group_booking():
+    if not current_user.has_role('admin', 'reservation'):
+        abort(403)
+
+    voyage_id = request.form.get('voyage_id', type=int)
+    seat_ids_raw = request.form.getlist('seat_ids[]')
+    passenger_name = (request.form.get('passenger_name') or '').strip()
+    passenger_phone = (request.form.get('passenger_phone') or '').strip()
+    gender = request.form.get('gender', '')
+    boarding_point = request.form.get('boarding_point', '')
+    dropping_point = request.form.get('dropping_point', '')
+    fare_per_seat = request.form.get('fare', type=float, default=0)
+    advance_paid = request.form.get('advance_paid', type=float, default=0)
+
+    seat_ids = [s.strip() for s in seat_ids_raw if s.strip()]
+
+    if not voyage_id or not seat_ids or not passenger_name or not passenger_phone or gender not in ('M', 'F'):
+        return jsonify({'status': 'error', 'message': 'Missing required fields.'}), 400
+
+    voyage = Voyage.query.get_or_404(voyage_id)
+
+    # Verify all seats are still available
+    for sid in seat_ids:
+        existing = Booking.query.filter_by(voyage_id=voyage.id, seat_id=sid, status='confirmed').first()
+        if existing:
+            return jsonify({'status': 'error', 'message': f'Seat {sid} was just booked. Please refresh.'}), 409
+
+    total_fare = fare_per_seat * len(seat_ids)
+    balance = total_fare - advance_paid
+
+    group_code = f"GRP-{voyage.departure_at.strftime('%Y%m%d')}-{secrets.token_hex(4).upper()}"
+
+    bookings_created = []
+    try:
+        for sid in seat_ids:
+            per_seat_advance = round(advance_paid / len(seat_ids), 2)
+            per_seat_balance = fare_per_seat - per_seat_advance
+            code = f"SHRI-{voyage.departure_at.strftime('%Y%m%d')}-{sid}-{secrets.token_hex(3).upper()}"
+            b = Booking(
+                voyage_id=voyage.id,
+                seat_id=sid,
+                passenger_name=passenger_name,
+                passenger_phone=passenger_phone,
+                gender=gender,
+                boarding_point=boarding_point,
+                dropping_point=dropping_point,
+                fare=fare_per_seat,
+                advance_paid=per_seat_advance,
+                balance_due=per_seat_balance,
+                booking_code=code,
+                group_booking_code=group_code,
+                created_by_id=current_user.id,
+                status='confirmed',
+            )
+            db.session.add(b)
+            bookings_created.append(b)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': 'One or more seats were just booked. Please refresh.'}), 409
+
+    for b in bookings_created:
+        log_activity('booking_created',
+                     f'Group booking {group_code}: seat {b.seat_id} for {b.passenger_name} on {voyage.origin}→{voyage.destination}',
+                     'booking', b.id)
+        socketio.emit('seat_booked', {
+            'voyage_id': voyage.id,
+            'seat_id': b.seat_id,
+            'gender': b.gender,
+            'name': b.passenger_name,
+        })
+
+    return jsonify({
+        'status': 'success',
+        'group_code': group_code,
+        'seat_ids': seat_ids,
+        'bookings': [{'id': b.id, 'seat_id': b.seat_id, 'code': b.booking_code} for b in bookings_created],
+        'name': passenger_name,
+        'gender': gender,
+    })
+
+
+@staff_bp.route('/booking/group/<group_code>/ticket')
+def download_group_ticket(group_code):
+    bookings = Booking.query.filter_by(
+        group_booking_code=group_code, status='confirmed'
+    ).order_by(Booking.seat_id).all()
+    if not bookings:
+        abort(404)
+    _ = bookings[0].voyage.bus
+    pdf = generate_group_ticket(bookings)
+    filename = f"ticket-{group_code}.pdf"
+    return send_file(pdf, mimetype='application/pdf', as_attachment=True, download_name=filename)
+
+
 @staff_bp.route('/booking/<int:booking_id>/cancel', methods=['POST'])
 def cancel_booking(booking_id):
     if not current_user.has_role('admin', 'reservation'):
@@ -280,11 +377,9 @@ def cancel_booking(booking_id):
     booking = Booking.query.get_or_404(booking_id)
     booking.status = 'cancelled'
     db.session.commit()
-    booking.status = 'cancelled'
-    db.session.commit()
 
     log_activity('booking_cancelled',
-                 f'Cancelled seat {seat_id} ({booking.passenger_name}) on voyage {voyage_id}',
+                 f'Cancelled seat {booking.seat_id} ({booking.passenger_name}) on voyage {booking.voyage_id}',
                  'booking', booking_id)
     socketio.emit('seat_freed', {
         'voyage_id': booking.voyage_id,

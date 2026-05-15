@@ -127,6 +127,7 @@ class Booking(db.Model):
 
     status = db.Column(db.String(20), default='confirmed')  # confirmed, cancelled
     booking_code = db.Column(db.String(30), unique=True, index=True)
+    group_booking_code = db.Column(db.String(30), nullable=True, index=True)
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
