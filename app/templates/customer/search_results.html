@@ -1,0 +1,160 @@
+{% extends 'customer/base_customer.html' %}
+{% block title %}
+  {% if origin and destination %}{{ origin }} → {{ destination }}{% else %}Search{% endif %} · SHRISAMARTH
+{% endblock %}
+
+{% block nav_extra %}
+<a href="{{ url_for('customer.home') }}" class="btn btn-ghost" style="font-size:12px; padding:6px 14px;">← Home</a>
+{% endblock %}
+
+{% block customer_content %}
+
+<!-- Compact search bar -->
+<div class="c-search-bar">
+    <form method="GET" action="{{ url_for('customer.search') }}" class="c-search-bar-form">
+        <select name="origin" class="c-bar-input" required>
+            <option value="">From…</option>
+            {% for city in origins %}
+            <option value="{{ city }}" {% if city == origin %}selected{% endif %}>{{ city }}</option>
+            {% endfor %}
+        </select>
+        <span class="c-bar-arrow">→</span>
+        <select name="destination" class="c-bar-input" required>
+            <option value="">To…</option>
+            {% for city in destinations %}
+            <option value="{{ city }}" {% if city == destination %}selected{% endif %}>{{ city }}</option>
+            {% endfor %}
+        </select>
+        <input type="date" name="date" class="c-bar-input"
+               value="{{ travel_date }}"
+               min="{{ today_str if today_str else '' }}"
+               required>
+        <button type="submit" class="btn btn-primary" style="width:auto; padding:10px 20px; white-space:nowrap;">Search</button>
+    </form>
+</div>
+
+<!-- Results header -->
+<div class="c-results-page">
+    <div class="c-results-header">
+        {% if origin and destination and search_date %}
+        <div>
+            <div class="c-results-route">{{ origin }} → {{ destination }}</div>
+            <div class="c-results-meta">
+                {{ search_date.strftime('%A, %d %B %Y') }}
+                · <strong>{{ voyages|length }}</strong>
+                {{ 'bus' if voyages|length == 1 else 'buses' }} found
+            </div>
+        </div>
+        {% if voyages %}
+        <div class="c-sort-bar">
+            <span class="c-sort-label">Sort:</span>
+            <a href="?origin={{ origin }}&destination={{ destination }}&date={{ travel_date }}&sort=time"
+               class="c-sort-btn {% if sort_by == 'time' %}active{% endif %}">Time</a>
+            <a href="?origin={{ origin }}&destination={{ destination }}&date={{ travel_date }}&sort=price"
+               class="c-sort-btn {% if sort_by == 'price' %}active{% endif %}">Price</a>
+            <a href="?origin={{ origin }}&destination={{ destination }}&date={{ travel_date }}&sort=seats"
+               class="c-sort-btn {% if sort_by == 'seats' %}active{% endif %}">Seats</a>
+        </div>
+        {% endif %}
+        {% else %}
+        <div class="c-results-route" style="color:var(--muted); font-size:20px;">Enter a route above to search</div>
+        {% endif %}
+    </div>
+
+    <div class="c-results-list">
+        {% if voyages %}
+            {% for v in voyages %}
+            {% set stops = voyage_stops.get(v.id, {}) %}
+            {% set avail = v.bus.total_seats - v.seats_booked %}
+            <div class="c-result-card">
+                <div class="c-result-main">
+                    <!-- Time + bus info -->
+                    <div class="c-result-time-block">
+                        <div class="c-result-time">{{ v.departure_at.strftime('%H:%M') }}</div>
+                        <div class="c-result-date">{{ v.departure_at.strftime('%d %b') }}</div>
+                        {% if v.arrival_at %}
+                        <div class="c-result-arrival">arrives {{ v.arrival_at.strftime('%H:%M') }}</div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Route + bus details -->
+                    <div class="c-result-details">
+                        <div class="c-result-route-label">
+                            {{ v.origin }} <span style="color:var(--marigold);">→</span> {{ v.destination }}
+                        </div>
+                        <div class="c-result-bus-info">
+                            <span class="c-result-bus-reg">{{ v.bus.registration }}</span>
+                            {% if v.bus.name %}
+                            <span class="c-result-bus-name">{{ v.bus.name }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="c-result-seats
+                            {% if avail == 0 %}c-seats-sold{% elif avail <= 5 %}c-seats-low{% else %}c-seats-ok{% endif %}">
+                            {% if avail == 0 %}
+                                Sold out
+                            {% elif avail <= 5 %}
+                                ⚠ {{ avail }} seat{{ 's' if avail != 1 }} left
+                            {% else %}
+                                {{ avail }} seats available
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Fare + CTA -->
+                    <div class="c-result-cta">
+                        <div class="c-result-fare">₹ {{ v.base_fare | int }}</div>
+                        <div class="c-result-fare-sub">per seat</div>
+                        {% if avail > 0 %}
+                        <a href="{{ url_for('customer.book', voyage_id=v.id) }}"
+                           class="c-book-btn">Select Seats →</a>
+                        {% else %}
+                        <span class="c-book-btn c-book-btn-disabled">Sold Out</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Stops row -->
+                {% if stops.boarding or stops.dropping %}
+                <div class="c-result-stops">
+                    {% if stops.boarding %}
+                    <div class="c-stops-row">
+                        <span class="c-stops-label boarding">Boarding</span>
+                        <div class="c-stops-chips">
+                            {% for s in stops.boarding %}
+                            <span class="c-stop-chip">
+                                {{ s.stop_name }}{% if s.stop_time %} <em>{{ s.stop_time }}</em>{% endif %}
+                            </span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% if stops.dropping %}
+                    <div class="c-stops-row">
+                        <span class="c-stops-label dropping">Dropping</span>
+                        <div class="c-stops-chips">
+                            {% for s in stops.dropping %}
+                            <span class="c-stop-chip">
+                                {{ s.stop_name }}{% if s.stop_time %} <em>{{ s.stop_time }}</em>{% endif %}
+                            </span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+
+        {% elif origin and destination %}
+        <!-- No results -->
+        <div class="c-no-results">
+            <div class="c-no-results-icon">🚌</div>
+            <h2 class="serif">No buses found</h2>
+            <p>No scheduled buses from <strong>{{ origin }}</strong> to <strong>{{ destination }}</strong>
+               on {{ search_date.strftime('%d %B %Y') if search_date }}.</p>
+            <p style="margin-top:8px;">Try a different date or check back later.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -1,7 +1,5 @@
 import os
-from flask import Flask, redirect, url_for
-from flask_login import current_user
-
+from flask import Flask
 from config import Config
 from app.extensions import db, migrate, login_manager, bcrypt, socketio, babel, csrf
 
@@ -25,17 +23,12 @@ def create_app(config_class=Config):
     from app.auth.routes import auth_bp
     from app.staff.routes import staff_bp
     from app.admin.routes import admin_bp
+    from app.customer.routes import customer_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(staff_bp, url_prefix='/staff')
     app.register_blueprint(admin_bp, url_prefix='/admin')
-
-    # Root route
-    @app.route('/')
-    def index():
-        if current_user.is_authenticated:
-            return redirect(url_for('staff.dashboard'))
-        return redirect(url_for('auth.login'))
+    app.register_blueprint(customer_bp)  # root — no prefix
 
     # Import models so migrations detect them
     from app import models  # noqa: F401

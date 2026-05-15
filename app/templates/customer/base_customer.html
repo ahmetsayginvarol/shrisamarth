@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<nav class="c-nav">
+    <a href="{{ url_for('customer.home') }}" class="c-nav-brand">
+        <span class="c-nav-mark">श्री</span>
+        <span class="c-nav-name">SHRISAMARTH</span>
+    </a>
+    <div class="c-nav-links">
+        {% block nav_extra %}{% endblock %}
+        <a href="{{ url_for('auth.login') }}"
+           class="btn btn-ghost"
+           style="font-size:12px; padding:6px 14px;">Staff ↗</a>
+    </div>
+</nav>
+
+{% block customer_content %}{% endblock %}
+
+<footer class="c-footer">
+    <div class="c-footer-inner">
+        <div>
+            <div class="c-footer-brand">
+                <span class="c-footer-mark serif">श्री</span>
+                <span class="c-footer-name">SHRISAMARTH TRAVELS</span>
+            </div>
+            <div class="c-footer-sub">Reliable overnight bus travel across Maharashtra.</div>
+        </div>
+        <div class="c-footer-contact">
+            <div>📞 +91 98200 00000</div>
+            <div>✉ info@shrisamarth.com</div>
+        </div>
+    </div>
+    <div class="c-footer-copy">© 2026 Shrisamarth Travels. All rights reserved.</div>
+</footer>
+{% endblock %}

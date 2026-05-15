@@ -1,0 +1,70 @@
+{% extends 'customer/base_customer.html' %}
+{% block title %}SHRISAMARTH — Book Bus Tickets{% endblock %}
+
+{% block customer_content %}
+<div class="c-hero">
+    <div class="c-hero-text">
+        <h1 class="c-hero-title serif">Your journey,<br>your comfort.</h1>
+        <p class="c-hero-sub">Overnight sleeper buses across Maharashtra — reliable and on time.</p>
+    </div>
+
+    <div class="c-search-card">
+        <div class="c-search-card-label">Find your bus</div>
+        <form method="GET" action="{{ url_for('customer.search') }}">
+            <div class="c-search-fields">
+                <div class="c-field-group">
+                    <label class="c-field-label">From</label>
+                    <select name="origin" class="c-field-input" required>
+                        <option value="">Select city…</option>
+                        {% for city in origins %}
+                        <option value="{{ city }}">{{ city }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="c-swap-icon" aria-hidden="true">⇄</div>
+
+                <div class="c-field-group">
+                    <label class="c-field-label">To</label>
+                    <select name="destination" class="c-field-input" required>
+                        <option value="">Select city…</option>
+                        {% for city in destinations %}
+                        <option value="{{ city }}">{{ city }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="c-field-group">
+                    <label class="c-field-label">Date</label>
+                    <input type="date" name="date" class="c-field-input"
+                           value="{{ today }}" min="{{ today }}" required>
+                </div>
+
+                <button type="submit" class="c-search-btn">
+                    Search Buses
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<section class="c-features">
+    <div class="c-features-inner">
+        <div class="c-feature">
+            <div class="c-feature-icon">🚌</div>
+            <div class="c-feature-title">Sleeper coaches</div>
+            <div class="c-feature-sub">Comfortable overnight journeys with 49-seat AC sleeper buses.</div>
+        </div>
+        <div class="c-feature">
+            <div class="c-feature-icon">📍</div>
+            <div class="c-feature-title">Multiple pick-ups</div>
+            <div class="c-feature-sub">Board from Dadar, Andheri, Borivali or Thane — whichever suits you.</div>
+        </div>
+        <div class="c-feature">
+            <div class="c-feature-icon">🎫</div>
+            <div class="c-feature-title">Instant e-ticket</div>
+            <div class="c-feature-sub">Booking confirmed in seconds. Download your PDF ticket right away.</div>
+        </div>
+    </div>
+</section>
+{% endblock %}
