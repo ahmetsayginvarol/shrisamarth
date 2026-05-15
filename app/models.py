@@ -136,6 +136,7 @@ class Booking(db.Model):
 
     passenger_name = db.Column(db.String(120), nullable=False)
     passenger_phone = db.Column(db.String(20), nullable=False)
+    passenger_email = db.Column(db.String(120), nullable=True)
     gender = db.Column(db.String(1), nullable=False)  # 'M' or 'F'
 
     boarding_point = db.Column(db.String(80))
@@ -188,6 +189,25 @@ class ActivityLog(db.Model):
 
     def __repr__(self):
         return f'<Log {self.action} by user {self.user_id}>'
+
+
+# ============================================================
+# SEAT LOCK (temporary reservation during checkout)
+# ============================================================
+
+class SeatLock(db.Model):
+    __tablename__ = 'seat_locks'
+    id = db.Column(db.Integer, primary_key=True)
+    voyage_id = db.Column(db.Integer, db.ForeignKey('voyages.id'), nullable=False)
+    seat_id = db.Column(db.String(8), nullable=False)
+    session_id = db.Column(db.String(64), nullable=False)
+    locked_at = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=False)
+
+    def __repr__(self):
+        return f'<SeatLock voyage={self.voyage_id} seat={self.seat_id}>'
+
+
 # ============================================================
     # SEAT LAYOUT HELPERS
     # ============================================================

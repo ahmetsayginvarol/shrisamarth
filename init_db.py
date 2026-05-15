@@ -26,6 +26,12 @@ with app.app_context():
                 ))
                 db.session.commit()
                 print("  Added group_booking_code column")
+            if 'passenger_email' not in columns:
+                db.session.execute(text(
+                    'ALTER TABLE bookings ADD COLUMN passenger_email VARCHAR(120)'
+                ))
+                db.session.commit()
+                print("  Added passenger_email column")
 
         # Create activity_log table if missing
         if 'activity_log' not in existing_tables:
@@ -43,6 +49,34 @@ with app.app_context():
             '''))
             db.session.commit()
             print("  Created activity_log table")
+
+        # Create seat_locks table if missing
+        if 'seat_locks' not in existing_tables:
+            if dialect == 'postgresql':
+                sql = """
+                    CREATE TABLE seat_locks (
+                        id          SERIAL PRIMARY KEY,
+                        voyage_id   INTEGER NOT NULL REFERENCES voyages(id),
+                        seat_id     VARCHAR(8) NOT NULL,
+                        session_id  VARCHAR(64) NOT NULL,
+                        locked_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        expires_at  TIMESTAMP NOT NULL
+                    )
+                """
+            else:
+                sql = """
+                    CREATE TABLE seat_locks (
+                        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                        voyage_id   INTEGER NOT NULL REFERENCES voyages(id),
+                        seat_id     VARCHAR(8) NOT NULL,
+                        session_id  VARCHAR(64) NOT NULL,
+                        locked_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        expires_at  TIMESTAMP NOT NULL
+                    )
+                """
+            db.session.execute(text(sql))
+            db.session.commit()
+            print(f"  Created seat_locks table ({dialect})")
 
         # Create route_stops table if missing
         if 'route_stops' not in existing_tables:
