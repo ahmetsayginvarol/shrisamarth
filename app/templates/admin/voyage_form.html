@@ -53,9 +53,78 @@
         {{ form.notes(class="form-input", rows=3, placeholder="Optional notes for staff") }}
     </div>
 
-    <div class="form-actions">
+    <!-- Route Stops Section -->
+    <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line);">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:8px;">
+            <div>
+                <div class="form-label" style="font-size:13px; margin-bottom:2px;">Route Stops</div>
+                <div style="font-size:12px; color:var(--muted);">Boarding and dropping points shown to staff when booking.</div>
+            </div>
+            <button type="button" class="btn btn-ghost"
+                    style="font-size:12px; padding:6px 12px;"
+                    onclick="loadMumbaiPuneDefaults()">
+                Load Mumbai → Pune defaults
+            </button>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
+            <!-- Boarding Stops -->
+            <div>
+                <div class="form-label" style="color:var(--gold); margin-bottom:8px;">Boarding Stops</div>
+                <div id="boardingStops" style="display:flex; flex-direction:column; gap:6px;"></div>
+                <button type="button" class="btn btn-ghost"
+                        style="margin-top:8px; font-size:12px; padding:6px 12px;"
+                        onclick="addStop('boarding')">+ Add Boarding Stop</button>
+            </div>
+            <!-- Dropping Stops -->
+            <div>
+                <div class="form-label" style="color:var(--gold); margin-bottom:8px;">Dropping Stops</div>
+                <div id="droppingStops" style="display:flex; flex-direction:column; gap:6px;"></div>
+                <button type="button" class="btn btn-ghost"
+                        style="margin-top:8px; font-size:12px; padding:6px 12px;"
+                        onclick="addStop('dropping')">+ Add Dropping Stop</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-actions" style="margin-top:24px;">
         <a href="{{ url_for('admin.voyages') }}" class="btn btn-ghost">Cancel</a>
         {{ form.submit(class="btn btn-primary", style="width:auto;") }}
     </div>
 </form>
+
+<script>
+const EXISTING_STOPS = {{ stops_json | safe }};
+
+function stopRow(type, name, time) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; gap:6px; align-items:center;';
+    row.innerHTML = `
+        <input type="hidden" name="stop_type[]" value="${type}">
+        <input type="text" name="stop_name[]" class="form-input"
+               value="${name}" placeholder="Stop name" required
+               style="flex:1; padding:7px 10px; font-size:13px;">
+        <input type="time" name="stop_time[]" class="form-input"
+               value="${time}" style="width:100px; padding:7px 10px; font-size:13px;">
+        <button type="button" onclick="this.parentNode.remove()"
+                style="background:none; border:none; color:var(--muted); font-size:16px; cursor:pointer; padding:4px 6px; line-height:1;">✕</button>
+    `;
+    return row;
+}
+
+function addStop(type, name='', time='') {
+    const container = document.getElementById(type === 'boarding' ? 'boardingStops' : 'droppingStops');
+    container.appendChild(stopRow(type, name, time));
+}
+
+function loadMumbaiPuneDefaults() {
+    document.getElementById('boardingStops').innerHTML = '';
+    document.getElementById('droppingStops').innerHTML = '';
+    [['Dadar','21:00'],['Andheri','21:30'],['Borivali','22:00'],['Thane','22:15']].forEach(([n,t]) => addStop('boarding', n, t));
+    [['Shivajinagar','01:30'],['Swargate','01:45'],['Katraj','02:00'],['Hinjewadi','02:30']].forEach(([n,t]) => addStop('dropping', n, t));
+}
+
+// Pre-populate on edit
+EXISTING_STOPS.forEach(s => addStop(s.type, s.name, s.time));
+</script>
 {% endblock %}

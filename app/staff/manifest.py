@@ -112,14 +112,17 @@ def generate_manifest(voyage, bookings) -> io.BytesIO:
     ]], colWidths=[quarter]*4)
 
     # ===== Passenger table =====
-    # Sort bookings by seat — letters first, then numbers
-    def seat_sort(b):
-        s = b.seat_id
-        if s.isdigit():
-            return (1, int(s))
-        return (0, s)
+    # Sort by boarding stop_order, then seat as tiebreaker
+    boarding_order = {s.stop_name: s.stop_order
+                      for s in voyage.stops if s.stop_type == 'boarding'}
 
-    sorted_bookings = sorted(bookings, key=seat_sort)
+    def manifest_sort(b):
+        stop_pos = boarding_order.get(b.boarding_point, 999)
+        seat = b.seat_id
+        seat_key = (1, int(seat)) if seat.isdigit() else (0, seat)
+        return (stop_pos,) + seat_key
+
+    sorted_bookings = sorted(bookings, key=manifest_sort)
 
     # Table header
     col_widths = [12*mm, 45*mm, 30*mm, 25*mm, 25*mm, 20*mm, 23*mm]

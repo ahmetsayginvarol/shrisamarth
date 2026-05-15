@@ -118,8 +118,12 @@ def generate_ticket(booking) -> io.BytesIO:
               colWidths=[half]),
     ]], colWidths=[half, half])
 
+    stop_times = {s.stop_name: s.stop_time for s in booking.voyage.stops}
+    board_label = booking.boarding_point
+    if stop_times.get(booking.boarding_point):
+        board_label = f"{booking.boarding_point} ({stop_times[booking.boarding_point]})"
     row_board_drop = Table([[
-        Table([[Paragraph('BOARDING', s_label)], [Paragraph(booking.boarding_point, s_val)]],
+        Table([[Paragraph('BOARDING', s_label)], [Paragraph(board_label, s_val)]],
               colWidths=[half]),
         Table([[Paragraph('DROPPING', s_label)], [Paragraph(booking.dropping_point, s_val)]],
               colWidths=[half]),

@@ -3,13 +3,33 @@ from flask import Blueprint, render_template, redirect, url_for, flash, abort, r
 from flask_login import login_required, current_user
 
 from app.extensions import db
-from app.models import Bus, Voyage, Booking, User, ActivityLog
+from app.models import Bus, Voyage, Booking, User, ActivityLog, RouteStop
 from datetime import datetime, timedelta
 from sqlalchemy import func, and_
 from app.admin.forms import BusForm, VoyageForm, UserForm, UserEditForm
 from app.logging import log_activity
 
 admin_bp = Blueprint('admin', __name__, template_folder='../templates/admin')
+
+
+def _save_stops(voyage_id):
+    """Parse stop arrays from POST data and save RouteStop rows."""
+    names = request.form.getlist('stop_name[]')
+    types = request.form.getlist('stop_type[]')
+    times = request.form.getlist('stop_time[]')
+    for i, name in enumerate(names):
+        name = name.strip()
+        if not name:
+            continue
+        stop_type = types[i] if i < len(types) else 'boarding'
+        stop_time = times[i].strip() if i < len(times) else ''
+        db.session.add(RouteStop(
+            voyage_id=voyage_id,
+            stop_name=name,
+            stop_type=stop_type,
+            stop_time=stop_time or None,
+            stop_order=i,
+        ))
 
 
 @admin_bp.before_request
@@ -152,7 +172,6 @@ def bus_new():
         db.session.commit()
         log_activity('bus_created', f'Added bus {bus.registration}', 'bus', bus.id)
         flash(f'Bus {bus.registration} added.', 'success')
-        flash(f'Bus {bus.registration} added.', 'success')
         return redirect(url_for('admin.buses'))
     return render_template('admin/bus_form.html', form=form, title='Add Bus')
 
@@ -169,7 +188,6 @@ def bus_edit(bus_id):
         bus.is_active = form.is_active.data
         db.session.commit()
         log_activity('bus_edited', f'Edited bus {bus.registration}', 'bus', bus.id)
-        flash(f'Bus {bus.registration} updated.', 'success')
         flash(f'Bus {bus.registration} updated.', 'success')
         return redirect(url_for('admin.buses'))
     return render_template('admin/bus_form.html', form=form, title='Edit Bus', bus=bus)
@@ -216,15 +234,17 @@ def voyage_new():
             created_by_id=current_user.id,
         )
         db.session.add(voyage)
+        db.session.flush()  # get voyage.id before commit
+        _save_stops(voyage.id)
         db.session.commit()
         log_activity('voyage_created',
                      f'Created voyage {voyage.origin}→{voyage.destination} on {voyage.departure_at.strftime("%d %b %Y")}',
                      'voyage', voyage.id)
         flash(f'Voyage {voyage.origin} → {voyage.destination} created.', 'success')
-        flash(f'Voyage {voyage.origin} → {voyage.destination} created.', 'success')
         return redirect(url_for('admin.voyages'))
 
-    return render_template('admin/voyage_form.html', form=form, title='New Voyage')
+    return render_template('admin/voyage_form.html', form=form, title='New Voyage',
+                           stops_json='[]')
 
 
 @admin_bp.route('/voyages/<int:voyage_id>/edit', methods=['GET', 'POST'])
@@ -253,16 +273,24 @@ def voyage_edit(voyage_id):
         voyage.driver_id = form.driver_id.data if form.driver_id.data != 0 else None
         voyage.base_fare = form.base_fare.data
         voyage.notes = form.notes.data
+        RouteStop.query.filter_by(voyage_id=voyage.id).delete()
+        _save_stops(voyage.id)
         db.session.commit()
         log_activity('voyage_edited',
                      f'Edited voyage {voyage.origin}→{voyage.destination}',
                      'voyage', voyage.id)
         flash('Voyage updated.', 'success')
-        flash('Voyage updated.', 'success')
         return redirect(url_for('admin.voyages'))
 
+    import json
+    existing = [
+        {'name': s.stop_name, 'type': s.stop_type,
+         'time': s.stop_time or '', 'order': s.stop_order}
+        for s in sorted(voyage.stops, key=lambda s: s.stop_order)
+    ]
     return render_template('admin/voyage_form.html', form=form,
-                           title='Edit Voyage', voyage=voyage)
+                           title='Edit Voyage', voyage=voyage,
+                           stops_json=json.dumps(existing))
 
 
 @admin_bp.route('/voyages/<int:voyage_id>/cancel', methods=['POST'])
@@ -286,7 +314,6 @@ def voyage_cancel(voyage_id):
     log_activity('voyage_cancelled',
                  f'Cancelled voyage {voyage.origin}→{voyage.destination} ({len(confirmed_bookings)} bookings cancelled)',
                  'voyage', voyage.id)
-    flash(f'Voyage cancelled. {len(confirmed_bookings)} booking(s) also cancelled.', 'success')
     flash(f'Voyage cancelled. {len(confirmed_bookings)} booking(s) also cancelled.', 'success')
     return redirect(url_for('admin.voyages'))
 
@@ -323,7 +350,6 @@ def user_new():
         db.session.commit()
         log_activity('user_created', f'Created user {user.username} ({user.role})', 'user', user.id)
         flash(f'User {user.username} created.', 'success')
-        flash(f'User {user.username} created.', 'success')
         return redirect(url_for('admin.users'))
 
     return render_template('admin/user_form.html', form=form, title='Add User')
@@ -357,7 +383,6 @@ def user_edit(user_id):
 
         db.session.commit()
         log_activity('user_edited', f'Edited user {user.username} ({user.role})', 'user', user.id)
-        flash(f'User {user.username} updated.', 'success')
         flash(f'User {user.username} updated.', 'success')
         return redirect(url_for('admin.users'))
 

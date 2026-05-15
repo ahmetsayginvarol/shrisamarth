@@ -83,6 +83,8 @@ class Voyage(db.Model):
     created_by = db.relationship('User', foreign_keys=[created_by_id])
     bookings = db.relationship('Booking', backref='voyage', lazy=True,
                                cascade='all, delete-orphan')
+    stops = db.relationship('RouteStop', backref='voyage', lazy=True,
+                            cascade='all, delete-orphan')
 
     @property
     def seats_booked(self):
@@ -102,6 +104,24 @@ class Voyage(db.Model):
 
     def __repr__(self):
         return f'<Voyage {self.origin}→{self.destination} {self.departure_at}>'
+
+# ============================================================
+# ROUTE STOPS
+# ============================================================
+
+class RouteStop(db.Model):
+    __tablename__ = 'route_stops'
+
+    id = db.Column(db.Integer, primary_key=True)
+    voyage_id = db.Column(db.Integer, db.ForeignKey('voyages.id'), nullable=False)
+    stop_name = db.Column(db.String(80), nullable=False)
+    stop_type = db.Column(db.String(10), nullable=False)  # 'boarding' or 'dropping'
+    stop_time = db.Column(db.String(5), nullable=True)    # HH:MM format
+    stop_order = db.Column(db.Integer, nullable=False, default=0)
+
+    def __repr__(self):
+        return f'<RouteStop {self.stop_name} ({self.stop_type}) @{self.stop_time}>'
+
 
 # ============================================================
 # BOOKINGS

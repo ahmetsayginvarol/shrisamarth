@@ -87,6 +87,13 @@ def dashboard():
         v.departure_at.strftime('%Y-%m-%d') for v in all_scheduled
     ))
 
+    boarding_stops = []
+    dropping_stops = []
+    if voyage:
+        sorted_stops = sorted(voyage.stops, key=lambda s: s.stop_order)
+        boarding_stops = [s for s in sorted_stops if s.stop_type == 'boarding']
+        dropping_stops = [s for s in sorted_stops if s.stop_type == 'dropping']
+
     return render_template(
         'staff/dashboard.html',
         voyage=voyage,
@@ -97,6 +104,8 @@ def dashboard():
         role=current_user.role,
         selected_date=selected_date.strftime('%Y-%m-%d'),
         voyage_dates=voyage_dates,
+        boarding_stops=boarding_stops,
+        dropping_stops=dropping_stops,
     )
 
 

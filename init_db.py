@@ -8,13 +8,13 @@ app = create_app()
 with app.app_context():
     inspector = inspect(db.engine)
     existing_tables = inspector.get_table_names()
+    dialect = db.engine.dialect.name
 
     if not existing_tables:
         # Fresh database — create everything
         db.create_all()
         print("  Created all tables from scratch")
     else:
-        # Tables exist — only add missing columns
         print(f"  Found {len(existing_tables)} existing tables")
 
         # Add group_booking_code to bookings if missing
@@ -43,5 +43,33 @@ with app.app_context():
             '''))
             db.session.commit()
             print("  Created activity_log table")
+
+        # Create route_stops table if missing
+        if 'route_stops' not in existing_tables:
+            if dialect == 'postgresql':
+                sql = """
+                    CREATE TABLE route_stops (
+                        id          SERIAL PRIMARY KEY,
+                        voyage_id   INTEGER NOT NULL REFERENCES voyages(id) ON DELETE CASCADE,
+                        stop_name   VARCHAR(80) NOT NULL,
+                        stop_type   VARCHAR(10) NOT NULL,
+                        stop_time   VARCHAR(5),
+                        stop_order  INTEGER NOT NULL DEFAULT 0
+                    )
+                """
+            else:
+                sql = """
+                    CREATE TABLE route_stops (
+                        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                        voyage_id   INTEGER NOT NULL REFERENCES voyages(id) ON DELETE CASCADE,
+                        stop_name   VARCHAR(80) NOT NULL,
+                        stop_type   VARCHAR(10) NOT NULL,
+                        stop_time   VARCHAR(5),
+                        stop_order  INTEGER NOT NULL DEFAULT 0
+                    )
+                """
+            db.session.execute(text(sql))
+            db.session.commit()
+            print(f"  Created route_stops table ({dialect})")
 
     print("Database initialized successfully.")

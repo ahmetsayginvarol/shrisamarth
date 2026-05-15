@@ -282,21 +282,29 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label" data-i18n="dash.boarding">Boarding</label>
+                        {% if boarding_stops %}
                         <select name="boarding_point" class="form-select" required>
-                            <option value="Dadar">Dadar</option>
-                            <option value="Andheri">Andheri</option>
-                            <option value="Borivali">Borivali</option>
-                            <option value="Thane">Thane</option>
+                            {% for s in boarding_stops %}
+                            <option value="{{ s.stop_name }}">{{ s.stop_name }}{% if s.stop_time %} · {{ s.stop_time }}{% endif %}</option>
+                            {% endfor %}
                         </select>
+                        {% else %}
+                        <input type="text" name="boarding_point" class="form-input"
+                               placeholder="e.g. Dadar" required>
+                        {% endif %}
                     </div>
                     <div class="form-group">
                         <label class="form-label" data-i18n="dash.dropping">Dropping</label>
+                        {% if dropping_stops %}
                         <select name="dropping_point" class="form-select" required>
-                            <option value="Shivajinagar">Shivajinagar</option>
-                            <option value="Swargate">Swargate</option>
-                            <option value="Katraj">Katraj</option>
-                            <option value="Hinjewadi">Hinjewadi</option>
+                            {% for s in dropping_stops %}
+                            <option value="{{ s.stop_name }}">{{ s.stop_name }}{% if s.stop_time %} · {{ s.stop_time }}{% endif %}</option>
+                            {% endfor %}
                         </select>
+                        {% else %}
+                        <input type="text" name="dropping_point" class="form-input"
+                               placeholder="e.g. Shivajinagar" required>
+                        {% endif %}
                     </div>
                 </div>
 

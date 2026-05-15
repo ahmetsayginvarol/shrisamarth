@@ -3,7 +3,7 @@ import secrets
 from datetime import datetime, timedelta
 from app import create_app
 from app.extensions import db
-from app.models import User, Bus, Voyage, Booking
+from app.models import User, Bus, Voyage, Booking, RouteStop
 
 app = create_app()
 
@@ -41,6 +41,19 @@ with app.app_context():
                     departure_at=tomorrow, base_fare=800, driver_id=drv.id,
                     created_by_id=admin.id)
     db.session.add(voyage)
+    db.session.commit()
+
+    route_stops = [
+        RouteStop(voyage_id=voyage.id, stop_name='Dadar',   stop_type='boarding', stop_time='21:00', stop_order=0),
+        RouteStop(voyage_id=voyage.id, stop_name='Andheri', stop_type='boarding', stop_time='21:30', stop_order=1),
+        RouteStop(voyage_id=voyage.id, stop_name='Borivali',stop_type='boarding', stop_time='22:00', stop_order=2),
+        RouteStop(voyage_id=voyage.id, stop_name='Thane',   stop_type='boarding', stop_time='22:15', stop_order=3),
+        RouteStop(voyage_id=voyage.id, stop_name='Shivajinagar', stop_type='dropping', stop_time='01:30', stop_order=0),
+        RouteStop(voyage_id=voyage.id, stop_name='Swargate',     stop_type='dropping', stop_time='01:45', stop_order=1),
+        RouteStop(voyage_id=voyage.id, stop_name='Katraj',       stop_type='dropping', stop_time='02:00', stop_order=2),
+        RouteStop(voyage_id=voyage.id, stop_name='Hinjewadi',    stop_type='dropping', stop_time='02:30', stop_order=3),
+    ]
+    db.session.add_all(route_stops)
     db.session.commit()
 
     sample = [
