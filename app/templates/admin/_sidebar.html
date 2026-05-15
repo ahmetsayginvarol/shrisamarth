@@ -3,7 +3,7 @@
         <span class="brand-mark">श्री</span>
         <div>
             <div class="brand-name">SHRISAMARTH</div>
-            <div class="brand-sub">Admin Panel</div>
+            <div class="brand-sub" data-i18n="admin.sidebar.title">Admin Panel</div>
         </div>
     </div>
 
@@ -11,33 +11,33 @@
         <a href="{{ url_for('admin.dashboard') }}"
            class="nav-item {% if request.endpoint == 'admin.dashboard' %}active{% endif %}">
             <span class="nav-icon">⬡</span>
-            <span>Dashboard</span>
+            <span data-i18n="nav.dashboard">Dashboard</span>
         </a>
         <a href="{{ url_for('staff.dashboard') }}"
            class="nav-item {% if request.endpoint == 'staff.dashboard' %}active{% endif %}">
             <span class="nav-icon">▦</span>
-            <span>Seat Map</span>
+            <span data-i18n="nav.seatmap">Seat Map</span>
         </a>
         <a href="{{ url_for('admin.voyages') }}"
            class="nav-item {% if 'voyage' in request.endpoint %}active{% endif %}">
             <span class="nav-icon">⊛</span>
-            <span>Voyages</span>
+            <span data-i18n="nav.voyages">Voyages</span>
         </a>
         <a href="{{ url_for('admin.buses') }}"
            class="nav-item {% if 'bus' in request.endpoint %}active{% endif %}">
             <span class="nav-icon">⬕</span>
-            <span>Buses</span>
+            <span data-i18n="nav.buses">Buses</span>
         </a>
         <a href="{{ url_for('admin.users') }}"
            class="nav-item {% if 'user' in request.endpoint %}active{% endif %}">
             <span class="nav-icon">◎</span>
-            <span>Users</span>
+            <span data-i18n="nav.users">Users</span>
         </a>
 
         <a href="{{ url_for('admin.logs') }}"
    class="nav-item {% if 'logs' in request.endpoint %}active{% endif %}">
     <span class="nav-icon">☰</span>
-    <span>Activity Log</span>
+    <span data-i18n="nav.logs">Activity Log</span>
 </a>
     </nav>
 
@@ -50,7 +50,7 @@
             </div>
         </div>
         <a href="{{ url_for('auth.logout') }}" class="btn btn-ghost"
-           style="width:100%; margin-top:12px; text-align:center;">
+           style="width:100%; margin-top:12px; text-align:center;" data-i18n="nav.signout">
             Sign out
         </a>
     </div>

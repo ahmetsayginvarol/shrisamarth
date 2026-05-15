@@ -20,8 +20,24 @@
 
 <div class="admin-layout">
     {% include 'admin/_sidebar.html' %}
-    <div class="admin-main">
-        <div class="admin-content">
+    <div class="admin-main" style="padding: 0;">
+        <header class="topbar">
+            <div class="brand">
+                <span class="brand-mark">श्री</span>
+                <div>
+                    <div class="brand-name">SHRISAMARTH</div>
+                    <div class="brand-sub" data-i18n="admin.sidebar.title">Admin Panel</div>
+                </div>
+            </div>
+            <div class="topbar-right">
+                <div class="pill-group">
+                    <button class="pill lang-btn active" data-lang="en" onclick="applyLanguage('en')">EN</button>
+                    <button class="pill lang-btn" data-lang="hi" onclick="applyLanguage('hi')">हिं</button>
+                </div>
+                <span class="muted">{{ current_user.full_name }}</span>
+            </div>
+        </header>
+        <div class="admin-content" style="padding: 40px;">
             {% block admin_content %}{% endblock %}
         </div>
     </div>
