@@ -141,6 +141,14 @@ def book(voyage_id):
     locked_mine = [l.seat_id for l in active_locks if l.session_id == cust_sid]
     locked_other = [l.seat_id for l in active_locks if l.session_id != cust_sid]
 
+    prefill = {}
+    if current_user.is_authenticated and current_user.role == 'customer':
+        prefill = {
+            'name': current_user.full_name,
+            'phone': current_user.phone or '',
+            'email': current_user.email or '',
+        }
+
     return render_template(
         'customer/book.html',
         voyage=voyage,
@@ -150,6 +158,7 @@ def book(voyage_id):
         dropping_stops=dropping_stops,
         locked_other=locked_other,
         locked_mine=locked_mine,
+        prefill=prefill,
     )
 
 
@@ -389,6 +398,7 @@ def register():
             username=email,
             email=email,
             full_name=form.full_name.data.strip(),
+            phone=form.phone.data.strip(),
             role='customer',
             is_active_account=True,
         )

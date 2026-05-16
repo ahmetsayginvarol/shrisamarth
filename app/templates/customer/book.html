@@ -140,17 +140,20 @@
 
                     <div class="form-group">
                         <label class="form-label" data-i18n="c.passenger_name">Passenger Name</label>
-                        <input type="text" name="passenger_name" class="form-input" placeholder="Full name" required>
+                        <input type="text" name="passenger_name" class="form-input" placeholder="Full name"
+                               value="{{ prefill.get('name', '') }}" required>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label">Phone Number</label>
-                        <input type="tel" name="passenger_phone" class="form-input" placeholder="+91 98XXX XXXXX" required>
+                        <input type="tel" name="passenger_phone" class="form-input" placeholder="+91 98XXX XXXXX"
+                               value="{{ prefill.get('phone', '') }}" required>
                     </div>
 
                     <div class="form-group">
                         <label class="form-label">Email (optional)</label>
-                        <input type="email" name="passenger_email" class="form-input" placeholder="you@email.com">
+                        <input type="email" name="passenger_email" class="form-input" placeholder="you@email.com"
+                               value="{{ prefill.get('email', '') }}">
                     </div>
 
                     <div class="form-group">

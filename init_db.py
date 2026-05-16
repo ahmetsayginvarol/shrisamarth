@@ -17,6 +17,14 @@ with app.app_context():
     else:
         print(f"  Found {len(existing_tables)} existing tables")
 
+        # Add phone to users if missing
+        if 'users' in existing_tables:
+            user_cols = [c['name'] for c in inspector.get_columns('users')]
+            if 'phone' not in user_cols:
+                db.session.execute(text('ALTER TABLE users ADD COLUMN phone VARCHAR(20)'))
+                db.session.commit()
+                print("  Added phone column to users")
+
         # Add group_booking_code to bookings if missing
         if 'bookings' in existing_tables:
             columns = [c['name'] for c in inspector.get_columns('bookings')]
