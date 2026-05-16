@@ -34,11 +34,16 @@
             <span data-i18n="nav.users">Users</span>
         </a>
 
+        <a href="{{ url_for('admin.passengers') }}"
+           class="nav-item {% if 'passenger' in request.endpoint %}active{% endif %}">
+            <span class="nav-icon">👤</span>
+            <span>Passengers</span>
+        </a>
         <a href="{{ url_for('admin.logs') }}"
-   class="nav-item {% if 'logs' in request.endpoint %}active{% endif %}">
-    <span class="nav-icon">☰</span>
-    <span data-i18n="nav.logs">Activity Log</span>
-</a>
+           class="nav-item {% if 'logs' in request.endpoint %}active{% endif %}">
+            <span class="nav-icon">☰</span>
+            <span data-i18n="nav.logs">Activity Log</span>
+        </a>
     </nav>
 
     <div class="sidebar-footer">

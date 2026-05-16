@@ -496,3 +496,89 @@ def user_edit(user_id):
 
     return render_template('admin/user_form.html', form=form,
                            title='Edit User', user=user)
+
+# ============================================================
+# REGISTERED PASSENGERS
+# ============================================================
+
+@admin_bp.route('/passengers')
+@login_required
+def passengers():
+    customers = (User.query
+                 .filter_by(role='customer')
+                 .order_by(User.created_at.desc())
+                 .all())
+
+    # Annotate each customer with booking stats
+    stats = {}
+    for c in customers:
+        bookings = Booking.query.filter_by(created_by_id=c.id).all()
+        confirmed = [b for b in bookings if b.status == 'confirmed']
+        stats[c.id] = {
+            'total':    len(confirmed),
+            'upcoming': sum(1 for b in confirmed if b.voyage.departure_at > datetime.utcnow()),
+            'fare':     sum(float(b.fare) for b in confirmed),
+            'balance':  sum(float(b.balance_due or 0) for b in confirmed),
+        }
+
+    return render_template('admin/passengers.html', customers=customers, stats=stats)
+
+
+@admin_bp.route('/passengers/<int:customer_id>')
+@login_required
+def passenger_detail(customer_id):
+    customer = User.query.filter_by(id=customer_id, role='customer').first_or_404()
+
+    bookings = (Booking.query
+                .filter_by(created_by_id=customer_id)
+                .order_by(Booking.created_at.desc())
+                .all())
+
+    confirmed = [b for b in bookings if b.status == 'confirmed']
+    stats = {
+        'total':    len(confirmed),
+        'upcoming': sum(1 for b in confirmed if b.voyage.departure_at > datetime.utcnow()),
+        'fare':     sum(float(b.fare) for b in confirmed),
+        'balance':  sum(float(b.balance_due or 0) for b in confirmed),
+    }
+
+    return render_template('admin/passenger_detail.html',
+                           customer=customer, bookings=bookings, stats=stats)
+
+
+@admin_bp.route('/passengers/<int:customer_id>/add-credit', methods=['POST'])
+@login_required
+def passenger_add_credit(customer_id):
+    customer = User.query.filter_by(id=customer_id, role='customer').first_or_404()
+
+    try:
+        amount = float(request.form.get('amount', 0))
+    except ValueError:
+        flash('Invalid amount.', 'error')
+        return redirect(url_for('admin.passenger_detail', customer_id=customer_id))
+
+    if amount <= 0:
+        flash('Amount must be positive.', 'error')
+        return redirect(url_for('admin.passenger_detail', customer_id=customer_id))
+
+    note = request.form.get('note', '').strip() or 'Manual credit by admin'
+    customer.credit_balance = float(customer.credit_balance or 0) + amount
+    db.session.commit()
+
+    log_activity('user_edited',
+                 f'Added ₹{amount:.0f} credit to {customer.full_name} ({customer.email}) — {note}',
+                 'user', customer.id)
+    flash(f'₹{amount:.0f} added to {customer.full_name}\'s account.', 'success')
+    return redirect(url_for('admin.passenger_detail', customer_id=customer_id))
+
+
+@admin_bp.route('/passengers/<int:customer_id>/toggle-active', methods=['POST'])
+@login_required
+def passenger_toggle_active(customer_id):
+    customer = User.query.filter_by(id=customer_id, role='customer').first_or_404()
+    customer.is_active_account = not customer.is_active_account
+    db.session.commit()
+    state = 'activated' if customer.is_active_account else 'deactivated'
+    log_activity('user_edited', f'Customer account {state}: {customer.email}', 'user', customer.id)
+    flash(f'Account {state}.', 'success')
+    return redirect(url_for('admin.passenger_detail', customer_id=customer_id))

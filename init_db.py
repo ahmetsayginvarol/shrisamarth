@@ -28,6 +28,10 @@ with app.app_context():
                 db.session.execute(text('ALTER TABLE users ADD COLUMN gender VARCHAR(1)'))
                 db.session.commit()
                 print("  Added gender column to users")
+            if 'credit_balance' not in user_cols:
+                db.session.execute(text('ALTER TABLE users ADD COLUMN credit_balance NUMERIC(10,2) NOT NULL DEFAULT 0'))
+                db.session.commit()
+                print("  Added credit_balance column to users")
 
         # Add group_booking_code to bookings if missing
         if 'bookings' in existing_tables:

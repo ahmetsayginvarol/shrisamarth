@@ -1,0 +1,103 @@
+{% extends 'admin/base_admin.html' %}
+{% block admin_content %}
+
+<div class="page-header" style="margin-bottom:28px;">
+    <div>
+        <div class="page-title serif">Registered Passengers</div>
+        <div class="page-subtitle">{{ customers|length }} customer account{{ 's' if customers|length != 1 }}</div>
+    </div>
+</div>
+
+{% if customers %}
+<div class="data-table-wrap">
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Passenger</th>
+            <th>Contact</th>
+            <th>Gender</th>
+            <th>Member Since</th>
+            <th style="text-align:right;">Trips</th>
+            <th style="text-align:right;">Outstanding</th>
+            <th style="text-align:right;">Credit</th>
+            <th>Status</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for c in customers %}
+        {% set s = stats[c.id] %}
+        <tr>
+            <td>
+                <div style="font-weight:500;">{{ c.full_name }}</div>
+                <div style="font-size:11px; color:var(--muted);">{{ c.email }}</div>
+            </td>
+            <td>
+                {% if c.phone %}
+                <a href="https://wa.me/{{ c.phone | replace('+','') | replace(' ','') | replace('-','') }}"
+                   target="_blank"
+                   style="display:inline-flex; align-items:center; gap:5px; color:#25D366; font-size:13px; text-decoration:none;"
+                   title="Open WhatsApp">
+                    💬 {{ c.phone }}
+                </a>
+                {% else %}
+                <span class="muted">—</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if c.gender == 'M' %}
+                <span class="badge" style="background:rgba(59,130,246,0.12); color:#2563eb;">Male</span>
+                {% elif c.gender == 'F' %}
+                <span class="badge" style="background:rgba(236,72,153,0.12); color:#db2777;">Female</span>
+                {% else %}
+                <span class="muted">—</span>
+                {% endif %}
+            </td>
+            <td style="color:var(--muted); font-size:13px;">
+                {{ c.created_at.strftime('%d %b %Y') if c.created_at else '—' }}
+            </td>
+            <td style="text-align:right;">
+                <strong>{{ s.total }}</strong>
+                {% if s.upcoming %}
+                <span style="font-size:11px; color:var(--sage); margin-left:4px;">+{{ s.upcoming }} upcoming</span>
+                {% endif %}
+            </td>
+            <td style="text-align:right;">
+                {% if s.balance > 0 %}
+                <span style="color:var(--ruby); font-weight:500;">₹{{ s.balance | int }}</span>
+                {% else %}
+                <span class="muted">—</span>
+                {% endif %}
+            </td>
+            <td style="text-align:right;">
+                {% if c.credit_balance and c.credit_balance > 0 %}
+                <span style="color:var(--sage); font-weight:500;">₹{{ c.credit_balance | int }}</span>
+                {% else %}
+                <span class="muted">—</span>
+                {% endif %}
+            </td>
+            <td>
+                <span class="badge {% if c.is_active_account %}badge-active{% else %}badge-inactive{% endif %}">
+                    {{ 'Active' if c.is_active_account else 'Disabled' }}
+                </span>
+            </td>
+            <td>
+                <a href="{{ url_for('admin.passenger_detail', customer_id=c.id) }}"
+                   class="btn btn-ghost" style="padding:5px 12px; font-size:12px; white-space:nowrap;">
+                    View →
+                </a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+
+{% else %}
+<div class="empty-state">
+    <span class="serif">No registered passengers yet</span>
+    <p>Passengers who sign up on the customer booking site will appear here.</p>
+</div>
+{% endif %}
+
+{% endblock %}

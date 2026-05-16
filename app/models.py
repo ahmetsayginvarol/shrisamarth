@@ -19,6 +19,7 @@ class User(UserMixin, db.Model):
     # role values: 'admin', 'reservation', 'driver', 'customer'
     phone = db.Column(db.String(20), nullable=True)
     gender = db.Column(db.String(1), nullable=True)  # 'M' or 'F', optional
+    credit_balance = db.Column(db.Numeric(10, 2), default=0, nullable=False)
     is_active_account = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
