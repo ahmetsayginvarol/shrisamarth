@@ -87,11 +87,104 @@
         </div>
     </div>
 
+    <!-- Recurrence (only for new voyages) -->
+    {% if not voyage %}
+    <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line);">
+        <div class="form-label" style="font-size:13px; margin-bottom:4px;">Recurrence</div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Repeat</label>
+                <select name="recurrence" id="recurrenceSelect" class="form-select" onchange="updateRecurrence()">
+                    <option value="none">None (one-time)</option>
+                    <option value="daily">Daily</option>
+                    <option value="every2">Every 2 days</option>
+                    <option value="every3">Every 3 days</option>
+                    <option value="weekly">Weekly (same day of week)</option>
+                    <option value="custom">Custom days…</option>
+                </select>
+            </div>
+            <div class="form-group" id="repeatUntilGroup" style="display:none;">
+                <label class="form-label">Repeat Until</label>
+                <input type="date" name="repeat_until" id="repeatUntil" class="form-input">
+            </div>
+        </div>
+        <div id="customDaysGroup" style="display:none; margin-top:12px;">
+            <label class="form-label">Days of Week</label>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+                {% for day, label in [('0','Mon'),('1','Tue'),('2','Wed'),('3','Thu'),('4','Fri'),('5','Sat'),('6','Sun')] %}
+                <label style="display:flex; align-items:center; gap:4px; font-size:13px; cursor:pointer;">
+                    <input type="checkbox" name="custom_days" value="{{ day }}">
+                    {{ label }}
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+        <div id="recurrencePreview" style="margin-top:12px; font-size:13px; color:var(--marigold); display:none;"></div>
+    </div>
+    {% endif %}
+
     <div class="form-actions" style="margin-top:24px;">
         <a href="{{ url_for('admin.voyages') }}" class="btn btn-ghost">Cancel</a>
         {{ form.submit(class="btn btn-primary", style="width:auto;") }}
     </div>
 </form>
+
+{% if not voyage %}
+<script>
+function updateRecurrence() {
+    const val = document.getElementById('recurrenceSelect').value;
+    document.getElementById('repeatUntilGroup').style.display = val !== 'none' ? '' : 'none';
+    document.getElementById('customDaysGroup').style.display = val === 'custom' ? '' : 'none';
+    updatePreview();
+}
+
+function updatePreview() {
+    const val = document.getElementById('recurrenceSelect').value;
+    const startInput = document.querySelector('[name="departure_at"]');
+    const untilInput = document.getElementById('repeatUntil');
+    const preview = document.getElementById('recurrencePreview');
+
+    if (val === 'none' || !startInput || !startInput.value) {
+        preview.style.display = 'none';
+        return;
+    }
+
+    const start = new Date(startInput.value);
+    const until = untilInput.value ? new Date(untilInput.value) : new Date(start.getTime() + 30 * 86400000);
+
+    let count = 0;
+    const step = val === 'daily' ? 1 : val === 'every2' ? 2 : val === 'every3' ? 3 : val === 'weekly' ? 7 : 1;
+    const customDays = val === 'custom' ?
+        Array.from(document.querySelectorAll('[name="custom_days"]:checked')).map(c => parseInt(c.value)) : [];
+
+    let d = new Date(start);
+    const maxDate = new Date(Math.min(until.getTime(), start.getTime() + 90 * 86400000));
+
+    while (d <= maxDate && count < 91) {
+        if (val === 'custom') {
+            // Python weekday Mon=0..Sun=6, JS getDay() Sun=0..Sat=6
+            const jsDay = d.getDay(); // 0=Sun, 1=Mon,...
+            const pyDay = jsDay === 0 ? 6 : jsDay - 1; // Mon=0..Sun=6
+            if (customDays.includes(pyDay)) count++;
+        } else {
+            count++;
+        }
+        d.setDate(d.getDate() + (val === 'custom' ? 1 : step));
+    }
+
+    const opts = {month:'short', day:'numeric'};
+    preview.textContent = `This will create ${count} voyage${count !== 1 ? 's' : ''} from ${start.toLocaleDateString('en-IN', opts)} to ${maxDate.toLocaleDateString('en-IN', opts)}`;
+    preview.style.display = 'block';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const depInput = document.querySelector('[name="departure_at"]');
+    if (depInput) depInput.addEventListener('change', updatePreview);
+    document.getElementById('repeatUntil')?.addEventListener('change', updatePreview);
+    document.querySelectorAll('[name="custom_days"]').forEach(cb => cb.addEventListener('change', updatePreview));
+});
+</script>
+{% endif %}
 
 <script>
 const EXISTING_STOPS = {{ stops_json | safe }};

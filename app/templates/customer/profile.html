@@ -1,0 +1,88 @@
+{% extends 'customer/base_customer.html' %}
+{% block title %}My Profile · SHRISAMARTH{% endblock %}
+
+{% block customer_content %}
+<div style="max-width:600px; margin:0 auto; padding:40px 20px;">
+
+    <div class="page-header" style="border-bottom:1px solid var(--line); padding-bottom:20px; margin-bottom:28px;">
+        <div>
+            <h1 class="page-title serif">My Profile</h1>
+            <div class="page-subtitle">{{ current_user.email }}</div>
+        </div>
+        <a href="{{ url_for('customer.my_bookings') }}" class="btn btn-ghost">← My Bookings</a>
+    </div>
+
+    <!-- Stats -->
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:32px;">
+        <div class="c-stat-card">
+            <div class="c-stat-label">Total Trips</div>
+            <div class="c-stat-value">{{ stats.total_trips }}</div>
+        </div>
+        <div class="c-stat-card">
+            <div class="c-stat-label">Favourite Route</div>
+            <div style="font-size:13px; font-weight:500; margin-top:4px;">{{ stats.fav_route }}</div>
+        </div>
+        <div class="c-stat-card">
+            <div class="c-stat-label">Member Since</div>
+            <div style="font-size:13px; font-weight:500; margin-top:4px;">{{ stats.member_since }}</div>
+        </div>
+    </div>
+
+    <!-- Edit form -->
+    <div style="background:var(--cream); border:1px solid var(--line); border-radius:12px; padding:28px;">
+        <h2 class="serif" style="font-size:22px; margin-bottom:20px;">Edit Profile</h2>
+
+        <form method="POST" action="{{ url_for('customer.profile') }}">
+            {{ form.hidden_tag() }}
+
+            <div class="form-group">
+                {{ form.full_name.label(class='form-label') }}
+                {{ form.full_name(class='form-input') }}
+                {% for e in form.full_name.errors %}
+                <div style="color:var(--ruby); font-size:12px; margin-top:4px;">{{ e }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="form-group">
+                {{ form.email.label(class='form-label') }}
+                {{ form.email(class='form-input') }}
+                {% for e in form.email.errors %}
+                <div style="color:var(--ruby); font-size:12px; margin-top:4px;">{{ e }}</div>
+                {% endfor %}
+            </div>
+
+            <div style="border-top:1px solid var(--line); padding-top:20px; margin-top:20px;">
+                <div class="form-label" style="margin-bottom:14px;">Change Password (leave blank to keep current)</div>
+                <div class="form-row">
+                    <div class="form-group">
+                        {{ form.current_password.label(class='form-label') }}
+                        {{ form.current_password(class='form-input', placeholder='Current password') }}
+                    </div>
+                    <div class="form-group">
+                        {{ form.new_password.label(class='form-label') }}
+                        {{ form.new_password(class='form-input', placeholder='New password (min 6)') }}
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                {{ form.submit(class='btn btn-primary', style='width:auto;') }}
+            </div>
+        </form>
+    </div>
+
+    <!-- Danger zone -->
+    <div style="margin-top:32px; border:1px solid rgba(168,50,50,0.3); border-radius:12px; padding:20px; background:rgba(168,50,50,0.03);">
+        <h3 style="font-size:14px; font-weight:600; color:var(--ruby); margin-bottom:8px;">Danger Zone</h3>
+        <p style="font-size:13px; color:var(--muted); margin-bottom:14px;">Deactivating your account will prevent future logins. Your booking history is preserved.</p>
+        <form method="POST" action="{{ url_for('customer.delete_account') }}"
+              onsubmit="return confirm('Are you sure? This will deactivate your account.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-ghost" style="color:var(--ruby); border-color:var(--ruby); width:auto; font-size:13px; padding:8px 18px;">
+                Deactivate Account
+            </button>
+        </form>
+    </div>
+
+</div>
+{% endblock %}

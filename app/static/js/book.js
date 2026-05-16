@@ -200,9 +200,9 @@ if (bookingForm) {
 
         try {
             const formData = new FormData(bookingForm);
+            // Do NOT set Content-Type header — browser sets multipart boundary automatically for FormData
             const res = await fetch('/api/customer/book', {
                 method: 'POST',
-                headers: { 'X-CSRFToken': CSRF_TOKEN },
                 body: formData,
             });
             const data = await res.json();

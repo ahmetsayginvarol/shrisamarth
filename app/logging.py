@@ -16,3 +16,38 @@ def log_activity(action, description, target_type=None, target_id=None):
     )
     db.session.add(entry)
     db.session.commit()
+
+
+def notify_staff(title, message, link=None, booking_id=None, passenger_phone=None):
+    """Create notification for all admin and reservation users."""
+    from app.models import Notification, User
+    from app.extensions import socketio
+
+    try:
+        staff_users = User.query.filter(
+            User.role.in_(['admin', 'reservation']),
+            User.is_active_account == True
+        ).all()
+
+        for u in staff_users:
+            n = Notification(
+                user_id=u.id,
+                title=title,
+                message=message,
+                link=link,
+                booking_id=booking_id,
+                passenger_phone=passenger_phone,
+            )
+            db.session.add(n)
+
+        db.session.commit()
+
+        # Real-time: emit unread count per user
+        for u in staff_users:
+            count = Notification.query.filter_by(user_id=u.id, is_read=False).count()
+            socketio.emit('new_notification', {'count': count, 'title': title})
+    except Exception as e:
+        # Don't let notification failures break booking flow
+        db.session.rollback()
+        import sys
+        print(f"notify_staff error: {e}", file=sys.stderr)

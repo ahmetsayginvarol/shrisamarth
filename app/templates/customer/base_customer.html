@@ -9,17 +9,27 @@
     </a>
     <div class="c-nav-links">
         {% block nav_extra %}{% endblock %}
+        <div class="pill-group">
+            <button class="pill lang-btn active" data-lang="en" onclick="applyLanguage('en')">EN</button>
+            <button class="pill lang-btn" data-lang="hi" onclick="applyLanguage('hi')">हिं</button>
+        </div>
         {% if current_user.is_authenticated and current_user.role == 'customer' %}
         <a href="{{ url_for('customer.my_bookings') }}"
            class="btn btn-ghost"
-           style="font-size:12px; padding:6px 14px;">My Bookings</a>
+           style="font-size:12px; padding:6px 14px;"
+           data-i18n="c.my_bookings">My Bookings</a>
+        <a href="{{ url_for('customer.profile') }}"
+           class="btn btn-ghost"
+           style="font-size:12px; padding:6px 14px;">Profile</a>
         <a href="{{ url_for('customer.logout') }}"
            class="btn btn-ghost"
-           style="font-size:12px; padding:6px 14px;">Sign Out</a>
+           style="font-size:12px; padding:6px 14px;"
+           data-i18n="c.sign_out">Sign Out</a>
         {% elif not current_user.is_authenticated %}
         <a href="{{ url_for('customer.login') }}"
            class="btn btn-ghost"
-           style="font-size:12px; padding:6px 14px;">Sign In</a>
+           style="font-size:12px; padding:6px 14px;"
+           data-i18n="c.sign_in">Sign In</a>
         {% endif %}
         <a href="{{ url_for('auth.login') }}"
            class="btn btn-ghost"

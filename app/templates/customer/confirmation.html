@@ -6,8 +6,8 @@
 
     <!-- Hero -->
     <div class="c-confirm-hero">
-        <div style="font-size:56px; margin-bottom:12px;">✓</div>
-        <h1 class="serif" style="font-size:36px; color:var(--sage); margin-bottom:8px;">Booking Confirmed!</h1>
+        <div class="c-confirm-check">✓</div>
+        <h1 class="serif" style="font-size:36px; color:var(--sage); margin-bottom:8px;" data-i18n="c.booking_confirmed">Booking Confirmed!</h1>
         <p style="color:var(--muted); font-size:14px;">
             Your seat{% if is_group %}s have{% else %} has{% endif %} been reserved. Show the QR code at boarding.
         </p>
@@ -137,17 +137,20 @@ function shareWhatsApp() {
     const code = {{ code|tojson }};
     const name = {{ booking.passenger_name|tojson }};
     const route = {{ (booking.voyage.origin + ' → ' + booking.voyage.destination)|tojson }};
-    const dep = {{ booking.voyage.departure_at.strftime('%d %b %Y %H:%M')|tojson }};
+    const depDate = {{ booking.voyage.departure_at.strftime('%d %b %Y')|tojson }};
+    const depTime = {{ booking.voyage.departure_at.strftime('%H:%M')|tojson }};
     const seats = {{ bookings|map(attribute='seat_id')|list|tojson }};
     const fare = {{ bookings|sum(attribute='fare')|int }};
 
-    const msg = `*SHRISAMARTH Booking Confirmed!*\n\n`
-        + `Booking ID: ${code}\n`
-        + `Route: ${route}\n`
-        + `Departure: ${dep}\n`
-        + `Passenger: ${name}\n`
-        + `Seats: ${seats.join(', ')}\n`
-        + `Total Fare: ₹${fare} (pay on board)\n\n`
+    const msg = `*SHRISAMARTH Booking Confirmed!* ✅\n\n`
+        + `🎫 Booking ID: ${code}\n`
+        + `🛣️ Route: ${route}\n`
+        + `📅 Date: ${depDate}\n`
+        + `⏰ Departure: ${depTime}\n`
+        + `👤 Passenger: ${name}\n`
+        + `💺 Seats: ${seats.join(', ')}\n`
+        + `💰 Total Fare: ₹${fare} (pay on board)\n\n`
+        + `Show this at boarding.\n`
         + `View/Download: https://shrisamarth.onrender.com/booking/confirmation/${code}`;
 
     const url = 'https://wa.me/?text=' + encodeURIComponent(msg);

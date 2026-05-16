@@ -9,8 +9,8 @@ from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db, socketio, csrf
 from app.models import Voyage, Booking, RouteStop, SeatLock, User, WINDOW_SEATS
-from app.customer.forms import CustomerLoginForm, CustomerRegisterForm
-from app.logging import log_activity
+from app.customer.forms import CustomerLoginForm, CustomerRegisterForm, CustomerProfileForm
+from app.logging import log_activity, notify_staff
 from app.staff.ticket import generate_ticket, generate_group_ticket, generate_qr
 
 customer_bp = Blueprint('customer', __name__, template_folder='../templates/customer')
@@ -40,10 +40,16 @@ def _get_or_create_sid():
 @customer_bp.route('/')
 def home():
     origins, destinations = _get_cities()
+    popular_voyages = (Voyage.query
+        .filter_by(status='scheduled')
+        .filter(Voyage.departure_at > datetime.utcnow())
+        .order_by(Voyage.departure_at)
+        .limit(6).all())
     return render_template('customer/home.html',
                            origins=origins,
                            destinations=destinations,
-                           today=date.today().strftime('%Y-%m-%d'))
+                           today=date.today().strftime('%Y-%m-%d'),
+                           popular_voyages=popular_voyages)
 
 
 # ============================================================
@@ -219,6 +225,13 @@ def customer_book():
                          f'Customer group booking {group_code}: seat {b.seat_id} for {passenger_name}',
                          'booking', b.id)
         db.session.commit()
+        notify_staff(
+            title='New Customer Booking',
+            message=f"{passenger_name} — {len(seat_ids)} seats ({', '.join(seat_ids)}) — {voyage.origin}→{voyage.destination} {voyage.departure_at.strftime('%d %b %Y')}",
+            link=url_for('staff.dashboard', voyage_id=voyage.id, date=voyage.departure_at.strftime('%Y-%m-%d')),
+            booking_id=bookings_created[0].id if bookings_created else None,
+            passenger_phone=passenger_phone,
+        )
 
         return jsonify({'status': 'success', 'code': group_code, 'is_group': True})
 
@@ -264,6 +277,13 @@ def customer_book():
         log_activity('booking_created',
                      f'Customer booking {code}: seat {sid} for {passenger_name}',
                      'booking', b.id)
+        notify_staff(
+            title='New Customer Booking',
+            message=f"{passenger_name} — Seat {sid} — {voyage.origin}→{voyage.destination} {voyage.departure_at.strftime('%d %b %Y')}",
+            link=url_for('staff.dashboard', voyage_id=voyage.id, date=voyage.departure_at.strftime('%Y-%m-%d')),
+            booking_id=b.id,
+            passenger_phone=passenger_phone,
+        )
 
         return jsonify({'status': 'success', 'code': code, 'is_group': False})
 
@@ -347,7 +367,7 @@ def login():
         if user and user.check_password(form.password.data):
             login_user(user)
             log_activity('user_login', f'Customer login: {user.email}', 'user', user.id)
-            return redirect(url_for('customer.my_bookings'))
+            return redirect(request.args.get('next') or url_for('customer.my_bookings'))
         flash('Invalid email or password.', 'error')
 
     return render_template('customer/login.html', form=form)
@@ -390,6 +410,52 @@ def logout():
     return redirect(url_for('customer.home'))
 
 
+@customer_bp.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    if current_user.role != 'customer':
+        return redirect(url_for('staff.dashboard'))
+
+    form = CustomerProfileForm(obj=current_user)
+
+    if form.validate_on_submit():
+        if form.new_password.data:
+            if not current_user.check_password(form.current_password.data):
+                flash('Current password is incorrect.', 'error')
+                return render_template('customer/profile.html', form=form)
+            current_user.set_password(form.new_password.data)
+
+        current_user.full_name = form.full_name.data.strip()
+        current_user.email = form.email.data.lower().strip()
+        db.session.commit()
+        flash('Profile updated.', 'success')
+        return redirect(url_for('customer.profile'))
+
+    from collections import Counter
+    bookings = Booking.query.filter_by(created_by_id=current_user.id, status='confirmed').all()
+    total_trips = len(bookings)
+    routes = Counter(f"{b.voyage.origin}→{b.voyage.destination}" for b in bookings)
+    fav_route = routes.most_common(1)[0][0] if routes else '—'
+
+    return render_template('customer/profile.html', form=form, stats={
+        'total_trips': total_trips,
+        'fav_route': fav_route,
+        'member_since': current_user.created_at.strftime('%B %Y') if current_user.created_at else '—',
+    })
+
+
+@customer_bp.route('/profile/delete', methods=['POST'])
+@login_required
+def delete_account():
+    if current_user.role != 'customer':
+        abort(403)
+    current_user.is_active_account = False
+    db.session.commit()
+    logout_user()
+    flash('Your account has been deactivated.', 'info')
+    return redirect(url_for('customer.home'))
+
+
 @customer_bp.route('/my-bookings')
 @login_required
 def my_bookings():
@@ -399,6 +465,13 @@ def my_bookings():
     bookings = Booking.query.filter_by(
         created_by_id=current_user.id
     ).order_by(Booking.created_at.desc()).all()
+
+    # Stats
+    confirmed = [b for b in bookings if b.status == 'confirmed']
+    upcoming = [b for b in confirmed if b.voyage.departure_at > datetime.utcnow()]
+    total_spent = sum(float(b.fare) for b in confirmed)
+    balance_due = sum(float(b.balance_due) for b in confirmed)
+    soon = [b for b in upcoming if b.voyage.departure_at <= datetime.utcnow() + timedelta(hours=24)]
 
     # Group by group_booking_code
     seen_groups = set()
@@ -412,7 +485,11 @@ def my_bookings():
         else:
             grouped.append({'type': 'single', 'code': b.booking_code, 'bookings': [b]})
 
-    return render_template('customer/my_bookings.html', grouped=grouped)
+    return render_template('customer/my_bookings.html',
+        grouped=grouped,
+        stats={'total': len(confirmed), 'upcoming': len(upcoming), 'spent': total_spent, 'balance': balance_due},
+        soon_bookings=soon,
+    )
 
 
 # ============================================================

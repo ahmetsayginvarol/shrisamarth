@@ -78,6 +78,48 @@ with app.app_context():
             db.session.commit()
             print(f"  Created seat_locks table ({dialect})")
 
+        # Create notifications table if missing
+        if 'notifications' not in existing_tables:
+            if dialect == 'postgresql':
+                sql = """
+                    CREATE TABLE notifications (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(id),
+                        title VARCHAR(120) NOT NULL,
+                        message TEXT NOT NULL,
+                        link VARCHAR(500),
+                        booking_id INTEGER REFERENCES bookings(id),
+                        passenger_phone VARCHAR(20),
+                        is_read BOOLEAN NOT NULL DEFAULT FALSE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """
+            else:
+                sql = """
+                    CREATE TABLE notifications (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL REFERENCES users(id),
+                        title VARCHAR(120) NOT NULL,
+                        message TEXT NOT NULL,
+                        link VARCHAR(500),
+                        booking_id INTEGER REFERENCES bookings(id),
+                        passenger_phone VARCHAR(20),
+                        is_read INTEGER NOT NULL DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """
+            db.session.execute(text(sql))
+            db.session.commit()
+            print(f"  Created notifications table ({dialect})")
+
+        # Add recurrence_group to voyages if missing
+        if 'voyages' in existing_tables:
+            voyage_cols = [c['name'] for c in inspector.get_columns('voyages')]
+            if 'recurrence_group' not in voyage_cols:
+                db.session.execute(text('ALTER TABLE voyages ADD COLUMN recurrence_group VARCHAR(30)'))
+                db.session.commit()
+                print("  Added recurrence_group column to voyages")
+
         # Create route_stops table if missing
         if 'route_stops' not in existing_tables:
             if dialect == 'postgresql':

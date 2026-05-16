@@ -240,7 +240,99 @@ def voyage_new():
         log_activity('voyage_created',
                      f'Created voyage {voyage.origin}→{voyage.destination} on {voyage.departure_at.strftime("%d %b %Y")}',
                      'voyage', voyage.id)
-        flash(f'Voyage {voyage.origin} → {voyage.destination} created.', 'success')
+
+        # Handle recurrence
+        recurrence = request.form.get('recurrence', 'none')
+        repeat_until_str = request.form.get('repeat_until', '')
+        custom_days_raw = request.form.getlist('custom_days')
+
+        if recurrence != 'none':
+            import secrets as _secrets
+            rec_group = 'REC-' + _secrets.token_hex(5).upper()
+            voyage.recurrence_group = rec_group
+
+            try:
+                repeat_until = datetime.strptime(repeat_until_str, '%Y-%m-%d')
+            except Exception:
+                repeat_until = voyage.departure_at + timedelta(days=30)
+
+            max_date = voyage.departure_at + timedelta(days=90)
+            repeat_until = min(repeat_until, max_date)
+
+            step_map = {'daily': 1, 'every2': 2, 'every3': 3, 'weekly': 7}
+            step = step_map.get(recurrence, 1)
+            custom_days = [int(x) for x in custom_days_raw if x.isdigit()]
+
+            if recurrence == 'custom':
+                current_dt = voyage.departure_at + timedelta(days=1)
+            else:
+                current_dt = voyage.departure_at + timedelta(days=step)
+
+            created = 1  # count base voyage
+            skipped = 0
+
+            while current_dt.date() <= repeat_until.date() and created < 91:
+                if recurrence == 'custom':
+                    # Python weekday Mon=0..Sun=6
+                    wd = current_dt.weekday()
+                    if wd not in custom_days:
+                        current_dt += timedelta(days=1)
+                        continue
+
+                # Check for conflict
+                conflict = Voyage.query.filter_by(
+                    bus_id=voyage.bus_id,
+                    status='scheduled',
+                ).filter(
+                    func.date(Voyage.departure_at) == current_dt.date()
+                ).first()
+
+                if conflict:
+                    skipped += 1
+                else:
+                    arr = None
+                    if voyage.arrival_at:
+                        arr = voyage.arrival_at + (current_dt - voyage.departure_at)
+                    v = Voyage(
+                        bus_id=voyage.bus_id,
+                        origin=voyage.origin,
+                        destination=voyage.destination,
+                        departure_at=current_dt,
+                        arrival_at=arr,
+                        base_fare=voyage.base_fare,
+                        driver_id=voyage.driver_id,
+                        status='scheduled',
+                        notes=voyage.notes,
+                        recurrence_group=rec_group,
+                        created_by_id=current_user.id,
+                    )
+                    db.session.add(v)
+                    db.session.flush()
+                    # Copy route stops
+                    for s in voyage.stops:
+                        db.session.add(RouteStop(
+                            voyage_id=v.id,
+                            stop_name=s.stop_name,
+                            stop_type=s.stop_type,
+                            stop_time=s.stop_time,
+                            stop_order=s.stop_order,
+                        ))
+                    created += 1
+
+                if recurrence == 'custom':
+                    current_dt += timedelta(days=1)
+                else:
+                    current_dt += timedelta(days=step)
+
+            db.session.commit()
+            skip_msg = f" ({skipped} date{'s' if skipped != 1 else ''} skipped — bus conflict)" if skipped else ""
+            flash(f"Created {created} recurring voyage{'s' if created != 1 else ''}{skip_msg}.", 'success')
+            log_activity('voyage_created',
+                         f"Created recurring voyage {voyage.origin}→{voyage.destination} ({created} voyages, {recurrence}, {voyage.departure_at.strftime('%d %b')} - {repeat_until.strftime('%d %b %Y')})",
+                         'voyage', voyage.id)
+        else:
+            flash(f'Voyage {voyage.origin} → {voyage.destination} created.', 'success')
+
         return redirect(url_for('admin.voyages'))
 
     return render_template('admin/voyage_form.html', form=form, title='New Voyage',
@@ -291,6 +383,22 @@ def voyage_edit(voyage_id):
     return render_template('admin/voyage_form.html', form=form,
                            title='Edit Voyage', voyage=voyage,
                            stops_json=json.dumps(existing))
+
+
+@admin_bp.route('/voyages/cancel-recurrence/<group>', methods=['POST'])
+def cancel_recurrence(group):
+    future = Voyage.query.filter_by(recurrence_group=group, status='scheduled')\
+        .filter(Voyage.departure_at > datetime.utcnow()).all()
+    count = 0
+    for v in future:
+        v.status = 'cancelled'
+        v.cancelled_at = datetime.utcnow()
+        v.cancelled_by_id = current_user.id
+        count += 1
+    db.session.commit()
+    log_activity('voyage_cancelled', f'Cancelled {count} future recurring voyages in group {group}', 'voyage', None)
+    flash(f"Cancelled {count} future recurring voyages.", 'success')
+    return redirect(url_for('admin.voyages'))
 
 
 @admin_bp.route('/voyages/<int:voyage_id>/cancel', methods=['POST'])

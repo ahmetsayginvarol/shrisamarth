@@ -47,13 +47,13 @@
         </div>
         {% if voyages %}
         <div class="c-sort-bar">
-            <span class="c-sort-label">Sort:</span>
+            <span class="c-sort-label" data-i18n="c.sort">Sort:</span>
             <a href="?origin={{ origin }}&destination={{ destination }}&date={{ travel_date }}&sort=time"
-               class="c-sort-btn {% if sort_by == 'time' %}active{% endif %}">Time</a>
+               class="c-sort-btn {% if sort_by == 'time' %}active{% endif %}" data-i18n="c.sort_time">Time</a>
             <a href="?origin={{ origin }}&destination={{ destination }}&date={{ travel_date }}&sort=price"
-               class="c-sort-btn {% if sort_by == 'price' %}active{% endif %}">Price</a>
+               class="c-sort-btn {% if sort_by == 'price' %}active{% endif %}" data-i18n="c.sort_price">Price</a>
             <a href="?origin={{ origin }}&destination={{ destination }}&date={{ travel_date }}&sort=seats"
-               class="c-sort-btn {% if sort_by == 'seats' %}active{% endif %}">Seats</a>
+               class="c-sort-btn {% if sort_by == 'seats' %}active{% endif %}" data-i18n="c.sort_seats">Seats</a>
         </div>
         {% endif %}
         {% else %}
@@ -91,24 +91,27 @@
                         <div class="c-result-seats
                             {% if avail == 0 %}c-seats-sold{% elif avail <= 5 %}c-seats-low{% else %}c-seats-ok{% endif %}">
                             {% if avail == 0 %}
-                                Sold out
+                                <span data-i18n="c.sold_out">Sold out</span>
                             {% elif avail <= 5 %}
                                 ⚠ {{ avail }} seat{{ 's' if avail != 1 }} left
                             {% else %}
                                 {{ avail }} seats available
                             {% endif %}
                         </div>
+                        {% if avail > 0 %}
+                        <div class="c-avail-bar"><div class="c-avail-fill {% if avail <= 10 %}low{% endif %}" style="width:{{ ((v.bus.total_seats - avail) / v.bus.total_seats * 100)|int }}%"></div></div>
+                        {% endif %}
                     </div>
 
                     <!-- Fare + CTA -->
                     <div class="c-result-cta">
                         <div class="c-result-fare">₹ {{ v.base_fare | int }}</div>
-                        <div class="c-result-fare-sub">per seat</div>
+                        <div class="c-result-fare-sub" data-i18n="c.per_seat">per seat</div>
                         {% if avail > 0 %}
                         <a href="{{ url_for('customer.book', voyage_id=v.id) }}"
-                           class="c-book-btn">Select Seats →</a>
+                           class="c-book-btn" data-i18n="c.select_seats">Select Seats →</a>
                         {% else %}
-                        <span class="c-book-btn c-book-btn-disabled">Sold Out</span>
+                        <span class="c-book-btn c-book-btn-disabled" data-i18n="c.sold_out">Sold Out</span>
                         {% endif %}
                     </div>
                 </div>
@@ -118,7 +121,7 @@
                 <div class="c-result-stops">
                     {% if stops.boarding %}
                     <div class="c-stops-row">
-                        <span class="c-stops-label boarding">Boarding</span>
+                        <span class="c-stops-label boarding" data-i18n="c.boarding">Boarding</span>
                         <div class="c-stops-chips">
                             {% for s in stops.boarding %}
                             <span class="c-stop-chip">
@@ -130,7 +133,7 @@
                     {% endif %}
                     {% if stops.dropping %}
                     <div class="c-stops-row">
-                        <span class="c-stops-label dropping">Dropping</span>
+                        <span class="c-stops-label dropping" data-i18n="c.dropping">Dropping</span>
                         <div class="c-stops-chips">
                             {% for s in stops.dropping %}
                             <span class="c-stop-chip">

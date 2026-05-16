@@ -10,7 +10,8 @@ from flask import send_file
 from app.staff.ticket import generate_ticket, generate_group_ticket
 import secrets
 from app.staff.manifest import generate_manifest
-from app.logging import log_activity
+from app.logging import log_activity, notify_staff
+from app.models import Notification
 
 staff_bp = Blueprint('staff', __name__, template_folder='../templates/staff')
 
@@ -135,6 +136,7 @@ def seat_info(voyage_id, seat_id):
             voyage_id=voyage_id, seat_id=seat_id, status='confirmed'
         ).first()
         if booking:
+            voyage = booking.voyage
             return jsonify({
                 'status': 'booked',
                 'seat_id': seat_id,
@@ -150,6 +152,8 @@ def seat_info(voyage_id, seat_id):
                     'fare': float(booking.fare),
                     'advance': float(booking.advance_paid or 0),
                     'balance': float(booking.balance_due or 0),
+                    'departure_date': voyage.departure_at.strftime('%d %b %Y'),
+                    'departure_time': voyage.departure_at.strftime('%H:%M'),
                 }
             })
         else:
@@ -168,6 +172,7 @@ def seat_info(voyage_id, seat_id):
             ).all()
             group_seats = [b.seat_id for b in siblings]
 
+        voyage = booking.voyage
         return jsonify({
             'status': 'booked',
             'seat_id': seat_id,
@@ -185,6 +190,8 @@ def seat_info(voyage_id, seat_id):
                 'fare': float(booking.fare),
                 'advance': float(booking.advance_paid or 0),
                 'balance': float(booking.balance_due or 0),
+                'departure_date': voyage.departure_at.strftime('%d %b %Y'),
+                'departure_time': voyage.departure_at.strftime('%H:%M'),
             }
         })
 
@@ -281,6 +288,13 @@ def create_booking():
         'gender': booking.gender,
         'name': booking.passenger_name,
     })
+    notify_staff(
+        title='New Booking',
+        message=f"{booking.passenger_name} — Seat {booking.seat_id} — {voyage.origin}→{voyage.destination} {voyage.departure_at.strftime('%d %b %Y')}",
+        link=url_for('staff.dashboard', voyage_id=voyage.id, date=voyage.departure_at.strftime('%Y-%m-%d')),
+        booking_id=booking.id,
+        passenger_phone=booking.passenger_phone,
+    )
 
     return jsonify({
         'status': 'success',
@@ -366,6 +380,13 @@ def create_group_booking():
             'gender': b.gender,
             'name': b.passenger_name,
         })
+    notify_staff(
+        title='New Group Booking',
+        message=f"{passenger_name} — {len(seat_ids)} seats ({', '.join(seat_ids)}) — {voyage.origin}→{voyage.destination} {voyage.departure_at.strftime('%d %b %Y')}",
+        link=url_for('staff.dashboard', voyage_id=voyage.id, date=voyage.departure_at.strftime('%Y-%m-%d')),
+        booking_id=bookings_created[0].id if bookings_created else None,
+        passenger_phone=passenger_phone,
+    )
 
     return jsonify({
         'status': 'success',
@@ -406,6 +427,12 @@ def cancel_booking(booking_id):
         'voyage_id': booking.voyage_id,
         'seat_id': booking.seat_id,
     })
+    notify_staff(
+        title='Booking Cancelled',
+        message=f"{booking.passenger_name} — Seat {booking.seat_id} — {booking.voyage.origin}→{booking.voyage.destination}",
+        booking_id=booking.id,
+        passenger_phone=booking.passenger_phone,
+    )
 
     return jsonify({'status': 'success', 'seat_id': booking.seat_id})
 
@@ -425,6 +452,54 @@ def download_ticket(booking_id):
         as_attachment=True,
         download_name=filename,
     )
+@staff_bp.route('/api/notifications')
+def get_notifications():
+    if not current_user.has_role('admin', 'reservation'):
+        return jsonify({'error': 'forbidden'}), 403
+
+    notes = Notification.query.filter_by(user_id=current_user.id)\
+        .order_by(Notification.created_at.desc()).limit(20).all()
+
+    unread = Notification.query.filter_by(user_id=current_user.id, is_read=False).count()
+
+    def time_ago(dt):
+        diff = datetime.utcnow() - dt
+        if diff.seconds < 60: return 'just now'
+        if diff.seconds < 3600: return f"{diff.seconds//60}m ago"
+        if diff.days == 0: return f"{diff.seconds//3600}h ago"
+        return f"{diff.days}d ago"
+
+    return jsonify({
+        'unread': unread,
+        'notifications': [{
+            'id': n.id,
+            'title': n.title,
+            'message': n.message,
+            'link': n.link,
+            'booking_id': n.booking_id,
+            'passenger_phone': n.passenger_phone,
+            'is_read': n.is_read,
+            'time_ago': time_ago(n.created_at),
+        } for n in notes]
+    })
+
+
+@staff_bp.route('/api/notifications/read/<int:nid>', methods=['POST'])
+def mark_notification_read(nid):
+    n = Notification.query.filter_by(id=nid, user_id=current_user.id).first_or_404()
+    n.is_read = True
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@staff_bp.route('/api/notifications/read-all', methods=['POST'])
+def mark_all_notifications_read():
+    Notification.query.filter_by(user_id=current_user.id, is_read=False)\
+        .update({'is_read': True})
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
 @staff_bp.route('/manifest/<int:voyage_id>/pdf')
 def download_manifest(voyage_id):
     voyage = Voyage.query.get_or_404(voyage_id)

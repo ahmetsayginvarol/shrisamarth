@@ -22,6 +22,21 @@
             <button class="pill lang-btn active" data-lang="en" onclick="applyLanguage('en')">EN</button>
             <button class="pill lang-btn" data-lang="hi" onclick="applyLanguage('hi')">हिं</button>
         </div>
+        {% if current_user.has_role('admin', 'reservation') %}
+        <div class="notif-bell" id="notifBell" onclick="toggleNotifDropdown()">
+          🔔
+          <span class="notif-badge hidden" id="notifBadge">0</span>
+        </div>
+        <div class="notif-dropdown hidden" id="notifDropdown">
+          <div class="notif-dropdown-header">
+            <span>Notifications</span>
+            <button onclick="markAllRead()" class="notif-mark-all">Mark all read</button>
+          </div>
+          <div id="notifList" class="notif-list">
+            <div class="notif-empty">Loading…</div>
+          </div>
+        </div>
+        {% endif %}
         <span class="muted">{{ current_user.full_name }}</span>
         {% if role != 'admin' %}
         <a href="{{ url_for('auth.logout') }}" class="btn btn-ghost" data-i18n="nav.signout">Sign out</a>

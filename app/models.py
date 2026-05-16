@@ -77,6 +77,7 @@ class Voyage(db.Model):
     cancelled_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    recurrence_group = db.Column(db.String(30), nullable=True, index=True)
 
     driver = db.relationship('User', foreign_keys=[driver_id])
     cancelled_by = db.relationship('User', foreign_keys=[cancelled_by_id])
@@ -194,6 +195,23 @@ class ActivityLog(db.Model):
 # ============================================================
 # SEAT LOCK (temporary reservation during checkout)
 # ============================================================
+
+class Notification(db.Model):
+    __tablename__ = 'notifications'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    title = db.Column(db.String(120), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    link = db.Column(db.String(500), nullable=True)
+    booking_id = db.Column(db.Integer, db.ForeignKey('bookings.id'), nullable=True)
+    passenger_phone = db.Column(db.String(20), nullable=True)
+    is_read = db.Column(db.Boolean, default=False, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    user = db.relationship('User', foreign_keys=[user_id])
+    booking = db.relationship('Booking', foreign_keys=[booking_id])
+
 
 class SeatLock(db.Model):
     __tablename__ = 'seat_locks'

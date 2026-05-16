@@ -2,15 +2,50 @@
 {% block title %}My Bookings · SHRISAMARTH{% endblock %}
 
 {% block customer_content %}
-<div style="max-width:800px; margin:0 auto; padding:40px 20px;">
+<div style="max-width:860px; margin:0 auto; padding:40px 20px;">
 
-    <div class="page-header" style="border-bottom:1px solid var(--line); padding-bottom:20px; margin-bottom:32px;">
+    <div class="page-header" style="border-bottom:1px solid var(--line); padding-bottom:20px; margin-bottom:28px;">
         <div>
-            <h1 class="page-title serif">My Bookings</h1>
+            <h1 class="page-title serif" data-i18n="c.my_bookings">My Bookings</h1>
             <div class="page-subtitle">{{ current_user.full_name }} · {{ current_user.email }}</div>
         </div>
         <a href="{{ url_for('customer.home') }}" class="btn btn-ghost">+ New Booking</a>
     </div>
+
+    <!-- Stats row -->
+    {% if stats %}
+    <div class="c-stats-row">
+        <div class="c-stat-card">
+            <div class="c-stat-label">Total Trips</div>
+            <div class="c-stat-value">{{ stats.total }}</div>
+        </div>
+        <div class="c-stat-card">
+            <div class="c-stat-label">Upcoming</div>
+            <div class="c-stat-value" style="color:var(--sage);">{{ stats.upcoming }}</div>
+        </div>
+        <div class="c-stat-card">
+            <div class="c-stat-label">Total Fare</div>
+            <div class="c-stat-value" style="font-size:20px;">₹{{ stats.spent|int }}</div>
+        </div>
+        <div class="c-stat-card">
+            <div class="c-stat-label">Balance Due</div>
+            <div class="c-stat-value" style="font-size:20px; color:var(--marigold);">₹{{ stats.balance|int }}</div>
+            <div class="c-stat-sub">Pay on board</div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Soon banner -->
+    {% if soon_bookings %}
+    <div class="c-soon-banner">
+        ⚡ <strong>Departing soon!</strong>
+        {% for b in soon_bookings %}
+        {{ b.voyage.origin }} → {{ b.voyage.destination }}
+        at <strong>{{ b.voyage.departure_at.strftime('%H:%M') }}</strong>
+        (Seat {{ b.seat_id }}){% if not loop.last %}, {% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
 
     {% if grouped %}
     <div style="display:flex; flex-direction:column; gap:16px;">
@@ -31,6 +66,9 @@
                 <div style="text-align:right;">
                     {% if item.type == 'group' %}
                     <span class="badge" style="background:rgba(212,168,76,0.2); color:var(--gold); margin-bottom:4px;">Group</span>
+                    {% endif %}
+                    {% if b0 in soon_bookings %}
+                    <span class="badge" style="background:rgba(200,118,26,0.3); color:var(--marigold); margin-bottom:4px;">Soon</span>
                     {% endif %}
                     <div class="mono" style="font-size:11px; color:rgba(255,255,255,0.6);">{{ item.code }}</div>
                 </div>
@@ -67,22 +105,30 @@
                     </tbody>
                 </table>
 
-                <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
+                <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; align-items:center;">
                     <a href="{{ url_for('customer.confirmation', code=item.code) }}"
                        class="btn btn-ghost" style="font-size:12px; padding:6px 14px;">
                         View Details
                     </a>
                     {% if item.type == 'group' %}
                     <a href="{{ url_for('customer.download_group_ticket', group_code=item.code) }}"
-                       class="btn btn-ghost" style="font-size:12px; padding:6px 14px; color:var(--marigold); border-color:var(--marigold);">
+                       class="btn btn-ghost" style="font-size:12px; padding:6px 14px; color:var(--marigold); border-color:var(--marigold);"
+                       data-i18n="c.download_ticket">
                         ↓ Download Ticket
                     </a>
                     {% else %}
                     <a href="{{ url_for('customer.download_ticket', booking_id=b0.id) }}"
-                       class="btn btn-ghost" style="font-size:12px; padding:6px 14px; color:var(--marigold); border-color:var(--marigold);">
+                       class="btn btn-ghost" style="font-size:12px; padding:6px 14px; color:var(--marigold); border-color:var(--marigold);"
+                       data-i18n="c.download_ticket">
                         ↓ Download Ticket
                     </a>
                     {% endif %}
+                    <button onclick="shareBooking('{{ item.code }}', '{{ b0.passenger_name }}', '{{ b0.voyage.origin }} → {{ b0.voyage.destination }}', '{{ b0.voyage.departure_at.strftime('%d %b %Y · %H:%M') }}')"
+                            class="btn btn-ghost"
+                            style="color:#25D366; border-color:#25D366; font-size:12px; padding:6px 14px;"
+                            data-i18n="c.share_whatsapp">
+                        💬 WhatsApp
+                    </button>
                     <div style="flex:1; text-align:right;">
                         <div style="font-size:11px; color:var(--muted);">
                             Booked {{ b0.created_at.strftime('%d %b %Y') if b0.created_at else '' }}
@@ -106,4 +152,11 @@
     {% endif %}
 
 </div>
+
+<script>
+function shareBooking(code, name, route, dep) {
+    const msg = `*SHRISAMARTH Booking*\n\nPassenger: ${name}\nRoute: ${route}\nDeparture: ${dep}\nCode: ${code}\n\nPay on board. Show this at boarding.`;
+    window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
+}
+</script>
 {% endblock %}

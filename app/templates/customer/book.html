@@ -19,7 +19,7 @@
         <section class="c-book-seat-section">
 
             <div class="seat-section-header" style="max-width:380px; width:100%; margin-bottom:16px;">
-                <h2 class="serif" style="font-size:20px;">Select Seats</h2>
+                <h2 class="serif" style="font-size:20px;" data-i18n="c.select_seats">Select Seats</h2>
                 <div class="legend">
                     <span class="legend-item">
                         <span class="legend-swatch available"></span> Open
@@ -139,7 +139,7 @@
                     <div id="seatInputsContainer"></div>
 
                     <div class="form-group">
-                        <label class="form-label">Passenger Name</label>
+                        <label class="form-label" data-i18n="c.passenger_name">Passenger Name</label>
                         <input type="text" name="passenger_name" class="form-input" placeholder="Full name" required>
                     </div>
 
@@ -154,24 +154,24 @@
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label">Gender</label>
+                        <label class="form-label" data-i18n="c.gender">Gender</label>
                         <div class="gender-choice">
                             <label class="gender-btn">
                                 <input type="radio" name="gender" value="M" required>
                                 <span class="gender-dot male-dot"></span>
-                                <span>Male</span>
+                                <span data-i18n="c.male">Male</span>
                             </label>
                             <label class="gender-btn">
                                 <input type="radio" name="gender" value="F">
                                 <span class="gender-dot female-dot"></span>
-                                <span>Female</span>
+                                <span data-i18n="c.female">Female</span>
                             </label>
                         </div>
                     </div>
 
                     <div class="form-row">
                         <div class="form-group">
-                            <label class="form-label">Boarding Point</label>
+                            <label class="form-label" data-i18n="c.boarding">Boarding Point</label>
                             {% if boarding_stops %}
                             <select name="boarding_point" class="form-select" required>
                                 {% for s in boarding_stops %}
@@ -183,7 +183,7 @@
                             {% endif %}
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Dropping Point</label>
+                            <label class="form-label" data-i18n="c.dropping">Dropping Point</label>
                             {% if dropping_stops %}
                             <select name="dropping_point" class="form-select" required>
                                 {% for s in dropping_stops %}
@@ -202,7 +202,7 @@
 
                     <div class="form-actions" style="justify-content:space-between;">
                         <button type="button" class="btn btn-ghost" onclick="cancelForm()">← Back</button>
-                        <button type="submit" class="btn btn-primary" style="width:auto; flex:1; margin-left:10px;">
+                        <button type="submit" class="btn btn-primary" style="width:auto; flex:1; margin-left:10px;" data-i18n="c.confirm_booking">
                             Confirm Booking
                         </button>
                     </div>

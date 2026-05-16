@@ -2,69 +2,92 @@
 {% block title %}SHRISAMARTH — Book Bus Tickets{% endblock %}
 
 {% block customer_content %}
+<!-- Hero with gradient -->
 <div class="c-hero">
+  <div class="c-hero-inner">
     <div class="c-hero-text">
-        <h1 class="c-hero-title serif">Your journey,<br>your comfort.</h1>
-        <p class="c-hero-sub">Overnight sleeper buses across Maharashtra — reliable and on time.</p>
+      <h1 class="c-hero-title serif" data-i18n="c.hero_title">Travel with Comfort</h1>
+      <p class="c-hero-sub" data-i18n="c.hero_sub">Overnight sleeper buses across Maharashtra — reliable and on time.</p>
     </div>
-
+    <!-- Search card -->
     <div class="c-search-card">
-        <div class="c-search-card-label">Find your bus</div>
-        <form method="GET" action="{{ url_for('customer.search') }}">
-            <div class="c-search-fields">
-                <div class="c-field-group">
-                    <label class="c-field-label">From</label>
-                    <select name="origin" class="c-field-input" required>
-                        <option value="">Select city…</option>
-                        {% for city in origins %}
-                        <option value="{{ city }}">{{ city }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div class="c-swap-icon" aria-hidden="true">⇄</div>
-
-                <div class="c-field-group">
-                    <label class="c-field-label">To</label>
-                    <select name="destination" class="c-field-input" required>
-                        <option value="">Select city…</option>
-                        {% for city in destinations %}
-                        <option value="{{ city }}">{{ city }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div class="c-field-group">
-                    <label class="c-field-label">Date</label>
-                    <input type="date" name="date" class="c-field-input"
-                           value="{{ today }}" min="{{ today }}" required>
-                </div>
-
-                <button type="submit" class="c-search-btn">
-                    Search Buses
-                </button>
-            </div>
-        </form>
+      <div class="c-search-card-label" data-i18n="c.find_bus">Find your bus</div>
+      <form method="GET" action="{{ url_for('customer.search') }}">
+        <div class="c-search-fields">
+          <div class="c-field-group">
+            <label class="c-field-label" data-i18n="c.from">From</label>
+            <select name="origin" class="c-field-input" required>
+              <option value="" data-i18n="c.select_city">Select city…</option>
+              {% for city in origins %}<option value="{{ city }}">{{ city }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="c-swap-btn" onclick="swapCities()" title="Swap">⇄</div>
+          <div class="c-field-group">
+            <label class="c-field-label" data-i18n="c.to">To</label>
+            <select name="destination" class="c-field-input" required>
+              <option value="" data-i18n="c.select_city">Select city…</option>
+              {% for city in destinations %}<option value="{{ city }}">{{ city }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="c-field-group">
+            <label class="c-field-label" data-i18n="c.date">Date</label>
+            <input type="date" name="date" class="c-field-input" value="{{ today }}" min="{{ today }}" required>
+          </div>
+          <button type="submit" class="c-search-btn" data-i18n="c.search_btn">Search Buses</button>
+        </div>
+      </form>
     </div>
+  </div>
 </div>
 
-<section class="c-features">
-    <div class="c-features-inner">
-        <div class="c-feature">
-            <div class="c-feature-icon">🚌</div>
-            <div class="c-feature-title">Sleeper coaches</div>
-            <div class="c-feature-sub">Comfortable overnight journeys with 49-seat AC sleeper buses.</div>
-        </div>
-        <div class="c-feature">
-            <div class="c-feature-icon">📍</div>
-            <div class="c-feature-title">Multiple pick-ups</div>
-            <div class="c-feature-sub">Board from Dadar, Andheri, Borivali or Thane — whichever suits you.</div>
-        </div>
-        <div class="c-feature">
-            <div class="c-feature-icon">🎫</div>
-            <div class="c-feature-title">Instant e-ticket</div>
-            <div class="c-feature-sub">Booking confirmed in seconds. Download your PDF ticket right away.</div>
-        </div>
+<!-- Why SHRISAMARTH -->
+<section class="c-why">
+  <div class="c-why-inner">
+    <h2 class="serif c-section-title" data-i18n="c.why_title">Why SHRISAMARTH?</h2>
+    <div class="c-why-grid">
+      <div class="c-why-card">
+        <div class="c-why-icon">🛡️</div>
+        <h3 data-i18n="c.safe">Safe Travel</h3>
+        <p data-i18n="c.safe_sub">Professional drivers, well-maintained AC sleeper coaches.</p>
+      </div>
+      <div class="c-why-card">
+        <div class="c-why-icon">⚡</div>
+        <h3 data-i18n="c.easy">Easy Booking</h3>
+        <p data-i18n="c.easy_sub">Choose your seat, fill one form, get an instant e-ticket.</p>
+      </div>
+      <div class="c-why-card">
+        <div class="c-why-icon">💰</div>
+        <h3 data-i18n="c.price">Best Prices</h3>
+        <p data-i18n="c.price_sub">Pay on board — no hidden fees, no advance payment required.</p>
+      </div>
     </div>
+  </div>
 </section>
+
+<!-- Popular routes -->
+{% if popular_voyages %}
+<section class="c-popular">
+  <div class="c-popular-inner">
+    <h2 class="serif c-section-title" data-i18n="c.popular_title">Upcoming Buses</h2>
+    <div class="c-popular-grid">
+      {% for v in popular_voyages %}
+      <a href="{{ url_for('customer.book', voyage_id=v.id) }}" class="c-popular-card">
+        <div class="c-popular-route">{{ v.origin }} <span class="c-arrow">→</span> {{ v.destination }}</div>
+        <div class="c-popular-time">{{ v.departure_at.strftime('%d %b · %H:%M') }}</div>
+        <div class="c-popular-fare">₹ {{ v.base_fare | int }} <span>per seat</span></div>
+        <div class="c-popular-avail">{{ v.bus.total_seats - v.seats_booked }} seats left</div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<script>
+function swapCities() {
+  const o = document.querySelector('select[name="origin"]');
+  const d = document.querySelector('select[name="destination"]');
+  const tmp = o.value; o.value = d.value; d.value = tmp;
+}
+</script>
 {% endblock %}

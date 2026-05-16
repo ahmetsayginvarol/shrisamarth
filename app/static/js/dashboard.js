@@ -396,6 +396,8 @@ function showBookingDetails(booking, readonly) {
         waBtn.dataset.fare = booking.fare;
         waBtn.dataset.balance = booking.balance;
         waBtn.dataset.bookingId = booking.id;
+        waBtn.dataset.departureDate = booking.departure_date || '';
+        waBtn.dataset.departureTime = booking.departure_time || '';
     }
 
     // Hide action buttons for drivers
@@ -457,6 +459,8 @@ if (waBtn) {
         const fare     = this.dataset.fare;
         const balance  = this.dataset.balance;
         const phone    = this.dataset.phone;
+        const depDate  = this.dataset.departureDate || '';
+        const depTime  = this.dataset.departureTime || '';
 
         if (!name) return;
 
@@ -467,6 +471,8 @@ if (waBtn) {
             `Your booking is confirmed! ✅\n\n` +
             `🎫 *Booking ID:* ${code}\n` +
             `💺 *Seat(s):* ${seat}\n` +
+            (depDate ? `📅 *Date:* ${depDate}\n` : ``) +
+            (depTime ? `⏰ *Departure:* ${depTime}\n` : ``) +
             `📍 *Boarding:* ${boarding}\n` +
             `📍 *Dropping:* ${dropping}\n` +
             `💰 *Fare:* ₹${fare}\n` +
@@ -611,3 +617,100 @@ if (voyagePicker) {
         window.location.href = `/staff/dashboard?date=${date}&voyage_id=${voyageId}`;
     });
 }
+
+// ============================================================
+// CSRF TOKEN HELPER
+// ============================================================
+
+const csrfEl = document.querySelector('input[name="csrf_token"]');
+const CSRF_TOKEN = csrfEl ? csrfEl.value : '';
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+let notifOpen = false;
+
+async function loadNotifications() {
+    try {
+        const res = await fetch('/staff/api/notifications');
+        const data = await res.json();
+
+        const badge = document.getElementById('notifBadge');
+        if (badge) {
+            if (data.unread > 0) {
+                badge.textContent = data.unread > 99 ? '99+' : data.unread;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        const list = document.getElementById('notifList');
+        if (!list) return;
+
+        if (!data.notifications || !data.notifications.length) {
+            list.innerHTML = '<div class="notif-empty">No notifications</div>';
+            return;
+        }
+
+        list.innerHTML = data.notifications.map(n => {
+            const icon = n.title.includes('Cancel') ? '❌' : '🎫';
+            const waBtn = n.passenger_phone ?
+                `<a class="notif-wa-btn" href="https://wa.me/${n.passenger_phone.replace(/\D/g,'')}" target="_blank" title="WhatsApp">💬</a>` : '';
+            return `<div class="notif-item ${n.is_read ? '' : 'unread'}" data-id="${n.id}" data-link="${n.link || ''}" onclick="handleNotifClick(this)">
+                <div class="notif-icon">${icon}</div>
+                <div>
+                    <div class="notif-title-row">${n.title}</div>
+                    <div class="notif-msg">${n.message}</div>
+                    <div class="notif-time">${n.time_ago}</div>
+                </div>
+                ${waBtn}
+            </div>`;
+        }).join('');
+    } catch(e) { console.error('Notif load failed', e); }
+}
+
+function toggleNotifDropdown() {
+    const dd = document.getElementById('notifDropdown');
+    if (!dd) return;
+    notifOpen = !notifOpen;
+    dd.classList.toggle('hidden', !notifOpen);
+    if (notifOpen) loadNotifications();
+}
+
+async function handleNotifClick(el) {
+    const id = el.dataset.id;
+    const link = el.dataset.link;
+    await fetch(`/staff/api/notifications/read/${id}`, { method: 'POST', headers: {'X-CSRFToken': CSRF_TOKEN} });
+    if (link) window.location.href = link;
+    else toggleNotifDropdown();
+}
+
+async function markAllRead() {
+    await fetch('/staff/api/notifications/read-all', { method: 'POST', headers: {'X-CSRFToken': CSRF_TOKEN} });
+    loadNotifications();
+}
+
+// Real-time: listen for new notifications
+socket.on('new_notification', (data) => {
+    const badge = document.getElementById('notifBadge');
+    if (badge && data.count > 0) {
+        badge.textContent = data.count > 99 ? '99+' : data.count;
+        badge.classList.remove('hidden');
+        badge.style.animation = 'none';
+        requestAnimationFrame(() => { badge.style.animation = ''; });
+    }
+    if (notifOpen) loadNotifications();
+});
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    if (notifOpen && !e.target.closest('#notifBell') && !e.target.closest('#notifDropdown')) {
+        notifOpen = false;
+        document.getElementById('notifDropdown')?.classList.add('hidden');
+    }
+});
+
+// Load on page load
+document.addEventListener('DOMContentLoaded', loadNotifications);
