@@ -1328,14 +1328,22 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
 }
 
 /* ===== NOTIFICATION BELL ===== */
+.notif-wrapper {
+  position: relative;   /* dropdown anchors to this */
+  display: flex;
+  align-items: center;
+}
 .notif-bell {
-  position: relative;
   cursor: pointer;
   font-size: 18px;
-  padding: 6px;
+  padding: 6px 8px;
   border-radius: 8px;
   transition: background 0.15s;
   user-select: none;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  position: relative;   /* keeps badge positioned over the bell */
 }
 .notif-bell:hover { background: rgba(255,255,255,0.1); }
 .notif-badge {
@@ -1417,9 +1425,6 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
 }
 .notif-wa-btn:hover { opacity: 1; }
 .notif-empty { padding: 32px; text-align: center; color: var(--muted); font-size: 13px; }
-
-/* Topbar position context */
-.topbar { position: relative; }
 
 @media (max-width: 768px) {
   .notif-dropdown { width: 100vw; right: -16px; border-radius: 0; }

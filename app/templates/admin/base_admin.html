@@ -34,6 +34,21 @@
                     <button class="pill lang-btn active" data-lang="en" onclick="applyLanguage('en')">EN</button>
                     <button class="pill lang-btn" data-lang="hi" onclick="applyLanguage('hi')">हिं</button>
                 </div>
+                <div class="notif-wrapper">
+                    <div class="notif-bell" id="notifBell" onclick="toggleNotifDropdown()">
+                        🔔
+                        <span class="notif-badge hidden" id="notifBadge">0</span>
+                    </div>
+                    <div class="notif-dropdown hidden" id="notifDropdown">
+                        <div class="notif-dropdown-header">
+                            <span>Notifications</span>
+                            <button onclick="markAllRead()" class="notif-mark-all">Mark all read</button>
+                        </div>
+                        <div id="notifList" class="notif-list">
+                            <div class="notif-empty">Loading…</div>
+                        </div>
+                    </div>
+                </div>
                 <span class="muted">{{ current_user.full_name }}</span>
             </div>
         </header>
@@ -50,12 +65,82 @@ function toggleSidebar() {
     document.querySelector('.sidebar').classList.toggle('open');
     document.getElementById('sidebarOverlay').classList.toggle('active');
 }
-// Close sidebar on Escape key
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         document.querySelector('.sidebar').classList.remove('open');
         document.getElementById('sidebarOverlay').classList.remove('active');
     }
 });
+
+// ── Notification bell ──
+const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content || '';
+let notifOpen = false;
+
+async function loadNotifications() {
+    try {
+        const res = await fetch('/staff/api/notifications');
+        const data = await res.json();
+        const badge = document.getElementById('notifBadge');
+        if (badge) {
+            if (data.unread > 0) {
+                badge.textContent = data.unread > 99 ? '99+' : data.unread;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+        const list = document.getElementById('notifList');
+        if (!list) return;
+        if (!data.notifications.length) {
+            list.innerHTML = '<div class="notif-empty">No notifications</div>';
+            return;
+        }
+        list.innerHTML = data.notifications.map(n => {
+            const icon = n.title.includes('Cancel') ? '❌' : '🎫';
+            const waBtn = n.passenger_phone
+                ? `<a class="notif-wa-btn" href="https://wa.me/${n.passenger_phone.replace(/\D/g,'')}" target="_blank">💬</a>`
+                : '';
+            return `<div class="notif-item ${n.is_read ? '' : 'unread'}" data-id="${n.id}" data-link="${n.link||''}" onclick="handleNotifClick(this)">
+                <div class="notif-icon">${icon}</div>
+                <div>
+                    <div class="notif-title-row">${n.title}</div>
+                    <div class="notif-msg">${n.message}</div>
+                    <div class="notif-time">${n.time_ago}</div>
+                </div>
+                ${waBtn}
+            </div>`;
+        }).join('');
+    } catch(e) { console.error('Notif load failed', e); }
+}
+
+function toggleNotifDropdown() {
+    const dd = document.getElementById('notifDropdown');
+    if (!dd) return;
+    notifOpen = !notifOpen;
+    dd.classList.toggle('hidden', !notifOpen);
+    if (notifOpen) loadNotifications();
+}
+
+async function handleNotifClick(el) {
+    const id = el.dataset.id;
+    const link = el.dataset.link;
+    await fetch(`/staff/api/notifications/read/${id}`, { method: 'POST', headers: {'X-CSRFToken': CSRF_TOKEN} });
+    if (link) window.location.href = link;
+    else toggleNotifDropdown();
+}
+
+async function markAllRead() {
+    await fetch('/staff/api/notifications/read-all', { method: 'POST', headers: {'X-CSRFToken': CSRF_TOKEN} });
+    loadNotifications();
+}
+
+document.addEventListener('click', function(e) {
+    if (notifOpen && !e.target.closest('#notifBell') && !e.target.closest('#notifDropdown')) {
+        notifOpen = false;
+        document.getElementById('notifDropdown')?.classList.add('hidden');
+    }
+});
+
+document.addEventListener('DOMContentLoaded', loadNotifications);
 </script>
 {% endblock %}
