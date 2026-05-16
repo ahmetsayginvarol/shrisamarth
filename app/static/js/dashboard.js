@@ -20,7 +20,15 @@ const selectedSeats = new Set();  // seat IDs pending group booking
 function showPanel(name) {
     document.querySelectorAll('.panel-view').forEach(p => p.classList.add('hidden'));
     const panel = document.getElementById('panel-' + name);
-    if (panel) panel.classList.remove('hidden');
+    if (panel) {
+        panel.classList.remove('hidden');
+        // On mobile the panel is below the seat map — scroll it into view
+        if (window.innerWidth < 900 && name !== 'empty' && name !== 'manifest') {
+            const sidePanel = document.querySelector('.side-panel') || document.querySelector('.panel');
+            const target = sidePanel || panel;
+            setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300);
+        }
+    }
 }
 
 function closePanel() {

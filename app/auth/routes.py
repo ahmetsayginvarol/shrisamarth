@@ -13,6 +13,10 @@ auth_bp = Blueprint('auth', __name__, template_folder='../templates/auth')
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
+        if current_user.role == 'admin':
+            return redirect(url_for('admin.dashboard'))
+        if current_user.role == 'customer':
+            return redirect(url_for('customer.home'))
         return redirect(url_for('staff.dashboard'))
 
     form = LoginForm()
@@ -34,6 +38,8 @@ def login():
         if not next_page or urlparse(next_page).netloc != '':
             if user.role == 'admin':
                 next_page = url_for('admin.dashboard')
+            elif user.role == 'customer':
+                next_page = url_for('customer.home')
             else:
                 next_page = url_for('staff.dashboard')
 

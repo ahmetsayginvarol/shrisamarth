@@ -25,15 +25,24 @@
            class="btn btn-ghost"
            style="font-size:12px; padding:6px 14px;"
            data-i18n="c.sign_out">Sign Out</a>
-        {% elif not current_user.is_authenticated %}
+        {% elif current_user.is_authenticated %}
+        {# Staff/admin landed on a customer page — show a link back to their panel #}
+        <a href="{{ url_for('admin.dashboard') if current_user.role == 'admin' else url_for('staff.dashboard') }}"
+           class="btn btn-ghost"
+           style="font-size:12px; padding:6px 14px;">Staff Panel ↗</a>
+        {% else %}
         <a href="{{ url_for('customer.login') }}"
            class="btn btn-ghost"
            style="font-size:12px; padding:6px 14px;"
            data-i18n="c.sign_in">Sign In</a>
-        {% endif %}
+        <a href="{{ url_for('customer.register') }}"
+           class="btn btn-ghost"
+           style="font-size:12px; padding:6px 14px;"
+           data-i18n="c.register">Register</a>
         <a href="{{ url_for('auth.login') }}"
            class="btn btn-ghost"
-           style="font-size:12px; padding:6px 14px;">Staff ↗</a>
+           style="font-size:12px; padding:6px 14px; opacity:0.55;">Staff ↗</a>
+        {% endif %}
     </div>
 </nav>
 

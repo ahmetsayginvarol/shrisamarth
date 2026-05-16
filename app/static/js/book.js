@@ -134,6 +134,12 @@ async function unlockSeat(sid) {
 // UI STATE
 // ============================================================
 
+function scrollToPanel() {
+    if (window.innerWidth >= 900) return;
+    const panel = document.querySelector('.c-book-panel');
+    if (panel) setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300);
+}
+
 function updateSelectionUI() {
     const count = selectedSeats.size;
     const totalFare = count * BASE_FARE;
@@ -153,6 +159,8 @@ function updateSelectionUI() {
             '₹ ' + totalFare.toLocaleString('en-IN');
         document.getElementById('seatCountDisplay').textContent =
             `${count} seat${count !== 1 ? 's' : ''}`;
+
+        scrollToPanel();
     } else {
         panelEmpty.classList.remove('hidden');
         panelSelected.classList.add('hidden');
@@ -163,6 +171,7 @@ function updateSelectionUI() {
 function showBookingForm() {
     document.getElementById('panel-empty').classList.add('hidden');
     document.getElementById('panel-selected').classList.add('hidden');
+    scrollToPanel();
     document.getElementById('panel-form').classList.remove('hidden');
 
     // Inject seat_ids hidden inputs
