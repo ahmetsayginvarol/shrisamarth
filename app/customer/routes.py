@@ -147,6 +147,7 @@ def book(voyage_id):
             'name': current_user.full_name,
             'phone': current_user.phone or '',
             'email': current_user.email or '',
+            'gender': current_user.gender or '',
         }
 
     return render_template(
@@ -399,6 +400,7 @@ def register():
             email=email,
             full_name=form.full_name.data.strip(),
             phone=form.phone.data.strip(),
+            gender=form.gender.data or None,
             role='customer',
             is_active_account=True,
         )

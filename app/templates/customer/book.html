@@ -160,12 +160,14 @@
                         <label class="form-label" data-i18n="c.gender">Gender</label>
                         <div class="gender-choice">
                             <label class="gender-btn">
-                                <input type="radio" name="gender" value="M" required>
+                                <input type="radio" name="gender" value="M" required
+                                       {{ 'checked' if prefill.get('gender') == 'M' }}>
                                 <span class="gender-dot male-dot"></span>
                                 <span data-i18n="c.male">Male</span>
                             </label>
                             <label class="gender-btn">
-                                <input type="radio" name="gender" value="F">
+                                <input type="radio" name="gender" value="F"
+                                       {{ 'checked' if prefill.get('gender') == 'F' }}>
                                 <span class="gender-dot female-dot"></span>
                                 <span data-i18n="c.female">Female</span>
                             </label>

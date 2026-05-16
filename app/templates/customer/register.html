@@ -50,6 +50,22 @@
                 {% endif %}
             </div>
 
+            <div class="form-group">
+                <label class="form-label">Gender <span style="color:var(--muted); font-weight:400;">(optional)</span></label>
+                <div class="gender-choice">
+                    <label class="gender-btn">
+                        <input type="radio" name="gender" value="M" {{ 'checked' if form.gender.data == 'M' }}>
+                        <span class="gender-dot male-dot"></span>
+                        <span>Male</span>
+                    </label>
+                    <label class="gender-btn">
+                        <input type="radio" name="gender" value="F" {{ 'checked' if form.gender.data == 'F' }}>
+                        <span class="gender-dot female-dot"></span>
+                        <span>Female</span>
+                    </label>
+                </div>
+            </div>
+
             <div class="form-row">
                 <div class="form-group">
                     {{ form.password.label(class='form-label') }}
