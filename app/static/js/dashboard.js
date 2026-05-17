@@ -323,13 +323,20 @@ async function submitGroupBooking(formData) {
             selectedSeats.clear();
             updateMultiSeatUI();
 
-            // Offer group ticket download
             closePanel();
-            toast(`${data.seat_ids.length} seats booked for ${data.name}`);
-
-            // Show a quick follow-up prompt for group ticket
-            if (confirm(`Group booking confirmed!\nSeats: ${data.seat_ids.join(', ')}\nBooking ID: ${data.group_code}\n\nDownload group e-ticket?`)) {
-                window.open(`/staff/booking/group/${data.group_code}/ticket`, '_blank');
+            if (data.group_code) {
+                // True multi-seat group booking
+                toast(`${data.seat_ids.length} seats booked for ${data.name}`);
+                if (confirm(`Group booking confirmed!\nSeats: ${data.seat_ids.join(', ')}\nBooking ID: ${data.group_code}\n\nDownload group e-ticket?`)) {
+                    window.open(`/staff/booking/group/${data.group_code}/ticket`, '_blank');
+                }
+            } else {
+                // Single seat submitted via multi-select UI
+                const b = data.bookings[0];
+                toast(`Seat ${b.seat_id} booked for ${data.name}`);
+                if (confirm(`Booking confirmed!\nSeat: ${b.seat_id}\nBooking ID: ${b.code}\n\nDownload e-ticket?`)) {
+                    window.open(`/staff/booking/${b.id}/ticket`, '_blank');
+                }
             }
 
         } else if (data.status === 'error') {

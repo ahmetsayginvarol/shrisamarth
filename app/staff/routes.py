@@ -339,7 +339,8 @@ def create_group_booking():
     total_fare = fare_per_seat * len(seat_ids)
     balance = total_fare - advance_paid
 
-    group_code = f"GRP-{voyage.departure_at.strftime('%Y%m%d')}-{secrets.token_hex(4).upper()}"
+    is_group = len(seat_ids) > 1
+    group_code = f"GRP-{voyage.departure_at.strftime('%Y%m%d')}-{secrets.token_hex(4).upper()}" if is_group else None
 
     bookings_created = []
     try:
@@ -359,7 +360,7 @@ def create_group_booking():
                 advance_paid=per_seat_advance,
                 balance_due=per_seat_balance,
                 booking_code=code,
-                group_booking_code=group_code,
+                group_booking_code=group_code,  # None for single-seat bookings
                 created_by_id=current_user.id,
                 status='confirmed',
             )
@@ -371,22 +372,38 @@ def create_group_booking():
         return jsonify({'status': 'error', 'message': 'One or more seats were just booked. Please refresh.'}), 409
 
     for b in bookings_created:
-        log_activity('booking_created',
-                     f'Group booking {group_code}: seat {b.seat_id} for {b.passenger_name} on {voyage.origin}→{voyage.destination}',
-                     'booking', b.id)
+        if is_group:
+            log_activity('booking_created',
+                         f'Group booking {group_code}: seat {b.seat_id} for {b.passenger_name} on {voyage.origin}→{voyage.destination}',
+                         'booking', b.id)
+        else:
+            log_activity('booking_created',
+                         f'Booking {b.booking_code}: seat {b.seat_id} for {b.passenger_name} on {voyage.origin}→{voyage.destination}',
+                         'booking', b.id)
         socketio.emit('seat_booked', {
             'voyage_id': voyage.id,
             'seat_id': b.seat_id,
             'gender': b.gender,
             'name': b.passenger_name,
         })
-    notify_staff(
-        title='New Group Booking',
-        message=f"{passenger_name} — {len(seat_ids)} seats ({', '.join(seat_ids)}) — {voyage.origin}→{voyage.destination} {voyage.departure_at.strftime('%d %b %Y')}",
-        link=url_for('staff.dashboard', voyage_id=voyage.id, date=voyage.departure_at.strftime('%Y-%m-%d')),
-        booking_id=bookings_created[0].id if bookings_created else None,
-        passenger_phone=passenger_phone,
-    )
+
+    if is_group:
+        notify_staff(
+            title='New Group Booking',
+            message=f"{passenger_name} — {len(seat_ids)} seats ({', '.join(seat_ids)}) — {voyage.origin}→{voyage.destination} {voyage.departure_at.strftime('%d %b %Y')}",
+            link=url_for('staff.dashboard', voyage_id=voyage.id, date=voyage.departure_at.strftime('%Y-%m-%d')),
+            booking_id=bookings_created[0].id if bookings_created else None,
+            passenger_phone=passenger_phone,
+        )
+    else:
+        b = bookings_created[0]
+        notify_staff(
+            title='New Booking',
+            message=f"{passenger_name} — Seat {b.seat_id} — {voyage.origin}→{voyage.destination} {voyage.departure_at.strftime('%d %b %Y')}",
+            link=url_for('staff.dashboard', voyage_id=voyage.id, date=voyage.departure_at.strftime('%Y-%m-%d')),
+            booking_id=b.id,
+            passenger_phone=passenger_phone,
+        )
 
     return jsonify({
         'status': 'success',
