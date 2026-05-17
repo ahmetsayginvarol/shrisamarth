@@ -264,7 +264,7 @@
 
   function t(key) {
     var lang = getLang();
-    var tr = window.TRANSLATIONS;
+    var tr = (typeof TRANSLATIONS !== 'undefined') ? TRANSLATIONS : window.TRANSLATIONS;
     return (tr && tr[lang] && tr[lang][key]) || (tr && tr.en && tr.en[key]) || key;
   }
 
