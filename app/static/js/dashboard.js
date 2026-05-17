@@ -201,6 +201,26 @@ document.querySelectorAll('.seat').forEach(seat => {
 });
 
 // ============================================================
+// GROUP SEAT HOVER HIGHLIGHT
+// ============================================================
+
+const seatMapEl = document.getElementById('seatMap');
+if (seatMapEl) {
+    seatMapEl.addEventListener('mouseover', (e) => {
+        const seat = e.target.closest('.seat.group-seat');
+        if (!seat) return;
+        const grp = seat.dataset.group;
+        if (!grp) return;
+        document.querySelectorAll(`.seat[data-group="${grp}"]`).forEach(s => s.classList.add('group-highlight'));
+    });
+    seatMapEl.addEventListener('mouseout', (e) => {
+        const seat = e.target.closest('.seat.group-seat');
+        if (!seat) return;
+        document.querySelectorAll('.seat.group-highlight').forEach(s => s.classList.remove('group-highlight'));
+    });
+}
+
+// ============================================================
 // BOOKING FORM (only exists for reservation/admin)
 // ============================================================
 
@@ -313,6 +333,10 @@ async function submitGroupBooking(formData) {
                 if (seat) {
                     seat.classList.remove('multi-selected', 'active-single');
                     seat.classList.add('booked-' + gender);
+                    if (data.group_code) {
+                        seat.classList.add('group-seat');
+                        seat.dataset.group = data.group_code;
+                    }
                     seat.title = data.name;
                 }
             });
@@ -527,7 +551,8 @@ if (cancelBtn) {
 
             if (data.status === 'success') {
                 const seat = document.querySelector(`.seat[data-seat="${data.seat_id}"]`);
-                seat.classList.remove('booked-m', 'booked-f', 'active-single', 'multi-selected');
+                seat.classList.remove('booked-m', 'booked-f', 'active-single', 'multi-selected', 'group-seat', 'group-highlight');
+                delete seat.dataset.group;
                 seat.title = `Seat ${data.seat_id}`;
 
                 const oc = document.getElementById('occupancyCount');
@@ -572,6 +597,10 @@ socket.on('seat_booked', (data) => {
     if (!seat || seat.classList.contains('active-single')) return;
     seat.classList.remove('booked-m', 'booked-f', 'multi-selected');
     seat.classList.add('booked-' + data.gender.toLowerCase());
+    if (data.group_code) {
+        seat.classList.add('group-seat');
+        seat.dataset.group = data.group_code;
+    }
     seat.title = data.name;
     // Remove from pending multi-select if it got booked by another agent
     if (selectedSeats.has(data.seat_id)) {
@@ -587,7 +616,8 @@ socket.on('seat_freed', (data) => {
     if (parseInt(data.voyage_id) !== parseInt(VOYAGE_ID)) return;
     const seat = document.querySelector(`.seat[data-seat="${data.seat_id}"]`);
     if (!seat) return;
-    seat.classList.remove('booked-m', 'booked-f', 'active-single', 'multi-selected');
+    seat.classList.remove('booked-m', 'booked-f', 'active-single', 'multi-selected', 'group-seat', 'group-highlight');
+    delete seat.dataset.group;
     seat.title = `Seat ${data.seat_id}`;
     const oc = document.getElementById('occupancyCount');
     if (oc) oc.textContent = parseInt(oc.textContent) - 1;

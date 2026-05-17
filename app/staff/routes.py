@@ -385,6 +385,7 @@ def create_group_booking():
             'seat_id': b.seat_id,
             'gender': b.gender,
             'name': b.passenger_name,
+            'group_code': group_code,
         })
 
     if is_group:

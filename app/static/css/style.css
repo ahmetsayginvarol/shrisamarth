@@ -102,6 +102,14 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
 .seat.active-single { background: var(--gold); border-color: var(--marigold); transform: translateY(-3px); box-shadow: 0 0 0 3px rgba(212,168,76,0.25), 0 8px 16px -4px rgba(200,118,26,0.4); }
 .seat.multi-selected { background: var(--sage, #4a7c59); border-color: #2d5a3d; color: var(--cream); transform: translateY(-3px); box-shadow: 0 0 0 3px rgba(74,124,89,0.3), 0 8px 16px -4px rgba(45,90,61,0.4); }
 
+/* ===== Group seat indicator ===== */
+.seat.group-seat { position: relative; }
+.seat.group-seat::after { content: ''; position: absolute; top: 3px; right: 3px; width: 5px; height: 5px; border-radius: 50%; background: var(--gold); border: 1px solid rgba(255,255,255,0.5); pointer-events: none; }
+.seat.group-highlight { outline: 2px solid var(--gold); outline-offset: 1px; z-index: 2; }
+.legend-swatch.group { background: var(--male); border-color: var(--male); position: relative; }
+.legend-swatch.group::after { content: ''; position: absolute; top: 1px; right: 1px; width: 4px; height: 4px; border-radius: 50%; background: var(--gold); }
+.manifest-group-tag { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; color: var(--gold); margin-left: 4px; font-weight: 600; letter-spacing: 0.04em; vertical-align: middle; }
+
 /* ===== Multi-seat controls ===== */
 .seat-section-header { flex-wrap: wrap; gap: 8px; }
 .multi-seat-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

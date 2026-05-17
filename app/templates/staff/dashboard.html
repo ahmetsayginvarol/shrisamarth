@@ -135,6 +135,10 @@
                     <span class="legend-swatch booked-f"></span>
                     <span>F</span>
                 </span>
+                <span class="legend-item">
+                    <span class="legend-swatch group"></span>
+                    <span>Group</span>
+                </span>
             </div>
             {% if role != 'driver' %}
             <div class="multi-seat-controls">
@@ -171,9 +175,10 @@
                     {% set b = seat_map.get(seat_id) %}
                     <div class="seat
                         {% if seat_id in window_seats %}window{% endif %}
-                        {% if b %}booked-{{ b.gender|lower }}{% elif seat_id in locked_seats %}locked{% endif %}"
+                        {% if b %}booked-{{ b.gender|lower }}{% if b.group_booking_code %} group-seat{% endif %}{% elif seat_id in locked_seats %}locked{% endif %}"
                         data-seat="{{ seat_id }}"
-                        title="{% if b %}{{ b.passenger_name }}{% elif seat_id in locked_seats %}Being reserved by a customer{% else %}Seat {{ seat_id }}{% endif %}">
+                        {% if b and b.group_booking_code %}data-group="{{ b.group_booking_code }}"{% endif %}
+                        title="{% if b %}{{ b.passenger_name }}{% if b.group_booking_code %} (group){% endif %}{% elif seat_id in locked_seats %}Being reserved by a customer{% else %}Seat {{ seat_id }}{% endif %}">
                         {{ seat_id }}
                     </div>
                     {% if loop.index == 2 %}<div class="aisle"></div>{% endif %}
@@ -186,9 +191,10 @@
                     {% set b = seat_map.get(seat_id) %}
                     <div class="seat
                         {% if seat_id in window_seats %}window{% endif %}
-                        {% if b %}booked-{{ b.gender|lower }}{% elif seat_id in locked_seats %}locked{% endif %}"
+                        {% if b %}booked-{{ b.gender|lower }}{% if b.group_booking_code %} group-seat{% endif %}{% elif seat_id in locked_seats %}locked{% endif %}"
                         data-seat="{{ seat_id }}"
-                        title="{% if b %}{{ b.passenger_name }}{% elif seat_id in locked_seats %}Being reserved by a customer{% else %}Seat {{ seat_id }}{% endif %}">
+                        {% if b and b.group_booking_code %}data-group="{{ b.group_booking_code }}"{% endif %}
+                        title="{% if b %}{{ b.passenger_name }}{% if b.group_booking_code %} (group){% endif %}{% elif seat_id in locked_seats %}Being reserved by a customer{% else %}Seat {{ seat_id }}{% endif %}">
                         {{ seat_id }}
                     </div>
                 {% endfor %}
@@ -225,7 +231,10 @@
                         {{ seat_id }}
                     </div>
                     <div>
-                        <div class="manifest-name">{{ b.passenger_name }}</div>
+                        <div class="manifest-name">
+                            {{ b.passenger_name }}
+                            {% if b.group_booking_code %}<span class="manifest-group-tag" title="Group: {{ b.group_booking_code }}">⬡ GRP</span>{% endif %}
+                        </div>
                         <div class="manifest-sub">{{ b.passenger_phone }}</div>
                         <div class="manifest-sub">{{ b.boarding_point }} → {{ b.dropping_point }}</div>
                     </div>
