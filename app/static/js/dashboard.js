@@ -737,6 +737,8 @@ async function markBoardedFromPanel(code, name) {
 // ============================================================
 // TOAST NOTIFICATION
 // ============================================================
+
+function toast(msg) {
     let t = document.getElementById('toast');
     if (!t) {
         t = document.createElement('div');
