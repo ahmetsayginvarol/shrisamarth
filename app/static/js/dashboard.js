@@ -6,6 +6,17 @@ const staffMain = document.querySelector('.staff-main');
 const VOYAGE_ID = staffMain ? staffMain.dataset.voyageId : null;
 const BASE_FARE = staffMain ? parseFloat(staffMain.dataset.baseFare) : 0;
 
+function getCsrfToken() {
+    // Prefer meta tag (always present), fall back to hidden input inside a form
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta) return meta.content;
+    const input = document.querySelector('input[name="csrf_token"]');
+    return input ? input.value : '';
+}
+function csrfHeaders() {
+    return { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() };
+}
+
 let currentSeatId = null;
 let currentBookingId = null;
 
@@ -566,9 +577,7 @@ if (cancelBtn) {
         if (!confirm('Cancel this booking? This cannot be undone.')) return;
 
         try {
-            const csrfEl = document.querySelector('input[name="csrf_token"]');
-            const headers = {};
-            if (csrfEl) headers['X-CSRFToken'] = csrfEl.value;
+            const headers = csrfHeaders();
 
             const res = await fetch(`/staff/booking/${currentBookingId}/cancel`, {
                 method: 'POST',
@@ -610,9 +619,7 @@ async function checkInFromPanel() {
         : `Check in ${name} for seat ${seatId}?`;
     if (!confirm(msg)) return;
 
-    const csrfEl = document.querySelector('input[name="csrf_token"]');
-    const headers = { 'Content-Type': 'application/json' };
-    if (csrfEl) headers['X-CSRFToken'] = csrfEl.value;
+    const headers = csrfHeaders();
     try {
         const res = await fetch(`/staff/booking/${bookingId}/checkin`, { method: 'POST', headers });
         const data = await res.json();
@@ -646,9 +653,7 @@ async function undoCheckinFromPanel() {
     const msg = lang === 'hi' ? `${name} का चेक-इन रद्द करें?` : `Undo check-in for ${name}?`;
     if (!confirm(msg)) return;
 
-    const csrfEl = document.querySelector('input[name="csrf_token"]');
-    const headers = { 'Content-Type': 'application/json' };
-    if (csrfEl) headers['X-CSRFToken'] = csrfEl.value;
+    const headers = csrfHeaders();
     try {
         const res = await fetch(`/staff/booking/${bookingId}/uncheckin`, { method: 'POST', headers });
         const data = await res.json();
@@ -685,9 +690,7 @@ async function manifestCheckin(e, btn) {
         // Already checked in — offer undo
         const msg = lang === 'hi' ? `${name} का चेक-इन रद्द करें?` : `Undo check-in for ${name}?`;
         if (!confirm(msg)) return;
-        const csrfEl = document.querySelector('input[name="csrf_token"]');
-        const headers = { 'Content-Type': 'application/json' };
-        if (csrfEl) headers['X-CSRFToken'] = csrfEl.value;
+        const headers = csrfHeaders();
         const res = await fetch(`/staff/booking/${bookingId}/uncheckin`, { method: 'POST', headers });
         const data = await res.json();
         if (data.status === 'ok') {
@@ -710,9 +713,7 @@ async function manifestCheckin(e, btn) {
         ? `${name} को सीट ${seatId} के लिए चेक-इन करें?`
         : `Check in ${name} for seat ${seatId}?`;
     if (!confirm(msg)) return;
-    const csrfEl = document.querySelector('input[name="csrf_token"]');
-    const headers = { 'Content-Type': 'application/json' };
-    if (csrfEl) headers['X-CSRFToken'] = csrfEl.value;
+    const headers = csrfHeaders();
     const res = await fetch(`/staff/booking/${bookingId}/checkin`, { method: 'POST', headers });
     const data = await res.json();
     if (data.status === 'ok' || data.status === 'already_checked_in') {
@@ -917,8 +918,7 @@ async function markBoardedFromPanel(code, name) {
     const btn = document.getElementById('scanBoardBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Marking…'; }
     try {
-        const csrfEl = document.querySelector('input[name="csrf_token"]');
-        const headers = csrfEl ? { 'X-CSRFToken': csrfEl.value } : {};
+        const headers = { 'X-CSRFToken': getCsrfToken() };
         const res = await fetch('/verify/' + encodeURIComponent(code) + '/board', {
             method: 'POST', headers,
         });
@@ -1097,8 +1097,7 @@ if (voyagePicker) {
 // CSRF TOKEN HELPER
 // ============================================================
 
-const csrfEl = document.querySelector('input[name="csrf_token"]');
-const CSRF_TOKEN = csrfEl ? csrfEl.value : '';
+const CSRF_TOKEN = getCsrfToken();
 
 // ============================================================
 // NOTIFICATIONS
