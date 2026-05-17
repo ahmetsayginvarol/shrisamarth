@@ -576,7 +576,13 @@ let scanStream = null;
 let scanInterval = null;
 
 function openScanner() {
-    document.getElementById('scannerModal').classList.remove('hidden');
+    const modal = document.getElementById('scannerModal');
+    if (!modal) return;
+    const manualDiv = document.getElementById('manualInput');
+    if (manualDiv) manualDiv.style.display = 'flex';
+    const codeInput = document.getElementById('manualCode');
+    if (codeInput) codeInput.value = '';
+    modal.classList.remove('hidden');
     startCamera();
 }
 

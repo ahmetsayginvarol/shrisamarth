@@ -113,7 +113,7 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
 
 /* ===== Scanner modal ===== */
 .scanner-modal { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; }
-.scanner-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.85); }
+.scanner-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 0; }
 .scanner-container { position: relative; z-index: 1; width: 100%; max-width: 380px; background: #0a0a0a; border-radius: 16px; overflow: hidden; margin: 0 16px; }
 .scanner-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; color: #fff; }
 .scanner-viewport { position: relative; width: 100%; aspect-ratio: 1; background: #000; overflow: hidden; }
