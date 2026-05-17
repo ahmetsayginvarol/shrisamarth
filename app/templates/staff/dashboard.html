@@ -56,6 +56,10 @@
         <div class="route-cities">
             {{ voyage.origin }} <span class="route-arrow">—</span> {{ voyage.destination }}
         </div>
+        {% elif role == 'driver' %}
+        <div class="route-cities" style="font-size: 20px; color: var(--muted);">
+            <span data-i18n="dash.no_voyage_today">No voyage today</span>
+        </div>
         {% else %}
         <div class="route-cities" style="font-size: 20px; color: var(--muted);">
             No voyages on this date
@@ -64,6 +68,24 @@
     </div>
 
     <div class="voyage-meta">
+        {% if role == 'driver' %}
+        <div class="meta-item">
+            <div class="meta-label" data-i18n="dash.today_date">Today</div>
+            <div class="meta-value" style="font-weight:600;">{{ today_display }}</div>
+        </div>
+        {% if day_voyages|length > 1 %}
+        <div class="meta-item">
+            <div class="meta-label" data-i18n="dash.switch">Switch Voyage</div>
+            <select class="form-select voyage-picker" id="voyagePicker" style="width:auto; padding: 8px 12px;">
+                {% for v in day_voyages %}
+                <option value="{{ v.id }}" {% if voyage and v.id == voyage.id %}selected{% endif %}>
+                    {{ v.origin }} → {{ v.destination }} · {{ v.departure_at.strftime('%H:%M') }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+        {% else %}
         <div class="meta-item">
             <div class="meta-label">Date</div>
             <input type="date" class="form-input date-picker"
@@ -71,7 +93,6 @@
                    value="{{ selected_date }}"
                    style="width: auto; padding: 8px 12px; cursor: pointer;">
         </div>
-
         {% if role in ['admin', 'reservation'] and day_voyages|length > 1 %}
         <div class="meta-item">
             <div class="meta-label" data-i18n="dash.switch">Switch Voyage</div>
@@ -85,6 +106,7 @@
                 {% endfor %}
             </select>
         </div>
+        {% endif %}
         {% endif %}
 
         {% if voyage %}
@@ -161,6 +183,34 @@
             {% endif %}
         </div>
 
+        {% if role == 'driver' and (boarding_stops or dropping_stops) %}
+        <div class="stop-filter-bar" id="stopFilterBar">
+            {% if boarding_stops %}
+            <div class="stop-filter-row">
+                <span class="stop-filter-label" data-i18n="dash.filter_boarding">Filter by boarding:</span>
+                <div class="stop-pills" id="boardingPills">
+                    <button class="stop-pill active" data-type="boarding" data-stop="ALL" onclick="setStopFilter('boarding','ALL',this)" data-i18n="dash.filter_all">All</button>
+                    {% for s in boarding_stops %}
+                    <button class="stop-pill" data-type="boarding" data-stop="{{ s.stop_name }}" onclick="setStopFilter('boarding','{{ s.stop_name }}',this)">{{ s.stop_name }}</button>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            {% if dropping_stops %}
+            <div class="stop-filter-row">
+                <span class="stop-filter-label" data-i18n="dash.filter_dropping">Filter by dropping:</span>
+                <div class="stop-pills" id="droppingPills">
+                    <button class="stop-pill active" data-type="dropping" data-stop="ALL" onclick="setStopFilter('dropping','ALL',this)" data-i18n="dash.filter_all">All</button>
+                    {% for s in dropping_stops %}
+                    <button class="stop-pill" data-type="dropping" data-stop="{{ s.stop_name }}" onclick="setStopFilter('dropping','{{ s.stop_name }}',this)">{{ s.stop_name }}</button>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+            <div class="stop-filter-count hidden" id="stopFilterCount"></div>
+        </div>
+        {% endif %}
+
         <div class="bus" id="seatMap">
             <div class="bus-front">
                 <div class="steering"></div>
@@ -184,8 +234,9 @@
                         {% if seat_id in window_seats %}window{% endif %}
                         {% if b %}{% if b.boarded_at %}checked-in-{{ b.gender|lower }}{% else %}booked-{{ b.gender|lower }}{% endif %}{% if b.group_booking_code %} group-seat{% endif %}{% elif seat_id in locked_seats %}locked{% endif %}"
                         data-seat="{{ seat_id }}"
+                        {% if b %}data-boarding="{{ b.boarding_point or '' }}" data-dropping="{{ b.dropping_point or '' }}"{% endif %}
                         {% if b and b.group_booking_code %}data-group="{{ b.group_booking_code }}"{% endif %}
-                        title="{% if b %}{{ b.passenger_name }}{% if b.group_booking_code %} (group){% endif %}{% elif seat_id in locked_seats %}Being reserved by a customer{% else %}Seat {{ seat_id }}{% endif %}">
+                        title="{% if b %}{{ b.passenger_name }}{% if b.boarding_point %} | Boards: {{ b.boarding_point }}{% endif %}{% if b.dropping_point %} | Drops: {{ b.dropping_point }}{% endif %}{% if b.group_booking_code %} (group){% endif %}{% elif seat_id in locked_seats %}Being reserved by a customer{% else %}Seat {{ seat_id }}{% endif %}">
                         {{ seat_id }}
                     </div>
                     {% if loop.index == 2 %}<div class="aisle"></div>{% endif %}
@@ -200,8 +251,9 @@
                         {% if seat_id in window_seats %}window{% endif %}
                         {% if b %}{% if b.boarded_at %}checked-in-{{ b.gender|lower }}{% else %}booked-{{ b.gender|lower }}{% endif %}{% if b.group_booking_code %} group-seat{% endif %}{% elif seat_id in locked_seats %}locked{% endif %}"
                         data-seat="{{ seat_id }}"
+                        {% if b %}data-boarding="{{ b.boarding_point or '' }}" data-dropping="{{ b.dropping_point or '' }}"{% endif %}
                         {% if b and b.group_booking_code %}data-group="{{ b.group_booking_code }}"{% endif %}
-                        title="{% if b %}{{ b.passenger_name }}{% if b.group_booking_code %} (group){% endif %}{% elif seat_id in locked_seats %}Being reserved by a customer{% else %}Seat {{ seat_id }}{% endif %}">
+                        title="{% if b %}{{ b.passenger_name }}{% if b.boarding_point %} | Boards: {{ b.boarding_point }}{% endif %}{% if b.dropping_point %} | Drops: {{ b.dropping_point }}{% endif %}{% if b.group_booking_code %} (group){% endif %}{% elif seat_id in locked_seats %}Being reserved by a customer{% else %}Seat {{ seat_id }}{% endif %}">
                         {{ seat_id }}
                     </div>
                 {% endfor %}
@@ -225,8 +277,11 @@
         <div class="panel-view {% if role != 'driver' %}hidden{% endif %}" id="panel-manifest">
             <div class="panel-header" style="margin-bottom: 8px;">
                 <h3 class="serif" data-i18n="dash.manifest">Manifest</h3>
-                <span class="seat-badge">{{ seat_map|length }} / {{ voyage.bus.total_seats }}</span>
+                <span class="seat-badge" id="manifestBadge">{{ seat_map|length }} / {{ voyage.bus.total_seats }}</span>
             </div>
+            {% if role == 'driver' and (boarding_stops or dropping_stops) %}
+            <div id="manifestFilterCount" class="hidden" style="font-size:12px;color:var(--marigold);margin-bottom:6px;font-weight:600;"></div>
+            {% endif %}
             {% set boarded_count = seat_map.values()|selectattr('boarded_at')|list|length %}
             <div class="checkin-count">
                 <span id="checkinCountText" data-i18n-template="dash.checkin_progress">
@@ -241,6 +296,7 @@
             <div class="manifest-list">
                 {% for seat_id, b in seat_map.items()|sort %}
                 <div class="manifest-item{% if b.boarded_at %} checked-in{% endif %}" data-seat="{{ seat_id }}" data-booking-id="{{ b.id }}"
+                     data-boarding="{{ b.boarding_point or '' }}" data-dropping="{{ b.dropping_point or '' }}"
                      style="cursor: pointer;"
                      onclick="manifestClick('{{ seat_id }}')">
                     <div class="manifest-seat"
@@ -472,10 +528,18 @@
 </main>
 
 {% else %}
+{% if role == 'driver' %}
+<div class="empty driver-no-voyage">
+    <div style="font-size: 48px; margin-bottom: 16px;">🚌</div>
+    <h2 class="serif" data-i18n="dash.no_voyage_assigned">No voyage assigned to you for today</h2>
+    <p class="muted" data-i18n="dash.no_voyage_contact">Contact your manager if this is unexpected</p>
+</div>
+{% else %}
 <div class="empty">
     <h2 class="serif">No voyages on this date</h2>
     <p class="muted">Select a different date or create a new voyage in the admin panel.</p>
 </div>
+{% endif %}
 {% endif %}
 
 {% if role == 'admin' %}

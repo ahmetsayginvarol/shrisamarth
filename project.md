@@ -22,6 +22,9 @@
 - Manual check-in system: drivers tap seat/manifest row to check in passengers
 - Real-time boarding progress bar in driver manifest
 - Boarding stats with progress bars in admin revenue dashboard
+- Interactive calendar dashboard on admin: month view, day detail panel, day report PDF
+- Driver scope: drivers see only today's voyages assigned to them (no date picker, no other drivers' voyages)
+- Stop filter: driver seat map has boarding/dropping stop pills to highlight/dim seats by stop
 
 ## To-Do
 1. Multi-seat selection (group/family bookings) — ONE name for all seats

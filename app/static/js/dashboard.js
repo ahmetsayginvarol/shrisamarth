@@ -1189,3 +1189,93 @@ document.addEventListener('click', (e) => {
 
 // Load on page load
 document.addEventListener('DOMContentLoaded', loadNotifications);
+
+// ============================================================
+// STOP FILTER (driver view only)
+// ============================================================
+var _stopFilter = { boarding: 'ALL', dropping: 'ALL' };
+
+function setStopFilter(type, stop, btn) {
+    _stopFilter[type] = stop;
+
+    // Update active pill in that row
+    var pills = document.querySelectorAll('.stop-pill[data-type="' + type + '"]');
+    pills.forEach(function(p) { p.classList.toggle('active', p.dataset.stop === stop); });
+
+    applyStopFilter();
+}
+
+function applyStopFilter() {
+    var bFilter = _stopFilter.boarding;
+    var dFilter = _stopFilter.dropping;
+    var isFiltered = (bFilter !== 'ALL' || dFilter !== 'ALL');
+
+    var seats = document.querySelectorAll('#seatMap .seat');
+    var manifestItems = document.querySelectorAll('.manifest-item');
+    var shown = 0;
+    var total = manifestItems.length;
+
+    seats.forEach(function(seat) {
+        var boarding = seat.dataset.boarding || '';
+        var dropping = seat.dataset.dropping || '';
+        var isBooked = boarding !== '' || dropping !== '';
+
+        if (!isFiltered || !isBooked) {
+            // Unfiltered or empty seat: restore normal
+            seat.classList.remove('stop-dimmed', 'stop-highlighted');
+            seat.style.pointerEvents = '';
+        } else {
+            var bMatch = (bFilter === 'ALL' || boarding === bFilter);
+            var dMatch = (dFilter === 'ALL' || dropping === dFilter);
+            if (bMatch && dMatch) {
+                seat.classList.add('stop-highlighted');
+                seat.classList.remove('stop-dimmed');
+                seat.style.pointerEvents = '';
+            } else {
+                seat.classList.add('stop-dimmed');
+                seat.classList.remove('stop-highlighted');
+                seat.style.pointerEvents = 'none';
+            }
+        }
+    });
+
+    manifestItems.forEach(function(item) {
+        var boarding = item.dataset.boarding || '';
+        var dropping = item.dataset.dropping || '';
+
+        if (!isFiltered) {
+            item.style.display = '';
+            shown++;
+        } else {
+            var bMatch = (bFilter === 'ALL' || boarding === bFilter);
+            var dMatch = (dFilter === 'ALL' || dropping === dFilter);
+            if (bMatch && dMatch) {
+                item.style.display = '';
+                shown++;
+            } else {
+                item.style.display = 'none';
+            }
+        }
+    });
+
+    // Update count label
+    var countEl = document.getElementById('manifestFilterCount');
+    var stopCountEl = document.getElementById('stopFilterCount');
+
+    if (countEl) {
+        if (isFiltered && shown < total) {
+            countEl.textContent = shown + ' ' + (TRANSLATIONS && TRANSLATIONS[localStorage.getItem('lang')||'en']['dash.filter_shown'] || 'shown') + ' / ' + total + ' ' + (TRANSLATIONS && TRANSLATIONS[localStorage.getItem('lang')||'en']['dash.filter_total'] || 'total');
+            countEl.classList.remove('hidden');
+        } else {
+            countEl.classList.add('hidden');
+        }
+    }
+    if (stopCountEl) {
+        if (isFiltered && shown < total) {
+            stopCountEl.textContent = shown + ' / ' + total;
+            stopCountEl.classList.remove('hidden');
+        } else {
+            stopCountEl.classList.add('hidden');
+        }
+    }
+}

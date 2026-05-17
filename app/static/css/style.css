@@ -1629,3 +1629,22 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
   .cal-date-num { font-size: 11px; }
   .day-detail-panel { display: none; }
 }
+
+/* ===== Stop filter bar (driver view) ===== */
+.stop-filter-bar { padding: 12px 16px; background: var(--cream-2); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+.stop-filter-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.stop-filter-label { font-size: 11px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.stop-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.stop-pill { padding: 4px 12px; border-radius: 20px; border: 1px solid var(--line); background: var(--cream); font-size: 12px; cursor: pointer; transition: all 0.15s; font-family: 'Geist', sans-serif; }
+.stop-pill:hover { border-color: var(--ink); }
+.stop-pill.active { background: var(--ink); color: var(--cream); border-color: var(--ink); }
+.stop-filter-count { font-size: 11px; color: var(--marigold); font-weight: 600; }
+
+/* Stop filter seat states */
+.seat.stop-highlighted { outline: 2px solid var(--marigold); outline-offset: 2px; z-index: 1; }
+.seat.stop-dimmed { opacity: 0.15 !important; }
+
+/* Driver no-voyage message */
+.driver-no-voyage { text-align: center; padding: 80px 40px; }
+.driver-no-voyage h2 { font-size: 24px; margin-bottom: 12px; }
+.driver-no-voyage p { font-size: 15px; }

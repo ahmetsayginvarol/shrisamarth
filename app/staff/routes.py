@@ -31,28 +31,37 @@ def restrict_to_staff():
 def dashboard():
     from datetime import datetime, date
 
-    # Get date from query param, default to today
-    date_str = request.args.get('date')
-    if date_str:
-        try:
-            selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-        except ValueError:
-            selected_date = date.today()
-    else:
-        selected_date = date.today()
+    is_driver = current_user.role == 'driver'
 
-    # All scheduled voyages (for checking which dates have voyages)
-    all_scheduled = (Voyage.query
-                     .filter_by(status='scheduled')
-                     .order_by(Voyage.departure_at.asc())
-                     .all())
+    if is_driver:
+        # Drivers always see today only, filtered to their own voyages
+        selected_date = date.today()
+        date_str = None
+        all_scheduled = (Voyage.query
+                         .filter_by(status='scheduled', driver_id=current_user.id)
+                         .order_by(Voyage.departure_at.asc())
+                         .all())
+    else:
+        date_str = request.args.get('date')
+        if date_str:
+            try:
+                selected_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            except ValueError:
+                selected_date = date.today()
+        else:
+            selected_date = date.today()
+
+        all_scheduled = (Voyage.query
+                         .filter_by(status='scheduled')
+                         .order_by(Voyage.departure_at.asc())
+                         .all())
 
     # Filter voyages for the selected date
     day_voyages = [v for v in all_scheduled
                    if v.departure_at.date() == selected_date]
 
-    # If no voyages on selected date, try to find the next date with voyages
-    if not day_voyages and not date_str:
+    # Non-drivers: if no voyages today, jump to next available date
+    if not is_driver and not day_voyages and not date_str:
         for v in all_scheduled:
             if v.departure_at.date() >= date.today():
                 selected_date = v.departure_at.date()
@@ -64,16 +73,13 @@ def dashboard():
     voyage_id = request.args.get('voyage_id', type=int)
     if voyage_id:
         voyage = Voyage.query.get_or_404(voyage_id)
+        # Drivers can only see their own voyages
+        if is_driver and voyage.driver_id != current_user.id:
+            voyage = day_voyages[0] if day_voyages else None
     elif day_voyages:
         voyage = day_voyages[0]
     else:
         voyage = None
-
-    # Driver restriction
-    if current_user.role == 'driver' and voyage:
-        if voyage.driver_id != current_user.id:
-            voyage = next((v for v in day_voyages
-                           if v.driver_id == current_user.id), None)
 
     from app.models import SeatLock
 
@@ -116,6 +122,7 @@ def dashboard():
         locked_seats=locked_seats,
         role=current_user.role,
         selected_date=selected_date.strftime('%Y-%m-%d'),
+        today_display=selected_date.strftime('%d %b %Y'),
         voyage_dates=voyage_dates,
         boarding_stops=boarding_stops,
         dropping_stops=dropping_stops,
