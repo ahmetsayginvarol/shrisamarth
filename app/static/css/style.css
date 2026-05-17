@@ -4,6 +4,7 @@
     --male: #3f6da8; --female: #b85685; --sage: #7a9a5a; --ruby: #a83232;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
+.hidden { display: none !important; }
 body { font-family: 'Geist', sans-serif; background: var(--cream); color: var(--ink); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
 .serif { font-family: 'Instrument Serif', serif; font-weight: 400; }
 .mono { font-family: 'JetBrains Mono', monospace; }
