@@ -393,6 +393,33 @@ function showBookingDetails(booking, readonly) {
     document.getElementById('detailsBalance').textContent = '₹ ' + booking.balance;
     document.getElementById('detailsCode').textContent = booking.code;
 
+    // Check-in section (visible for all roles when booking is shown)
+    const checkinSection = document.getElementById('checkinSection');
+    const checkinStatus = document.getElementById('checkinStatus');
+    const checkinBtn = document.getElementById('checkinBtn');
+    if (checkinSection) {
+        window._currentCheckinBookingId = booking.id;
+        window._currentCheckinSeatId = booking.seat || currentSeatId;
+        window._currentCheckinName = booking.name;
+        if (booking.boarded_at) {
+            checkinStatus.innerHTML = `<div class="checkin-status-badge">✓ <span data-i18n="dash.checkedin">Checked In</span> ${booking.boarded_at}${booking.boarded_by ? ' · ' + booking.boarded_by : ''}</div>`;
+            if (checkinBtn) checkinBtn.classList.add('hidden');
+            // Undo link (shown always — admins can undo anytime, drivers within 5 min)
+            const undoEl = checkinStatus.querySelector('.btn-undo-checkin') || (() => {
+                const b = document.createElement('button');
+                b.className = 'btn-undo-checkin';
+                b.setAttribute('data-i18n', 'dash.undo_checkin');
+                b.textContent = 'Undo check-in';
+                b.onclick = undoCheckinFromPanel;
+                checkinStatus.appendChild(b);
+                return b;
+            })();
+        } else {
+            checkinStatus.innerHTML = '';
+            if (checkinBtn) checkinBtn.classList.remove('hidden');
+        }
+    }
+
     // Show group seats info if this is a group booking
     const groupSeatsDiv = document.getElementById('detailsGroupSeats');
     const groupSeatsList = document.getElementById('detailsGroupSeatsList');
@@ -566,6 +593,178 @@ if (cancelBtn) {
             alert('Could not cancel booking.');
         }
     });
+}
+
+// ============================================================
+// MANUAL CHECK-IN
+// ============================================================
+
+async function checkInFromPanel() {
+    const bookingId = window._currentCheckinBookingId;
+    const name = window._currentCheckinName;
+    const seatId = window._currentCheckinSeatId;
+    if (!bookingId) return;
+    const lang = document.documentElement.lang || 'en';
+    const msg = lang === 'hi'
+        ? `${name} को सीट ${seatId} के लिए चेक-इन करें?`
+        : `Check in ${name} for seat ${seatId}?`;
+    if (!confirm(msg)) return;
+
+    const csrfEl = document.querySelector('input[name="csrf_token"]');
+    const headers = { 'Content-Type': 'application/json' };
+    if (csrfEl) headers['X-CSRFToken'] = csrfEl.value;
+    try {
+        const res = await fetch(`/staff/booking/${bookingId}/checkin`, { method: 'POST', headers });
+        const data = await res.json();
+        if (data.status === 'ok' || data.status === 'already_checked_in') {
+            const lang = document.documentElement.lang || 'en';
+            toast(lang === 'hi' ? `${name} चेक-इन हो गए ✓` : `${name} checked in ✓`);
+            // Update seat map
+            const seat = document.querySelector(`.seat[data-seat="${seatId}"]`);
+            if (seat) {
+                const gender = seat.classList.contains('booked-m') || seat.classList.contains('checked-in-m') ? 'm' : 'f';
+                seat.classList.remove('booked-m', 'booked-f');
+                seat.classList.add(`checked-in-${gender}`);
+            }
+            // Update manifest row
+            updateManifestRowCheckedIn(seatId, data.boarded_at);
+            updateCheckinProgress(1);
+            // Re-fetch and redisplay panel
+            const res2 = await fetch(`/staff/api/seat/${VOYAGE_ID}/${seatId}`);
+            const d2 = await res2.json();
+            if (d2.status === 'booked') showBookingDetails(d2.booking, d2.readonly);
+        }
+    } catch (err) { console.error('Check-in failed', err); }
+}
+
+async function undoCheckinFromPanel() {
+    const bookingId = window._currentCheckinBookingId;
+    const name = window._currentCheckinName;
+    const seatId = window._currentCheckinSeatId;
+    if (!bookingId) return;
+    const lang = document.documentElement.lang || 'en';
+    const msg = lang === 'hi' ? `${name} का चेक-इन रद्द करें?` : `Undo check-in for ${name}?`;
+    if (!confirm(msg)) return;
+
+    const csrfEl = document.querySelector('input[name="csrf_token"]');
+    const headers = { 'Content-Type': 'application/json' };
+    if (csrfEl) headers['X-CSRFToken'] = csrfEl.value;
+    try {
+        const res = await fetch(`/staff/booking/${bookingId}/uncheckin`, { method: 'POST', headers });
+        const data = await res.json();
+        if (data.status === 'ok') {
+            const lang = document.documentElement.lang || 'en';
+            toast(lang === 'hi' ? `${name} का चेक-इन रद्द हुआ` : `Check-in undone for ${name}`);
+            const seat = document.querySelector(`.seat[data-seat="${seatId}"]`);
+            if (seat) {
+                const gender = seat.classList.contains('checked-in-m') ? 'm' : 'f';
+                seat.classList.remove('checked-in-m', 'checked-in-f');
+                seat.classList.add(`booked-${gender}`);
+            }
+            updateManifestRowUnchecked(seatId);
+            updateCheckinProgress(-1);
+            const res2 = await fetch(`/staff/api/seat/${VOYAGE_ID}/${seatId}`);
+            const d2 = await res2.json();
+            if (d2.status === 'booked') showBookingDetails(d2.booking, d2.readonly);
+        } else if (data.status === 'error') {
+            const lang = document.documentElement.lang || 'en';
+            alert(lang === 'hi' ? 'समय सीमा समाप्त (5 मिनट)' : data.message || 'Undo window expired');
+        }
+    } catch (err) { console.error('Undo check-in failed', err); }
+}
+
+async function manifestCheckin(e, btn) {
+    e.stopPropagation();
+    const bookingId = btn.dataset.bookingId;
+    const seatId = btn.dataset.seat;
+    const name = btn.dataset.name;
+    const boarded = btn.dataset.boarded;
+    const lang = document.documentElement.lang || 'en';
+
+    if (boarded) {
+        // Already checked in — offer undo
+        const msg = lang === 'hi' ? `${name} का चेक-इन रद्द करें?` : `Undo check-in for ${name}?`;
+        if (!confirm(msg)) return;
+        const csrfEl = document.querySelector('input[name="csrf_token"]');
+        const headers = { 'Content-Type': 'application/json' };
+        if (csrfEl) headers['X-CSRFToken'] = csrfEl.value;
+        const res = await fetch(`/staff/booking/${bookingId}/uncheckin`, { method: 'POST', headers });
+        const data = await res.json();
+        if (data.status === 'ok') {
+            btn.textContent = '○';
+            btn.classList.remove('checked');
+            btn.dataset.boarded = '';
+            const timeEl = btn.parentNode.querySelector('.manifest-checkin-time');
+            if (timeEl) timeEl.remove();
+            updateManifestRowUnchecked(seatId);
+            updateCheckinProgress(-1);
+            toast(lang === 'hi' ? `${name} का चेक-इन रद्द हुआ` : `Undo: ${name}`);
+        } else if (data.status === 'error') {
+            alert(lang === 'hi' ? 'समय सीमा समाप्त' : data.message || 'Undo window expired');
+        }
+        return;
+    }
+
+    // Not yet checked in
+    const msg = lang === 'hi'
+        ? `${name} को सीट ${seatId} के लिए चेक-इन करें?`
+        : `Check in ${name} for seat ${seatId}?`;
+    if (!confirm(msg)) return;
+    const csrfEl = document.querySelector('input[name="csrf_token"]');
+    const headers = { 'Content-Type': 'application/json' };
+    if (csrfEl) headers['X-CSRFToken'] = csrfEl.value;
+    const res = await fetch(`/staff/booking/${bookingId}/checkin`, { method: 'POST', headers });
+    const data = await res.json();
+    if (data.status === 'ok' || data.status === 'already_checked_in') {
+        const t = data.boarded_at;
+        btn.textContent = '✓';
+        btn.classList.add('checked');
+        btn.dataset.boarded = t;
+        let timeEl = btn.parentNode.querySelector('.manifest-checkin-time');
+        if (!timeEl) { timeEl = document.createElement('div'); timeEl.className = 'manifest-checkin-time'; btn.parentNode.appendChild(timeEl); }
+        timeEl.textContent = t;
+        updateManifestRowCheckedIn(seatId, t);
+        // Update seat map
+        const seat = document.querySelector(`.seat[data-seat="${seatId}"]`);
+        if (seat) {
+            const gender = seat.classList.contains('booked-m') || seat.classList.contains('checked-in-m') ? 'm' : 'f';
+            seat.classList.remove('booked-m', 'booked-f');
+            seat.classList.add(`checked-in-${gender}`);
+        }
+        updateCheckinProgress(1);
+        toast(lang === 'hi' ? `${name} चेक-इन हो गए ✓` : `${name} checked in ✓`);
+    }
+}
+
+function updateManifestRowCheckedIn(seatId, time) {
+    const row = document.querySelector(`.manifest-item[data-seat="${seatId}"]`);
+    if (!row) return;
+    row.classList.add('checked-in');
+    row.classList.remove('boarded');
+    let badge = row.querySelector('.boarding-badge');
+    if (!badge) { badge = document.createElement('div'); badge.className = 'boarding-badge'; row.querySelector('.manifest-name').parentNode.appendChild(badge); }
+    badge.textContent = '✓ ' + time;
+}
+
+function updateManifestRowUnchecked(seatId) {
+    const row = document.querySelector(`.manifest-item[data-seat="${seatId}"]`);
+    if (!row) return;
+    row.classList.remove('checked-in', 'boarded');
+    const badge = row.querySelector('.boarding-badge');
+    if (badge) badge.remove();
+}
+
+function updateCheckinProgress(delta) {
+    const numEl = document.getElementById('checkinNum');
+    if (!numEl) return;
+    const current = parseInt(numEl.textContent) || 0;
+    const next = Math.max(0, current + delta);
+    numEl.textContent = next;
+    const fill = document.getElementById('checkinProgressFill');
+    if (fill) {
+        const total = parseInt(fill.parentNode.previousElementSibling?.querySelector('span:last-child')?.textContent) || 1;
+        fill.style.width = Math.round(next / total * 100) + '%';
+    }
 }
 
 // ============================================================
@@ -831,6 +1030,46 @@ socket.on('passenger_boarded', (data) => {
         }
     }
     toast(data.name + ' boarded ✓');
+});
+
+socket.on('passenger_checkin', (data) => {
+    if (parseInt(data.voyage_id) !== parseInt(VOYAGE_ID)) return;
+    const seat = document.querySelector(`.seat[data-seat="${data.seat_id}"]`);
+    if (seat) {
+        seat.classList.remove('booked-m', 'booked-f');
+        seat.classList.add(`checked-in-${data.gender.toLowerCase()}`);
+    }
+    updateManifestRowCheckedIn(data.seat_id, data.boarded_at);
+    updateCheckinProgress(1);
+    // Update checkin btn in manifest
+    const btn = document.querySelector(`.checkin-btn[data-seat="${data.seat_id}"]`);
+    if (btn) {
+        btn.textContent = '✓';
+        btn.classList.add('checked');
+        btn.dataset.boarded = data.boarded_at;
+        let timeEl = btn.parentNode.querySelector('.manifest-checkin-time');
+        if (!timeEl) { timeEl = document.createElement('div'); timeEl.className = 'manifest-checkin-time'; btn.parentNode.appendChild(timeEl); }
+        timeEl.textContent = data.boarded_at;
+    }
+});
+
+socket.on('passenger_uncheckin', (data) => {
+    if (parseInt(data.voyage_id) !== parseInt(VOYAGE_ID)) return;
+    const seat = document.querySelector(`.seat[data-seat="${data.seat_id}"]`);
+    if (seat) {
+        seat.classList.remove('checked-in-m', 'checked-in-f');
+        seat.classList.add(`booked-${data.gender.toLowerCase()}`);
+    }
+    updateManifestRowUnchecked(data.seat_id);
+    updateCheckinProgress(-1);
+    const btn = document.querySelector(`.checkin-btn[data-seat="${data.seat_id}"]`);
+    if (btn) {
+        btn.textContent = '○';
+        btn.classList.remove('checked');
+        btn.dataset.boarded = '';
+        const timeEl = btn.parentNode.querySelector('.manifest-checkin-time');
+        if (timeEl) timeEl.remove();
+    }
 });
 
 // ============================================================

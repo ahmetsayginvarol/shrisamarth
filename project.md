@@ -18,6 +18,10 @@
 - WhatsApp ticket delivery
 - Hindi/English toggle
 - Deployed on Render (free tier)
+- QR code boarding verification page (/verify/<code>) — public, mobile-first
+- Manual check-in system: drivers tap seat/manifest row to check in passengers
+- Real-time boarding progress bar in driver manifest
+- Boarding stats with progress bars in admin revenue dashboard
 
 ## To-Do
 1. Multi-seat selection (group/family bookings) — ONE name for all seats

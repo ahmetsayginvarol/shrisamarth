@@ -154,6 +154,8 @@ def seat_info(voyage_id, seat_id):
                     'balance': float(booking.balance_due or 0),
                     'departure_date': voyage.departure_at.strftime('%d %b %Y'),
                     'departure_time': voyage.departure_at.strftime('%H:%M'),
+                    'boarded_at': booking.boarded_at.strftime('%H:%M') if booking.boarded_at else None,
+                    'boarded_by': booking.boarded_by.full_name if booking.boarded_by else None,
                 }
             })
         else:
@@ -192,6 +194,8 @@ def seat_info(voyage_id, seat_id):
                 'balance': float(booking.balance_due or 0),
                 'departure_date': voyage.departure_at.strftime('%d %b %Y'),
                 'departure_time': voyage.departure_at.strftime('%H:%M'),
+                'boarded_at': booking.boarded_at.strftime('%H:%M') if booking.boarded_at else None,
+                'boarded_by': booking.boarded_by.full_name if booking.boarded_by else None,
             }
         })
 
@@ -453,6 +457,70 @@ def cancel_booking(booking_id):
     )
 
     return jsonify({'status': 'success', 'seat_id': booking.seat_id})
+
+
+@staff_bp.route('/booking/<int:booking_id>/checkin', methods=['POST'])
+@login_required
+def checkin_booking(booking_id):
+    if not current_user.has_role('admin', 'reservation', 'driver'):
+        abort(403)
+    booking = Booking.query.get_or_404(booking_id)
+    if booking.boarded_at:
+        return jsonify({
+            'status': 'already_checked_in',
+            'boarded_at': booking.boarded_at.strftime('%H:%M'),
+            'boarded_by': booking.boarded_by.full_name if booking.boarded_by else None,
+        })
+    booking.boarded_at = datetime.utcnow()
+    booking.boarded_by_id = current_user.id
+    db.session.commit()
+    voyage = booking.voyage
+    log_activity('passenger_checkin',
+                 f'{current_user.full_name} checked in {booking.passenger_name} seat {booking.seat_id} on {voyage.origin}→{voyage.destination}',
+                 'booking', booking.id)
+    socketio.emit('passenger_checkin', {
+        'voyage_id': voyage.id,
+        'seat_id': booking.seat_id,
+        'booking_id': booking.id,
+        'passenger_name': booking.passenger_name,
+        'boarded_at': booking.boarded_at.strftime('%H:%M'),
+        'gender': booking.gender,
+    })
+    return jsonify({
+        'status': 'ok',
+        'boarded_at': booking.boarded_at.strftime('%H:%M'),
+        'boarded_by': current_user.full_name,
+    })
+
+
+@staff_bp.route('/booking/<int:booking_id>/uncheckin', methods=['POST'])
+@login_required
+def uncheckin_booking(booking_id):
+    if not current_user.has_role('admin', 'reservation', 'driver'):
+        abort(403)
+    booking = Booking.query.get_or_404(booking_id)
+    if not booking.boarded_at:
+        return jsonify({'status': 'not_checked_in'})
+    # Allow undo within 5 minutes, or if admin/reservation
+    from datetime import datetime, timedelta
+    elapsed = datetime.utcnow() - booking.boarded_at
+    if elapsed > timedelta(minutes=5) and not current_user.has_role('admin', 'reservation'):
+        return jsonify({'status': 'error', 'message': 'Undo window expired (5 minutes)'}), 403
+    voyage = booking.voyage
+    booking.boarded_at = None
+    booking.boarded_by_id = None
+    db.session.commit()
+    log_activity('passenger_uncheckin',
+                 f'{current_user.full_name} undid check-in for {booking.passenger_name} seat {booking.seat_id} on {voyage.origin}→{voyage.destination}',
+                 'booking', booking.id)
+    socketio.emit('passenger_uncheckin', {
+        'voyage_id': voyage.id,
+        'seat_id': booking.seat_id,
+        'booking_id': booking.id,
+        'gender': booking.gender,
+    })
+    return jsonify({'status': 'ok'})
+
 
 @staff_bp.route('/booking/<int:booking_id>/ticket')
 def download_ticket(booking_id):

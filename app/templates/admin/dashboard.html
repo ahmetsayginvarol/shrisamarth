@@ -67,9 +67,13 @@
                 <td>{{ vs.bookings }}</td>
                 <td>
                     {% if vs.bookings > 0 %}
-                    <span style="color: {% if vs.boarded == vs.bookings %}var(--sage){% elif vs.boarded > 0 %}var(--marigold){% else %}var(--muted){% endif %};">
+                    {% set pct = (vs.boarded / vs.bookings * 100)|int %}
+                    <span style="color: {% if pct >= 80 %}var(--sage){% elif pct >= 50 %}var(--marigold){% else %}var(--muted){% endif %}; font-weight:600;">
                         {{ vs.boarded }}/{{ vs.bookings }}
                     </span>
+                    <div style="height:3px;background:var(--line);border-radius:2px;margin-top:3px;width:60px;">
+                        <div style="height:100%;width:{{ pct }}%;background:{% if pct >= 80 %}var(--sage){% elif pct >= 50 %}var(--marigold){% else %}var(--line){% endif %};border-radius:2px;"></div>
+                    </div>
                     {% else %}—{% endif %}
                 </td>
                 <td>₹ {{ '{:,.0f}'.format(vs.fare) }}</td>

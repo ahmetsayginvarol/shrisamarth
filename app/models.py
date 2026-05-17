@@ -156,6 +156,8 @@ class Booking(db.Model):
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     boarded_at = db.Column(db.DateTime, nullable=True)
+    boarded_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    boarded_by = db.relationship('User', foreign_keys=[boarded_by_id])
 
     created_by = db.relationship('User', foreign_keys=[created_by_id])
 

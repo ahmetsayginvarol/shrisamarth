@@ -109,6 +109,30 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
 .seat.group-highlight { outline: 2px solid var(--gold); outline-offset: 1px; z-index: 2; }
 .legend-swatch.group { background: var(--male); border-color: var(--male); position: relative; }
 .legend-swatch.group::after { content: ''; position: absolute; top: 1px; right: 1px; width: 4px; height: 4px; border-radius: 50%; background: var(--gold); }
+
+/* ===== Checked-in seat states ===== */
+.seat.checked-in-m { background: #15803d; border-color: #15803d; color: #fff; }
+.seat.checked-in-f { background: #0f766e; border-color: #0f766e; color: #fff; }
+.seat.checked-in-m::after, .seat.checked-in-f::after { content: '✓'; position: absolute; bottom: 1px; right: 2px; font-size: 8px; opacity: 0.85; }
+.legend-swatch.checked-in { background: #15803d; border-color: #15803d; position: relative; }
+.legend-swatch.checked-in::after { content: '✓'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #fff; }
+
+/* ===== Manifest check-in UI ===== */
+.checkin-btn { width: 36px; height: 36px; min-width: 44px; min-height: 44px; border-radius: 50%; border: 2px solid var(--line); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; color: var(--muted); transition: all 0.15s; flex-shrink: 0; padding: 0; }
+.checkin-btn:hover { border-color: var(--sage); color: var(--sage); }
+.checkin-btn.checked { border-color: var(--sage); background: var(--sage); color: #fff; }
+.manifest-item.checked-in { background: rgba(122,154,90,0.08); border-left: 3px solid var(--sage); }
+.manifest-checkin-time { font-size: 10px; color: var(--sage); font-weight: 600; text-align: center; margin-top: 2px; }
+.checkin-progress { height: 4px; background: var(--line); border-radius: 2px; margin-top: 8px; overflow: hidden; }
+.checkin-progress-fill { height: 100%; background: var(--sage); border-radius: 2px; transition: width 0.3s; }
+.checkin-count { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+/* ===== Panel check-in section ===== */
+.checkin-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.checkin-status-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(122,154,90,0.12); color: #15803d; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; margin-bottom: 10px; }
+.btn-checkin { min-height: 52px; font-size: 15px; font-weight: 700; background: #15803d; color: #fff; border: none; border-radius: 8px; cursor: pointer; width: 100%; }
+.btn-checkin:hover { background: #166534; }
+.btn-undo-checkin { background: none; border: none; color: var(--muted); font-size: 12px; cursor: pointer; padding: 4px 0; text-decoration: underline; margin-top: 4px; display: block; }
 .manifest-group-tag { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; color: var(--gold); margin-left: 4px; font-weight: 600; letter-spacing: 0.04em; vertical-align: middle; }
 
 /* ===== Scanner modal ===== */

@@ -142,6 +142,10 @@
                     <span class="legend-swatch group"></span>
                     <span>Group</span>
                 </span>
+                <span class="legend-item">
+                    <span class="legend-swatch checked-in"></span>
+                    <span data-i18n="dash.checkedin">Checked In</span>
+                </span>
             </div>
             {% if role != 'driver' %}
             <div class="multi-seat-controls">
@@ -178,7 +182,7 @@
                     {% set b = seat_map.get(seat_id) %}
                     <div class="seat
                         {% if seat_id in window_seats %}window{% endif %}
-                        {% if b %}booked-{{ b.gender|lower }}{% if b.group_booking_code %} group-seat{% endif %}{% elif seat_id in locked_seats %}locked{% endif %}"
+                        {% if b %}{% if b.boarded_at %}checked-in-{{ b.gender|lower }}{% else %}booked-{{ b.gender|lower }}{% endif %}{% if b.group_booking_code %} group-seat{% endif %}{% elif seat_id in locked_seats %}locked{% endif %}"
                         data-seat="{{ seat_id }}"
                         {% if b and b.group_booking_code %}data-group="{{ b.group_booking_code }}"{% endif %}
                         title="{% if b %}{{ b.passenger_name }}{% if b.group_booking_code %} (group){% endif %}{% elif seat_id in locked_seats %}Being reserved by a customer{% else %}Seat {{ seat_id }}{% endif %}">
@@ -194,7 +198,7 @@
                     {% set b = seat_map.get(seat_id) %}
                     <div class="seat
                         {% if seat_id in window_seats %}window{% endif %}
-                        {% if b %}booked-{{ b.gender|lower }}{% if b.group_booking_code %} group-seat{% endif %}{% elif seat_id in locked_seats %}locked{% endif %}"
+                        {% if b %}{% if b.boarded_at %}checked-in-{{ b.gender|lower }}{% else %}booked-{{ b.gender|lower }}{% endif %}{% if b.group_booking_code %} group-seat{% endif %}{% elif seat_id in locked_seats %}locked{% endif %}"
                         data-seat="{{ seat_id }}"
                         {% if b and b.group_booking_code %}data-group="{{ b.group_booking_code }}"{% endif %}
                         title="{% if b %}{{ b.passenger_name }}{% if b.group_booking_code %} (group){% endif %}{% elif seat_id in locked_seats %}Being reserved by a customer{% else %}Seat {{ seat_id }}{% endif %}">
@@ -219,14 +223,24 @@
         {% endif %}
 
         <div class="panel-view {% if role != 'driver' %}hidden{% endif %}" id="panel-manifest">
-            <div class="panel-header" style="margin-bottom: 16px;">
+            <div class="panel-header" style="margin-bottom: 8px;">
                 <h3 class="serif" data-i18n="dash.manifest">Manifest</h3>
                 <span class="seat-badge">{{ seat_map|length }} / {{ voyage.bus.total_seats }}</span>
+            </div>
+            {% set boarded_count = seat_map.values()|selectattr('boarded_at')|list|length %}
+            <div class="checkin-count">
+                <span id="checkinCountText" data-i18n-template="dash.checkin_progress">
+                    <span id="checkinNum">{{ boarded_count }}</span> / {{ seat_map|length }} <span data-i18n="dash.boarded">boarded</span>
+                </span>
+            </div>
+            <div class="checkin-progress">
+                <div class="checkin-progress-fill" id="checkinProgressFill"
+                     style="width: {{ (boarded_count / seat_map|length * 100)|int if seat_map|length > 0 else 0 }}%"></div>
             </div>
             {% if seat_map %}
             <div class="manifest-list">
                 {% for seat_id, b in seat_map.items()|sort %}
-                <div class="manifest-item{% if b.boarded_at %} boarded{% endif %}" data-seat="{{ seat_id }}"
+                <div class="manifest-item{% if b.boarded_at %} checked-in{% endif %}" data-seat="{{ seat_id }}" data-booking-id="{{ b.id }}"
                      style="cursor: pointer;"
                      onclick="manifestClick('{{ seat_id }}')">
                     <div class="manifest-seat"
@@ -241,15 +255,22 @@
                         <div class="manifest-sub">{{ b.passenger_phone }}</div>
                         <div class="manifest-sub">{{ b.boarding_point }} → {{ b.dropping_point }}</div>
                         {% if b.boarded_at %}
-                        <div class="boarding-badge">&#10003; Boarded {{ b.boarded_at.strftime('%H:%M') }}</div>
+                        <div class="boarding-badge" data-i18n-prefix="dash.checkedin_at">✓ {{ b.boarded_at.strftime('%H:%M') }}</div>
                         {% endif %}
                     </div>
-                    <div style="font-size:11px; color:var(--muted); text-align:right; line-height:1.6;">
-                        <div>₹ {{ b.fare }}</div>
-                        {% if b.balance_due > 0 %}
-                        <div style="color:var(--marigold);">bal ₹ {{ b.balance_due }}</div>
-                        {% else %}
-                        <div style="color:var(--sage);">paid ✓</div>
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:2px;margin-left:auto;">
+                        <button type="button"
+                                class="checkin-btn{% if b.boarded_at %} checked{% endif %}"
+                                data-booking-id="{{ b.id }}"
+                                data-seat="{{ seat_id }}"
+                                data-name="{{ b.passenger_name }}"
+                                data-boarded="{{ b.boarded_at.strftime('%H:%M') if b.boarded_at else '' }}"
+                                title="{{ 'Checked in ' + b.boarded_at.strftime('%H:%M') if b.boarded_at else 'Tap to check in' }}"
+                                onclick="manifestCheckin(event, this)">
+                            {{ '✓' if b.boarded_at else '○' }}
+                        </button>
+                        {% if b.boarded_at %}
+                        <div class="manifest-checkin-time">{{ b.boarded_at.strftime('%H:%M') }}</div>
                         {% endif %}
                     </div>
                 </div>
@@ -410,6 +431,14 @@
                         <span class="muted">Booking ID</span>
                         <span class="mono" id="detailsCode">—</span>
                     </div>
+                </div>
+                <div class="checkin-section" id="checkinSection">
+                    <div id="checkinStatus"></div>
+                    <button type="button" class="btn-checkin hidden" id="checkinBtn"
+                            data-i18n="dash.checkin_btn"
+                            onclick="checkInFromPanel()">
+                        ✓ Check In Passenger
+                    </button>
                 </div>
                 <div class="form-actions" style="flex-wrap: wrap; gap: 8px;">
                     <button type="button" class="btn btn-ghost"
