@@ -197,8 +197,7 @@ function stopRow(type, name, time) {
         <input type="text" name="stop_name[]" class="form-input"
                value="${name}" placeholder="Stop name" required
                style="flex:1; padding:7px 10px; font-size:13px;">
-        <input type="time" name="stop_time[]" class="form-input"
-               value="${time}" style="width:100px; padding:7px 10px; font-size:13px;">
+        <input type="hidden" name="stop_time[]" value="">
         <button type="button" onclick="this.parentNode.remove()"
                 style="background:none; border:none; color:var(--muted); font-size:16px; cursor:pointer; padding:4px 6px; line-height:1;">✕</button>
     `;

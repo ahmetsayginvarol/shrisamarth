@@ -311,7 +311,7 @@
                         {% if boarding_stops %}
                         <select name="boarding_point" class="form-select" required>
                             {% for s in boarding_stops %}
-                            <option value="{{ s.stop_name }}">{{ s.stop_name }}{% if s.stop_time %} · {{ s.stop_time }}{% endif %}</option>
+                            <option value="{{ s.stop_name }}">{{ s.stop_name }}</option>
                             {% endfor %}
                         </select>
                         {% else %}
@@ -324,7 +324,7 @@
                         {% if dropping_stops %}
                         <select name="dropping_point" class="form-select" required>
                             {% for s in dropping_stops %}
-                            <option value="{{ s.stop_name }}">{{ s.stop_name }}{% if s.stop_time %} · {{ s.stop_time }}{% endif %}</option>
+                            <option value="{{ s.stop_name }}">{{ s.stop_name }}</option>
                             {% endfor %}
                         </select>
                         {% else %}
