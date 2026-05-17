@@ -9,145 +9,958 @@
     <a href="{{ url_for('staff.dashboard') }}" class="btn btn-ghost">← Seat Map</a>
 </div>
 
-<!-- ===== Stats cards ===== -->
-<div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-card-label">Total Revenue</div>
-        <div class="stat-card-value serif">₹ {{ '{:,.0f}'.format(total_revenue) }}</div>
-        <div class="stat-card-sub">{{ total_bookings }} booking(s)</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-card-label">Collected</div>
-        <div class="stat-card-value serif" style="color: var(--sage);">
-            ₹ {{ '{:,.0f}'.format(total_collected) }}
+<div class="admin-calendar-layout">
+  <!-- ===== LEFT COLUMN: existing content ===== -->
+  <div class="admin-left-col">
+
+    <!-- ===== Stats cards ===== -->
+    <div class="stats-grid">
+        <div class="stat-card" id="statCardRevenue">
+            <div class="stat-card-label">Total Revenue</div>
+            <div class="stat-card-value serif" id="statRevenue">₹ {{ '{:,.0f}'.format(total_revenue) }}</div>
+            <div class="stat-card-sub" id="statRevenueSub">{{ total_bookings }} booking(s)</div>
+            <div class="stat-card-date-label hidden" id="statRevenueDateLabel">
+                <span id="statRevenueDateText"></span>
+                <button class="stat-clear-btn" onclick="clearDateSelection()">×</button>
+            </div>
         </div>
-        <div class="stat-card-sub">
-            {{ '{:.0f}'.format(total_collected / total_revenue * 100 if total_revenue > 0 else 0) }}% of total
+        <div class="stat-card" id="statCardCollected">
+            <div class="stat-card-label">Collected</div>
+            <div class="stat-card-value serif" id="statCollected" style="color: var(--sage);">
+                ₹ {{ '{:,.0f}'.format(total_collected) }}
+            </div>
+            <div class="stat-card-sub" id="statCollectedSub">
+                {{ '{:.0f}'.format(total_collected / total_revenue * 100 if total_revenue > 0 else 0) }}% of total
+            </div>
+            <div class="stat-card-date-label hidden" id="statCollectedDateLabel">
+                <span id="statCollectedDateText"></span>
+                <button class="stat-clear-btn" onclick="clearDateSelection()">×</button>
+            </div>
+        </div>
+        <div class="stat-card" id="statCardOutstanding">
+            <div class="stat-card-label">Outstanding</div>
+            <div class="stat-card-value serif" id="statOutstanding" style="color: var(--marigold);">
+                ₹ {{ '{:,.0f}'.format(total_outstanding) }}
+            </div>
+            <div class="stat-card-sub" id="statOutstandingSub">
+                {{ '{:.0f}'.format(total_outstanding / total_revenue * 100 if total_revenue > 0 else 0) }}% pending
+            </div>
+            <div class="stat-card-date-label hidden" id="statOutstandingDateLabel">
+                <span id="statOutstandingDateText"></span>
+                <button class="stat-clear-btn" onclick="clearDateSelection()">×</button>
+            </div>
+        </div>
+        <div class="stat-card" id="statCardBookings">
+            <div class="stat-card-label">Bookings</div>
+            <div class="stat-card-value serif" id="statBookings">{{ total_bookings }}</div>
+            <div class="stat-card-sub" id="statBookingsSub">all time</div>
+            <div class="stat-card-date-label hidden" id="statBookingsDateLabel">
+                <span id="statBookingsDateText"></span>
+                <button class="stat-clear-btn" onclick="clearDateSelection()">×</button>
+            </div>
         </div>
     </div>
-    <div class="stat-card">
-        <div class="stat-card-label">Outstanding</div>
-        <div class="stat-card-value serif" style="color: var(--marigold);">
-            ₹ {{ '{:,.0f}'.format(total_outstanding) }}
-        </div>
-        <div class="stat-card-sub">
-            {{ '{:.0f}'.format(total_outstanding / total_revenue * 100 if total_revenue > 0 else 0) }}% pending
-        </div>
+
+    <!-- ===== Voyage Revenue Breakdown ===== -->
+    <div class="report-section">
+        <h3 class="serif">Voyage Revenue</h3>
+
+        {% if voyage_stats %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Route</th>
+                    <th>Departure</th>
+                    <th>Bookings</th>
+                    <th>Boarded</th>
+                    <th>Revenue</th>
+                    <th>Collected</th>
+                    <th>Outstanding</th>
+                    <th>Occupancy</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for vs in voyage_stats %}
+                <tr>
+                    <td><strong>{{ vs.voyage.origin }}</strong> → {{ vs.voyage.destination }}</td>
+                    <td class="mono">{{ vs.voyage.departure_at.strftime('%d %b · %H:%M') }}</td>
+                    <td>{{ vs.bookings }}</td>
+                    <td>
+                        {% if vs.bookings > 0 %}
+                        {% set pct = (vs.boarded / vs.bookings * 100)|int %}
+                        <span style="color: {% if pct >= 80 %}var(--sage){% elif pct >= 50 %}var(--marigold){% else %}var(--muted){% endif %}; font-weight:600;">
+                            {{ vs.boarded }}/{{ vs.bookings }}
+                        </span>
+                        <div style="height:3px;background:var(--line);border-radius:2px;margin-top:3px;width:60px;">
+                            <div style="height:100%;width:{{ pct }}%;background:{% if pct >= 80 %}var(--sage){% elif pct >= 50 %}var(--marigold){% else %}var(--line){% endif %};border-radius:2px;"></div>
+                        </div>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>₹ {{ '{:,.0f}'.format(vs.fare) }}</td>
+                    <td style="color: var(--sage);">₹ {{ '{:,.0f}'.format(vs.collected) }}</td>
+                    <td>
+                        {% if vs.outstanding > 0 %}
+                        <span style="color: var(--marigold);">₹ {{ '{:,.0f}'.format(vs.outstanding) }}</span>
+                        {% else %}
+                        <span style="color: var(--sage);">✓ Clear</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="occupancy-bar">
+                            <div class="occupancy-fill"
+                                 style="width: {{ vs.voyage.occupancy_pct }}%"></div>
+                            <span>{{ vs.voyage.occupancy_pct }}%</span>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="muted">No upcoming voyages.</p>
+        {% endif %}
     </div>
-    <div class="stat-card">
-        <div class="stat-card-label">Today</div>
-        <div class="stat-card-value serif">₹ {{ '{:,.0f}'.format(today_revenue) }}</div>
-        <div class="stat-card-sub">{{ today_bookings }} booking(s) today</div>
+
+    <!-- ===== Recent Bookings ===== -->
+    <div class="report-section">
+        <h3 class="serif">Recent Bookings</h3>
+
+        {% if recent %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Passenger</th>
+                    <th>Seat</th>
+                    <th>Route</th>
+                    <th>Fare</th>
+                    <th>Balance</th>
+                    <th>Booked</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for b in recent %}
+                <tr>
+                    <td class="mono" style="font-size: 11px;">{{ b.booking_code }}</td>
+                    <td>
+                        <span style="color: {{ '#3f6da8' if b.gender == 'M' else '#b85685' }};">
+                            {{ '♂' if b.gender == 'M' else '♀' }}
+                        </span>
+                        {{ b.passenger_name }}
+                    </td>
+                    <td class="mono">{{ b.seat_id }}</td>
+                    <td>{{ b.voyage.origin }} → {{ b.voyage.destination }}</td>
+                    <td>₹ {{ '{:,.0f}'.format(b.fare) }}</td>
+                    <td>
+                        {% if b.balance_due > 0 %}
+                        <span style="color: var(--marigold);">₹ {{ '{:,.0f}'.format(b.balance_due) }}</span>
+                        {% else %}
+                        <span style="color: var(--sage);">✓</span>
+                        {% endif %}
+                    </td>
+                    <td class="muted" style="font-size: 11px;">
+                        {{ b.created_at.strftime('%d %b %H:%M') }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="muted">No bookings yet.</p>
+        {% endif %}
     </div>
+
+  </div><!-- /admin-left-col -->
+
+  <!-- ===== RIGHT COLUMN: Calendar ===== -->
+  <div class="admin-right-col">
+
+    <!-- Calendar wrapper -->
+    <div class="calendar-wrapper">
+      <!-- Calendar header -->
+      <div class="calendar-header">
+        <div style="display:flex;align-items:center;gap:6px;position:relative;">
+          <button class="calendar-nav-btn" id="calPrevBtn" title="Previous month">←</button>
+          <span class="calendar-month-label" id="calMonthLabel" title="Click to pick month">May 2026</span>
+          <button class="calendar-nav-btn" id="calNextBtn" title="Next month">→</button>
+          <!-- Month picker dropdown -->
+          <div class="month-picker hidden" id="monthPicker">
+            <div class="month-picker-year">
+              <button class="calendar-nav-btn" id="mpYearPrev">←</button>
+              <span id="mpYearLabel">2026</span>
+              <button class="calendar-nav-btn" id="mpYearNext">→</button>
+            </div>
+            <div class="month-picker-grid" id="mpMonthGrid"></div>
+          </div>
+        </div>
+        <button class="calendar-today-btn" id="calTodayBtn">Today</button>
+      </div>
+
+      <!-- Day-of-week headers -->
+      <div class="calendar-grid" id="calDayHeaders"></div>
+
+      <!-- Day cells -->
+      <div class="calendar-grid" id="calGrid" style="margin-top:2px;"></div>
+    </div>
+
+    <!-- Day detail panel -->
+    <div class="day-detail-panel" id="dayDetailPanel">
+      <div class="day-detail-empty" id="dayDetailEmpty">
+        <span style="font-size:24px;display:block;margin-bottom:8px;">←</span>
+        <span id="calClickDateMsg">Click a date to see details</span>
+      </div>
+      <div id="dayDetailContent" class="hidden"></div>
+    </div>
+
+  </div><!-- /admin-right-col -->
+</div><!-- /admin-calendar-layout -->
+
+<!-- Tooltip bubble -->
+<div class="tooltip-bubble hidden" id="calTooltip"></div>
+
+<!-- Mobile bottom sheet -->
+<div class="cal-bottom-sheet-overlay" id="calSheetOverlay" onclick="closeBottomSheet()"></div>
+<div class="cal-bottom-sheet" id="calBottomSheet">
+  <div class="cal-sheet-handle"></div>
+  <div id="calSheetContent"></div>
 </div>
 
-<!-- ===== Voyage Revenue Breakdown ===== -->
-<div class="report-section">
-    <h3 class="serif">Voyage Revenue</h3>
+{% endblock %}
 
-    {% if voyage_stats %}
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>Route</th>
-                <th>Departure</th>
-                <th>Bookings</th>
-                <th>Boarded</th>
-                <th>Revenue</th>
-                <th>Collected</th>
-                <th>Outstanding</th>
-                <th>Occupancy</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for vs in voyage_stats %}
-            <tr>
-                <td><strong>{{ vs.voyage.origin }}</strong> → {{ vs.voyage.destination }}</td>
-                <td class="mono">{{ vs.voyage.departure_at.strftime('%d %b · %H:%M') }}</td>
-                <td>{{ vs.bookings }}</td>
-                <td>
-                    {% if vs.bookings > 0 %}
-                    {% set pct = (vs.boarded / vs.bookings * 100)|int %}
-                    <span style="color: {% if pct >= 80 %}var(--sage){% elif pct >= 50 %}var(--marigold){% else %}var(--muted){% endif %}; font-weight:600;">
-                        {{ vs.boarded }}/{{ vs.bookings }}
-                    </span>
-                    <div style="height:3px;background:var(--line);border-radius:2px;margin-top:3px;width:60px;">
-                        <div style="height:100%;width:{{ pct }}%;background:{% if pct >= 80 %}var(--sage){% elif pct >= 50 %}var(--marigold){% else %}var(--line){% endif %};border-radius:2px;"></div>
-                    </div>
-                    {% else %}—{% endif %}
-                </td>
-                <td>₹ {{ '{:,.0f}'.format(vs.fare) }}</td>
-                <td style="color: var(--sage);">₹ {{ '{:,.0f}'.format(vs.collected) }}</td>
-                <td>
-                    {% if vs.outstanding > 0 %}
-                    <span style="color: var(--marigold);">₹ {{ '{:,.0f}'.format(vs.outstanding) }}</span>
-                    {% else %}
-                    <span style="color: var(--sage);">✓ Clear</span>
-                    {% endif %}
-                </td>
-                <td>
-                    <div class="occupancy-bar">
-                        <div class="occupancy-fill"
-                             style="width: {{ vs.voyage.occupancy_pct }}%"></div>
-                        <span>{{ vs.voyage.occupancy_pct }}%</span>
-                    </div>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <p class="muted">No upcoming voyages.</p>
-    {% endif %}
-</div>
+{% block scripts %}
+{{ super() }}
+<script>
+// ===== Admin Calendar =====
+(function() {
+  'use strict';
 
-<!-- ===== Recent Bookings ===== -->
-<div class="report-section">
-    <h3 class="serif">Recent Bookings</h3>
+  // ── State ──────────────────────────────────────────────
+  var calYear, calMonth;
+  var calendarCache = {};
+  var selectedDate = null;
+  var isTouchDevice = ('ontouchstart' in window);
+  var touchStartX = 0;
+  var mpPickerYear;
 
-    {% if recent %}
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>Code</th>
-                <th>Passenger</th>
-                <th>Seat</th>
-                <th>Route</th>
-                <th>Fare</th>
-                <th>Balance</th>
-                <th>Booked</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for b in recent %}
-            <tr>
-                <td class="mono" style="font-size: 11px;">{{ b.booking_code }}</td>
-                <td>
-                    <span style="color: {{ '#3f6da8' if b.gender == 'M' else '#b85685' }};">
-                        {{ '♂' if b.gender == 'M' else '♀' }}
-                    </span>
-                    {{ b.passenger_name }}
-                </td>
-                <td class="mono">{{ b.seat_id }}</td>
-                <td>{{ b.voyage.origin }} → {{ b.voyage.destination }}</td>
-                <td>₹ {{ '{:,.0f}'.format(b.fare) }}</td>
-                <td>
-                    {% if b.balance_due > 0 %}
-                    <span style="color: var(--marigold);">₹ {{ '{:,.0f}'.format(b.balance_due) }}</span>
-                    {% else %}
-                    <span style="color: var(--sage);">✓</span>
-                    {% endif %}
-                </td>
-                <td class="muted" style="font-size: 11px;">
-                    {{ b.created_at.strftime('%d %b %H:%M') }}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% else %}
-    <p class="muted">No bookings yet.</p>
-    {% endif %}
-</div>
+  // All-time defaults from server
+  var defaultRevenue = {{ total_revenue }};
+  var defaultCollected = {{ total_collected }};
+  var defaultOutstanding = {{ total_outstanding }};
+  var defaultBookings = {{ total_bookings }};
 
+  // ── DOM refs ───────────────────────────────────────────
+  var calGrid = document.getElementById('calGrid');
+  var calDayHeaders = document.getElementById('calDayHeaders');
+  var calMonthLabel = document.getElementById('calMonthLabel');
+  var calTooltip = document.getElementById('calTooltip');
+  var dayDetailEmpty = document.getElementById('dayDetailEmpty');
+  var dayDetailContent = document.getElementById('dayDetailContent');
+  var monthPicker = document.getElementById('monthPicker');
+  var mpYearLabel = document.getElementById('mpYearLabel');
+  var mpMonthGrid = document.getElementById('mpMonthGrid');
+
+  // ── i18n helpers ───────────────────────────────────────
+  function getLang() { return localStorage.getItem('lang') || 'en'; }
+
+  function t(key) {
+    var lang = getLang();
+    var tr = window.TRANSLATIONS;
+    return (tr && tr[lang] && tr[lang][key]) || (tr && tr.en && tr.en[key]) || key;
+  }
+
+  function getMonthName(idx) { return t('cal.month.' + idx); }
+  function getDayName(idx)   { return t('cal.day.' + idx); }
+
+  // ── Color helpers ──────────────────────────────────────
+  function occupancyColor(pct) {
+    if (pct >= 80) return 'high';
+    if (pct >= 50) return 'medium';
+    return 'low';
+  }
+
+  function occupancyHexColor(pct) {
+    if (pct >= 80) return 'var(--ink)';
+    if (pct >= 50) return 'var(--marigold)';
+    return 'var(--sage)';
+  }
+
+  // ── Date helpers ───────────────────────────────────────
+  function isoDate(y, m, d) {
+    return y + '-' + String(m).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+  }
+
+  function todayISO() {
+    var n = new Date();
+    return isoDate(n.getFullYear(), n.getMonth()+1, n.getDate());
+  }
+
+  function parseISO(s) {
+    var p = s.split('-');
+    return new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2]));
+  }
+
+  function formatDateLabel(dateStr) {
+    var d = parseISO(dateStr);
+    return d.getDate() + ' ' + getMonthName(d.getMonth()) + ' ' + d.getFullYear();
+  }
+
+  function daysInMonth(y, m) {
+    return new Date(y, m, 0).getDate();
+  }
+
+  // ── Skeleton ───────────────────────────────────────────
+  function showSkeleton() {
+    calGrid.innerHTML = '';
+    for (var i = 0; i < 35; i++) {
+      var el = document.createElement('div');
+      el.className = 'calendar-day skeleton-shimmer';
+      el.style.minHeight = '56px';
+      calGrid.appendChild(el);
+    }
+  }
+
+  // ── Fetch calendar data ────────────────────────────────
+  function fetchCalendarData(year, month, renderImmediately, prefetch) {
+    var key = year + '-' + String(month).padStart(2,'0');
+    if (calendarCache[key]) {
+      if (renderImmediately) renderCalendar(year, month);
+      return;
+    }
+    if (renderImmediately && !prefetch) showSkeleton();
+
+    fetch('/admin/api/calendar?year=' + year + '&month=' + month)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        // Evict oldest if cache > 6 items
+        var keys = Object.keys(calendarCache);
+        if (keys.length >= 6) {
+          keys.sort();
+          delete calendarCache[keys[0]];
+        }
+        calendarCache[key] = data;
+        if (renderImmediately) renderCalendar(year, month);
+        // Pre-fetch next month in background
+        if (!prefetch) {
+          var nm = month + 1, ny = year;
+          if (nm > 12) { nm = 1; ny++; }
+          fetchCalendarData(ny, nm, false, true);
+        }
+      })
+      .catch(function(e) {
+        console.error('Calendar fetch error', e);
+        if (renderImmediately) calGrid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center;color:var(--muted);font-size:13px;">Failed to load calendar data.</div>';
+      });
+  }
+
+  // ── Render calendar ────────────────────────────────────
+  function renderCalendar(year, month) {
+    calYear = year;
+    calMonth = month;
+
+    // Update month label
+    calMonthLabel.textContent = getMonthName(month - 1) + ' ' + year;
+
+    // Day headers
+    calDayHeaders.innerHTML = '';
+    for (var d = 0; d < 7; d++) {
+      var hdr = document.createElement('div');
+      hdr.className = 'calendar-day-header';
+      hdr.textContent = getDayName(d);
+      calDayHeaders.appendChild(hdr);
+    }
+
+    var key = year + '-' + String(month).padStart(2,'0');
+    var data = calendarCache[key] || {};
+    var today = todayISO();
+
+    var firstDow = new Date(year, month - 1, 1).getDay(); // 0=Sun
+    var totalDays = daysInMonth(year, month);
+
+    calGrid.innerHTML = '';
+
+    // Empty cells for days before month start
+    for (var e = 0; e < firstDow; e++) {
+      var empty = document.createElement('div');
+      empty.className = 'calendar-day empty';
+      calGrid.appendChild(empty);
+    }
+
+    // Day cells
+    for (var day = 1; day <= totalDays; day++) {
+      var ds = isoDate(year, month, day);
+      var dayData = data[ds] || null;
+      var cell = renderDayCell(ds, dayData, today);
+      calGrid.appendChild(cell);
+    }
+
+    // Update selected state
+    if (selectedDate) {
+      var sel = calGrid.querySelector('[data-date="' + selectedDate + '"]');
+      if (sel) sel.classList.add('selected');
+    }
+  }
+
+  // ── Render single day cell ─────────────────────────────
+  function renderDayCell(dateStr, dayData, today) {
+    var cell = document.createElement('div');
+    cell.className = 'calendar-day';
+    cell.dataset.date = dateStr;
+
+    var d = parseISO(dateStr);
+    var dayNum = d.getDate();
+
+    if (dateStr < today) cell.classList.add('past');
+    if (dateStr === today) cell.classList.add('today');
+    if (dateStr === selectedDate) cell.classList.add('selected');
+
+    var numEl = document.createElement('div');
+    numEl.className = 'cal-date-num';
+    numEl.textContent = dayNum;
+    cell.appendChild(numEl);
+
+    if (dayData && dayData.voyage_count > 0) {
+      // Dots
+      var dotsEl = document.createElement('div');
+      dotsEl.className = 'cal-dots';
+      var dotsCount = Math.min(dayData.voyages.length, 3);
+      for (var i = 0; i < dotsCount; i++) {
+        var dot = document.createElement('div');
+        var vOcc = dayData.voyages[i].occupancy_pct;
+        dot.className = 'voyage-dot ' + occupancyColor(vOcc);
+        dotsEl.appendChild(dot);
+      }
+      if (dayData.voyage_count > 3) {
+        var badge = document.createElement('span');
+        badge.className = 'cal-count-badge';
+        badge.textContent = '+' + (dayData.voyage_count - 3);
+        dotsEl.appendChild(badge);
+      }
+      cell.appendChild(dotsEl);
+
+      // Mini occupancy bar
+      var miniBar = document.createElement('div');
+      miniBar.className = 'occupancy-mini';
+      var miniFill = document.createElement('div');
+      miniFill.className = 'occupancy-mini-fill';
+      miniFill.style.width = Math.min(dayData.occupancy_pct, 100) + '%';
+      miniFill.style.background = occupancyHexColor(dayData.occupancy_pct);
+      miniBar.appendChild(miniFill);
+      cell.appendChild(miniBar);
+    }
+
+    // Click handler
+    cell.addEventListener('click', function() {
+      selectDate(dateStr, dayData);
+    });
+
+    // Tooltip (desktop only)
+    if (!isTouchDevice && dayData) {
+      cell.addEventListener('mouseenter', function(e) {
+        showTooltip(e, dateStr, dayData);
+      });
+      cell.addEventListener('mouseleave', hideTooltip);
+      cell.addEventListener('mousemove', function(e) {
+        positionTooltip(e);
+      });
+    }
+
+    return cell;
+  }
+
+  // ── Select date ────────────────────────────────────────
+  function selectDate(dateStr, dayData) {
+    // If data not passed, look it up from cache
+    if (dayData === undefined) {
+      var key = dateStr.substring(0, 7);
+      var cache = calendarCache[key] || {};
+      dayData = cache[dateStr] || null;
+    }
+
+    // Remove previous selection
+    var prev = calGrid.querySelector('.calendar-day.selected');
+    if (prev) prev.classList.remove('selected');
+
+    selectedDate = dateStr;
+
+    // Mark selected
+    var sel = calGrid.querySelector('[data-date="' + dateStr + '"]');
+    if (sel) sel.classList.add('selected');
+
+    updateStatsForDate(dateStr, dayData);
+
+    if (isTouchDevice) {
+      openBottomSheet(dateStr, dayData);
+    } else {
+      renderDetailPanel(dateStr, dayData);
+    }
+  }
+
+  // ── Stats cards update ─────────────────────────────────
+  function fmtMoney(v) { return '₹ ' + Math.round(v).toLocaleString('en-IN'); }
+
+  function updateStatsForDate(dateStr, dayData) {
+    var label = t('cal.showing') + ' ' + formatDateLabel(dateStr);
+    if (dayData) {
+      document.getElementById('statRevenue').textContent = fmtMoney(dayData.expected_revenue);
+      document.getElementById('statRevenueSub').textContent = dayData.confirmed_bookings + ' booking(s)';
+      document.getElementById('statCollected').textContent = fmtMoney(dayData.collected);
+      var rev = dayData.expected_revenue;
+      document.getElementById('statCollectedSub').textContent =
+        Math.round(rev > 0 ? dayData.collected / rev * 100 : 0) + '% of total';
+      document.getElementById('statOutstanding').textContent = fmtMoney(dayData.outstanding);
+      document.getElementById('statOutstandingSub').textContent =
+        Math.round(rev > 0 ? dayData.outstanding / rev * 100 : 0) + '% pending';
+      document.getElementById('statBookings').textContent = dayData.confirmed_bookings;
+      document.getElementById('statBookingsSub').textContent = dayData.voyage_count + ' voyage(s)';
+    } else {
+      document.getElementById('statRevenue').textContent = fmtMoney(0);
+      document.getElementById('statRevenueSub').textContent = '0 booking(s)';
+      document.getElementById('statCollected').textContent = fmtMoney(0);
+      document.getElementById('statCollectedSub').textContent = '0% of total';
+      document.getElementById('statOutstanding').textContent = fmtMoney(0);
+      document.getElementById('statOutstandingSub').textContent = '0% pending';
+      document.getElementById('statBookings').textContent = '0';
+      document.getElementById('statBookingsSub').textContent = '0 voyage(s)';
+    }
+    ['Revenue','Collected','Outstanding','Bookings'].forEach(function(n) {
+      var el = document.getElementById('stat' + n + 'DateLabel');
+      var txt = document.getElementById('stat' + n + 'DateText');
+      if (el) { el.classList.remove('hidden'); }
+      if (txt) txt.textContent = label;
+    });
+  }
+
+  function clearDateSelection() {
+    if (selectedDate) {
+      var prev = calGrid.querySelector('[data-date="' + selectedDate + '"]');
+      if (prev) prev.classList.remove('selected');
+      selectedDate = null;
+    }
+    // Restore defaults
+    document.getElementById('statRevenue').textContent = fmtMoney(defaultRevenue);
+    document.getElementById('statRevenueSub').textContent = defaultBookings + ' booking(s)';
+    document.getElementById('statCollected').textContent = fmtMoney(defaultCollected);
+    var defPct = defaultRevenue > 0 ? Math.round(defaultCollected / defaultRevenue * 100) : 0;
+    document.getElementById('statCollectedSub').textContent = defPct + '% of total';
+    document.getElementById('statOutstanding').textContent = fmtMoney(defaultOutstanding);
+    var outPct = defaultRevenue > 0 ? Math.round(defaultOutstanding / defaultRevenue * 100) : 0;
+    document.getElementById('statOutstandingSub').textContent = outPct + '% pending';
+    document.getElementById('statBookings').textContent = defaultBookings;
+    document.getElementById('statBookingsSub').textContent = 'all time';
+    ['Revenue','Collected','Outstanding','Bookings'].forEach(function(n) {
+      var el = document.getElementById('stat' + n + 'DateLabel');
+      if (el) el.classList.add('hidden');
+    });
+    // Hide detail panel
+    dayDetailEmpty.classList.remove('hidden');
+    dayDetailContent.classList.add('hidden');
+    dayDetailContent.innerHTML = '';
+  }
+
+  // ── Detail panel ───────────────────────────────────────
+  function renderDetailPanel(dateStr, dayData) {
+    dayDetailEmpty.classList.add('hidden');
+    dayDetailContent.classList.remove('hidden');
+
+    if (!dayData || dayData.voyage_count === 0) {
+      renderDetailPanel_noVoyages(dateStr);
+      return;
+    }
+
+    var today = todayISO();
+    var isPastOrToday = (dateStr <= today);
+    var label = formatDateLabel(dateStr);
+    var occ = dayData.occupancy_pct;
+    var occColor = occupancyHexColor(occ);
+    var occLabel = occ >= 80 ? t('cal.high_occupancy') : (occ >= 50 ? '' : t('cal.low_occupancy'));
+
+    var html = '';
+
+    // Header
+    html += '<div class="day-detail-header">';
+    html += '<div class="day-detail-title">' + label + '</div>';
+    html += '<button class="day-detail-nav-btn" onclick="navigateDay(-1)" title="' + t('cal.prev_day') + '">←</button>';
+    html += '<button class="day-detail-nav-btn" onclick="navigateDay(1)" title="' + t('cal.next_day') + '">→</button>';
+    html += '<a href="/staff/dashboard?date=' + dateStr + '" class="day-detail-nav-btn" style="text-decoration:none;font-size:11px;">' + t('cal.view_seatmap') + '</a>';
+    html += '<button class="day-detail-close" onclick="clearDateSelection()">×</button>';
+    html += '</div>';
+
+    // 2×2 summary cards
+    html += '<div class="day-summary-grid">';
+    html += '<div class="day-summary-card"><div class="day-summary-label">' + t('cal.voyage') + 's</div><div class="day-summary-value">' + dayData.voyage_count + '</div></div>';
+    html += '<div class="day-summary-card"><div class="day-summary-label">' + t('cal.passengers') + '</div><div class="day-summary-value">' + dayData.confirmed_bookings + '</div><div class="day-summary-sub">/ ' + dayData.total_seats + ' ' + t('cal.seats') + '</div></div>';
+    html += '<div class="day-summary-card"><div class="day-summary-label">' + t('cal.expected_revenue') + '</div><div class="day-summary-value">' + fmtMoney(dayData.expected_revenue) + '</div></div>';
+    html += '<div class="day-summary-card"><div class="day-summary-label">' + t('cal.collected') + '</div><div class="day-summary-value" style="color:var(--sage);">' + fmtMoney(dayData.collected) + '</div></div>';
+    html += '</div>';
+
+    // Occupancy bar
+    html += '<div class="day-occupancy-bar"><div class="day-occupancy-fill" style="width:' + occ + '%;background:' + occColor + ';"></div></div>';
+    html += '<div class="day-bar-label"><span>' + t('cal.occupancy') + ' ' + occ + '%' + (occLabel ? ' · ' + occLabel : '') + '</span><span>' + dayData.confirmed_bookings + ' / ' + dayData.total_seats + ' ' + t('cal.seats') + '</span></div>';
+
+    // Boarded bar (if past or today)
+    if (isPastOrToday && dayData.confirmed_bookings > 0) {
+      var boardedPct = Math.round(dayData.boarded / dayData.confirmed_bookings * 100);
+      html += '<div id="boardedBarWrapper">';
+      html += '<div class="day-occupancy-bar"><div class="day-occupancy-fill" id="boardedBarFill" style="width:' + boardedPct + '%;background:var(--sage);"></div></div>';
+      html += '<div class="day-bar-label"><span>' + t('cal.checked_in') + ' ' + boardedPct + '%</span><span id="boardedBarCount">' + dayData.boarded + ' / ' + dayData.confirmed_bookings + ' ' + t('cal.boarded') + '</span></div>';
+      html += '</div>';
+    }
+
+    // Per-voyage cards
+    dayData.voyages.forEach(function(v) {
+      var vOcc = v.occupancy_pct;
+      var vOccColor = occupancyHexColor(vOcc);
+      html += '<div class="voyage-day-card">';
+      html += '<div class="voyage-day-route">' + v.origin + ' → ' + v.destination + '</div>';
+      html += '<div class="voyage-day-meta">' + v.departure + ' · ' + v.bus + (v.driver ? ' · ' + v.driver : '') + '</div>';
+      // Occ bar
+      html += '<div class="day-occupancy-bar" style="height:5px;margin-bottom:4px;"><div class="day-occupancy-fill" style="width:' + vOcc + '%;background:' + vOccColor + ';height:5px;"></div></div>';
+      html += '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;">' + t('cal.occupancy') + ' ' + vOcc + '% · ' + v.confirmed + ' / ' + v.total_seats + ' ' + t('cal.seats') + '</div>';
+      // Revenue row
+      html += '<div style="display:flex;gap:12px;font-size:12px;margin-bottom:6px;">';
+      html += '<span>' + t('cal.expected_revenue') + ': <strong>' + fmtMoney(v.revenue) + '</strong></span>';
+      html += '<span style="color:var(--sage);">' + t('cal.collected') + ': ' + fmtMoney(v.collected) + '</span>';
+      if (v.outstanding > 0) html += '<span style="color:var(--marigold);">' + t('cal.outstanding') + ': ' + fmtMoney(v.outstanding) + '</span>';
+      html += '</div>';
+      // Actions
+      html += '<div class="voyage-day-actions">';
+      html += '<a href="/staff/dashboard?voyage_id=' + v.id + '">' + t('cal.view_seatmap') + '</a>';
+      html += '<a href="/staff/manifest/' + v.id + '/pdf" target="_blank">' + t('cal.print_manifest') + '</a>';
+      html += '</div>';
+      // Passenger toggle
+      if (v.passengers && v.passengers.length > 0) {
+        html += '<button class="passengers-toggle" onclick="togglePassengers(this, ' + JSON.stringify(v.passengers).replace(/"/g, '&quot;') + ')">' + t('cal.show_passengers') + ' (' + v.passengers.length + ')</button>';
+        html += '<div class="passengers-table-wrapper hidden"></div>';
+      }
+      html += '</div>';
+    });
+
+    // Download day report + create voyage link
+    html += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">';
+    html += '<a href="/admin/reports/day?date=' + dateStr + '" class="day-detail-nav-btn" style="text-decoration:none;font-size:12px;padding:6px 12px;">' + t('cal.download_day_report') + ' PDF</a>';
+    html += '</div>';
+
+    dayDetailContent.innerHTML = html;
+  }
+
+  function renderDetailPanel_noVoyages(dateStr) {
+    var label = formatDateLabel(dateStr);
+    var html = '';
+    html += '<div class="day-detail-header">';
+    html += '<div class="day-detail-title">' + label + '</div>';
+    html += '<button class="day-detail-nav-btn" onclick="navigateDay(-1)">←</button>';
+    html += '<button class="day-detail-nav-btn" onclick="navigateDay(1)">→</button>';
+    html += '<button class="day-detail-close" onclick="clearDateSelection()">×</button>';
+    html += '</div>';
+    html += '<div class="day-no-voyages">';
+    html += '<p style="margin-bottom:12px;">' + t('cal.no_voyages_scheduled') + '</p>';
+    html += '<a href="/admin/voyages/new" class="day-detail-nav-btn" style="text-decoration:none;">' + t('cal.create_voyage') + '</a>';
+    html += '</div>';
+    dayDetailContent.innerHTML = html;
+  }
+
+  // ── Passenger toggle ───────────────────────────────────
+  window.togglePassengers = function(btn, passengers) {
+    var wrapper = btn.nextElementSibling;
+    if (!wrapper) return;
+    var isHidden = wrapper.classList.contains('hidden');
+    if (isHidden) {
+      wrapper.classList.remove('hidden');
+      var tableHtml = '<table class="passengers-list-table"><thead><tr>';
+      tableHtml += '<th>' + t('cal.seats') + '</th><th>Name</th><th>Boarding</th><th>G</th><th>✓</th>';
+      tableHtml += '</tr></thead><tbody>';
+      passengers.forEach(function(p) {
+        tableHtml += '<tr>';
+        tableHtml += '<td class="mono">' + p.seat + '</td>';
+        tableHtml += '<td>' + p.name + '</td>';
+        tableHtml += '<td>' + (p.boarding || '') + '</td>';
+        tableHtml += '<td style="color:' + (p.gender === 'F' ? 'var(--female)' : 'var(--male)') + ';">' + (p.gender === 'F' ? '♀' : '♂') + '</td>';
+        tableHtml += '<td style="color:var(--sage);">' + (p.checked_in ? '✓' : '') + '</td>';
+        tableHtml += '</tr>';
+      });
+      tableHtml += '</tbody></table>';
+      wrapper.innerHTML = tableHtml;
+      btn.textContent = btn.textContent.replace(t('cal.show_passengers'), 'Hide passengers');
+    } else {
+      wrapper.classList.add('hidden');
+      wrapper.innerHTML = '';
+      btn.textContent = btn.textContent.replace('Hide passengers', t('cal.show_passengers'));
+    }
+  };
+
+  // ── Navigate day ───────────────────────────────────────
+  window.navigateDay = function(delta) {
+    if (!selectedDate) return;
+    var d = parseISO(selectedDate);
+    d.setDate(d.getDate() + delta);
+    var newDate = isoDate(d.getFullYear(), d.getMonth()+1, d.getDate());
+    // If different month, navigate calendar too
+    var nm = d.getMonth() + 1, ny = d.getFullYear();
+    if (nm !== calMonth || ny !== calYear) {
+      calYear = ny; calMonth = nm;
+      fetchCalendarData(ny, nm, true);
+    }
+    selectDate(newDate);
+  };
+
+  // ── Tooltip ────────────────────────────────────────────
+  function showTooltip(e, dateStr, dayData) {
+    if (isTouchDevice) return;
+    var label = formatDateLabel(dateStr);
+    var occ = dayData.occupancy_pct;
+    var occStatus = occ >= 80 ? t('cal.high_occupancy') : (occ >= 50 ? '' : t('cal.low_occupancy'));
+    var today = todayISO();
+    var html = '<div class="tt-date">' + label + '</div>';
+    html += '<div class="tt-row"><span>' + dayData.voyage_count + ' ' + (dayData.voyage_count === 1 ? t('cal.voyage') : t('cal.voyages')) + '</span></div>';
+    html += '<div class="tt-row"><span>' + t('cal.passengers') + '</span><span>' + dayData.confirmed_bookings + ' / ' + dayData.total_seats + ' ' + t('cal.seats') + '</span></div>';
+    html += '<div class="tt-row"><span>' + t('cal.expected_revenue') + '</span><span>' + fmtMoney(dayData.expected_revenue) + '</span></div>';
+    if (dateStr <= today && dayData.boarded > 0) {
+      html += '<div class="tt-row"><span>' + t('cal.boarded') + '</span><span>' + dayData.boarded + '</span></div>';
+    }
+    if (occStatus) {
+      html += '<div style="margin-top:6px;font-size:11px;color:' + occupancyHexColor(occ) + ';">' + occStatus + '</div>';
+    }
+    calTooltip.innerHTML = html;
+    calTooltip.classList.remove('hidden');
+    positionTooltip(e);
+  }
+
+  function positionTooltip(e) {
+    var tw = calTooltip.offsetWidth || 220;
+    var th = calTooltip.offsetHeight || 100;
+    var x = e.clientX + 14;
+    var y = e.clientY - th / 2;
+    if (x + tw > window.innerWidth - 10) x = e.clientX - tw - 14;
+    if (y < 10) y = 10;
+    if (y + th > window.innerHeight - 10) y = window.innerHeight - th - 10;
+    calTooltip.style.left = x + 'px';
+    calTooltip.style.top = y + 'px';
+  }
+
+  function hideTooltip() {
+    calTooltip.classList.add('hidden');
+  }
+
+  // ── Month navigation ───────────────────────────────────
+  function navigateMonth(delta) {
+    calMonth += delta;
+    if (calMonth > 12) { calMonth = 1; calYear++; }
+    if (calMonth < 1)  { calMonth = 12; calYear--; }
+    fetchCalendarData(calYear, calMonth, true);
+  }
+
+  // ── Month picker ───────────────────────────────────────
+  function showMonthPicker() {
+    mpPickerYear = calYear;
+    renderMonthPicker();
+    monthPicker.classList.remove('hidden');
+  }
+
+  function hideMonthPicker() {
+    monthPicker.classList.add('hidden');
+  }
+
+  function renderMonthPicker() {
+    mpYearLabel.textContent = mpPickerYear;
+    mpMonthGrid.innerHTML = '';
+    for (var m = 0; m < 12; m++) {
+      var btn = document.createElement('button');
+      btn.className = 'month-picker-btn' + (m + 1 === calMonth && mpPickerYear === calYear ? ' current' : '');
+      btn.textContent = getMonthName(m);
+      btn.dataset.m = m + 1;
+      btn.addEventListener('click', (function(mo) {
+        return function() {
+          calMonth = mo;
+          calYear = mpPickerYear;
+          hideMonthPicker();
+          fetchCalendarData(calYear, calMonth, true);
+        };
+      })(m + 1));
+      mpMonthGrid.appendChild(btn);
+    }
+  }
+
+  // ── Mobile bottom sheet ────────────────────────────────
+  function openBottomSheet(dateStr, dayData) {
+    var overlay = document.getElementById('calSheetOverlay');
+    var sheet = document.getElementById('calBottomSheet');
+    var content = document.getElementById('calSheetContent');
+
+    // Build same detail HTML into sheet
+    var dummy = document.createElement('div');
+    if (!dayData || dayData.voyage_count === 0) {
+      renderDetailPanel_noVoyages_into(dateStr, dummy);
+    } else {
+      renderDetailPanel_into(dateStr, dayData, dummy);
+    }
+    content.innerHTML = dummy.innerHTML;
+
+    overlay.style.display = 'block';
+    requestAnimationFrame(function() {
+      sheet.classList.add('open');
+    });
+  }
+
+  window.closeBottomSheet = function() {
+    var overlay = document.getElementById('calSheetOverlay');
+    var sheet = document.getElementById('calBottomSheet');
+    sheet.classList.remove('open');
+    setTimeout(function() { overlay.style.display = 'none'; }, 320);
+  };
+
+  // Reuse desktop render logic for sheet
+  function renderDetailPanel_noVoyages_into(dateStr, container) {
+    container.innerHTML = '';
+    renderDetailPanel_noVoyages(dateStr);
+    container.innerHTML = dayDetailContent.innerHTML;
+  }
+
+  function renderDetailPanel_into(dateStr, dayData, container) {
+    renderDetailPanel(dateStr, dayData);
+    container.innerHTML = dayDetailContent.innerHTML;
+  }
+
+  // ── Swipe on calendar grid ─────────────────────────────
+  calGrid.addEventListener('touchstart', function(e) {
+    touchStartX = e.touches[0].clientX;
+  }, { passive: true });
+
+  calGrid.addEventListener('touchend', function(e) {
+    var dx = e.changedTouches[0].clientX - touchStartX;
+    if (Math.abs(dx) > 50) navigateMonth(dx < 0 ? 1 : -1);
+  }, { passive: true });
+
+  // ── Nav button listeners ───────────────────────────────
+  document.getElementById('calPrevBtn').addEventListener('click', function() { navigateMonth(-1); });
+  document.getElementById('calNextBtn').addEventListener('click', function() { navigateMonth(1); });
+  document.getElementById('calTodayBtn').addEventListener('click', function() {
+    var n = new Date();
+    calYear = n.getFullYear();
+    calMonth = n.getMonth() + 1;
+    fetchCalendarData(calYear, calMonth, true);
+  });
+
+  // Month label click → picker
+  calMonthLabel.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (monthPicker.classList.contains('hidden')) showMonthPicker();
+    else hideMonthPicker();
+  });
+
+  document.getElementById('mpYearPrev').addEventListener('click', function(e) {
+    e.stopPropagation();
+    mpPickerYear--;
+    renderMonthPicker();
+  });
+  document.getElementById('mpYearNext').addEventListener('click', function(e) {
+    e.stopPropagation();
+    mpPickerYear++;
+    renderMonthPicker();
+  });
+
+  // Close picker on outside click
+  document.addEventListener('click', function(e) {
+    if (!monthPicker.classList.contains('hidden') && !monthPicker.contains(e.target) && e.target !== calMonthLabel) {
+      hideMonthPicker();
+    }
+  });
+
+  // ── Socket.IO real-time updates ────────────────────────
+  var _socket;
+  if (typeof socket !== 'undefined') {
+    _socket = socket;
+  } else {
+    try { _socket = io(); } catch(e) { _socket = null; }
+  }
+
+  if (_socket) {
+    _socket.on('seat_booked', function(data) {
+      if (!data || !data.departure_date) return;
+      var dateParts = data.departure_date.substring(0, 10);
+      var key = dateParts.substring(0, 7);
+      // Invalidate cache for that month
+      if (calendarCache[key]) {
+        delete calendarCache[key];
+        // Re-fetch and re-render if currently displayed
+        var displayKey = calYear + '-' + String(calMonth).padStart(2,'0');
+        if (key === displayKey) {
+          fetchCalendarData(calYear, calMonth, true);
+        }
+        // If that date is selected, re-render detail panel
+        if (selectedDate === dateParts) {
+          setTimeout(function() {
+            var newCache = calendarCache[key] || {};
+            var newData = newCache[dateParts] || null;
+            renderDetailPanel(dateParts, newData);
+            updateStatsForDate(dateParts, newData);
+          }, 600);
+        }
+      }
+      // Pulse animation
+      var cell = calGrid.querySelector('[data-date="' + dateParts + '"]');
+      if (cell) {
+        cell.classList.add('calendar-day-pulse');
+        setTimeout(function() { cell.classList.remove('calendar-day-pulse'); }, 500);
+      }
+    });
+
+    _socket.on('passenger_checkin', function(data) {
+      if (!data || !selectedDate) return;
+      // Update boarded bar if today is selected
+      var today = todayISO();
+      if (selectedDate === today) {
+        var boardedFill = document.getElementById('boardedBarFill');
+        var boardedCount = document.getElementById('boardedBarCount');
+        if (boardedFill && data.boarded !== undefined && data.confirmed !== undefined) {
+          var pct = data.confirmed > 0 ? Math.round(data.boarded / data.confirmed * 100) : 0;
+          boardedFill.style.width = pct + '%';
+          if (boardedCount) boardedCount.textContent = data.boarded + ' / ' + data.confirmed + ' ' + t('cal.boarded');
+        }
+      }
+    });
+  }
+
+  // ── Initialize ─────────────────────────────────────────
+  var now = new Date();
+  calYear = now.getFullYear();
+  calMonth = now.getMonth() + 1;
+  fetchCalendarData(calYear, calMonth, true);
+
+})();
+
+// Expose clearDateSelection globally (called by stat card × buttons)
+function clearDateSelection() {
+  // Delegate to the IIFE's function via DOM event trick — but since it's in IIFE,
+  // we re-implement the public parts here using the DOM IDs directly.
+  // The IIFE exposes nothing, so we replicate the clear logic:
+  var defaultRevenue = {{ total_revenue }};
+  var defaultCollected = {{ total_collected }};
+  var defaultOutstanding = {{ total_outstanding }};
+  var defaultBookings = {{ total_bookings }};
+
+  function fmtMoney(v) { return '₹ ' + Math.round(v).toLocaleString('en-IN'); }
+
+  document.getElementById('statRevenue').textContent = fmtMoney(defaultRevenue);
+  document.getElementById('statRevenueSub').textContent = defaultBookings + ' booking(s)';
+  document.getElementById('statCollected').textContent = fmtMoney(defaultCollected);
+  var defPct = defaultRevenue > 0 ? Math.round(defaultCollected / defaultRevenue * 100) : 0;
+  document.getElementById('statCollectedSub').textContent = defPct + '% of total';
+  document.getElementById('statOutstanding').textContent = fmtMoney(defaultOutstanding);
+  var outPct = defaultRevenue > 0 ? Math.round(defaultOutstanding / defaultRevenue * 100) : 0;
+  document.getElementById('statOutstandingSub').textContent = outPct + '% pending';
+  document.getElementById('statBookings').textContent = defaultBookings;
+  document.getElementById('statBookingsSub').textContent = 'all time';
+  ['Revenue','Collected','Outstanding','Bookings'].forEach(function(n) {
+    var el = document.getElementById('stat' + n + 'DateLabel');
+    if (el) el.classList.add('hidden');
+  });
+  // Remove selected state from calendar
+  var sel = document.querySelector('.calendar-day.selected');
+  if (sel) sel.classList.remove('selected');
+  // Hide detail panel
+  document.getElementById('dayDetailEmpty').classList.remove('hidden');
+  document.getElementById('dayDetailContent').classList.add('hidden');
+  document.getElementById('dayDetailContent').innerHTML = '';
+}
+</script>
 {% endblock %}

@@ -1,10 +1,12 @@
 from datetime import datetime
-from flask import Blueprint, render_template, redirect, url_for, flash, abort, request
+import io
+import calendar as cal_module
+from flask import Blueprint, render_template, redirect, url_for, flash, abort, request, jsonify, send_file
 from flask_login import login_required, current_user
 
 from app.extensions import db
 from app.models import Bus, Voyage, Booking, User, ActivityLog, RouteStop
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date as date_type
 from sqlalchemy import func, and_
 from app.admin.forms import BusForm, VoyageForm, UserForm, UserEditForm
 from app.logging import log_activity
@@ -584,3 +586,339 @@ def passenger_toggle_active(customer_id):
     log_activity('user_edited', f'Customer account {state}: {customer.email}', 'user', customer.id)
     flash(f'Account {state}.', 'success')
     return redirect(url_for('admin.passenger_detail', customer_id=customer_id))
+
+
+# ============================================================
+# CALENDAR API
+# ============================================================
+
+@admin_bp.route('/api/calendar')
+def calendar_data():
+    year = request.args.get('year', datetime.utcnow().year, type=int)
+    month = request.args.get('month', datetime.utcnow().month, type=int)
+
+    # Get start/end of month
+    first_day = date_type(year, month, 1)
+    last_day_num = cal_module.monthrange(year, month)[1]
+    last_day = date_type(year, month, last_day_num)
+
+    # Query all voyages departing in this month
+    voyages = Voyage.query.filter(
+        func.date(Voyage.departure_at) >= first_day,
+        func.date(Voyage.departure_at) <= last_day,
+    ).all()
+
+    if not voyages:
+        return jsonify({})
+
+    voyage_ids = [v.id for v in voyages]
+
+    # Query confirmed bookings for those voyages
+    bookings = Booking.query.filter(
+        Booking.voyage_id.in_(voyage_ids),
+        Booking.status == 'confirmed',
+    ).all()
+
+    # Group bookings by voyage_id
+    bookings_by_voyage = {}
+    for b in bookings:
+        bookings_by_voyage.setdefault(b.voyage_id, []).append(b)
+
+    # Group voyages by date
+    result = {}
+    voyages_by_date = {}
+    for v in voyages:
+        d = v.departure_at.date().isoformat()
+        voyages_by_date.setdefault(d, []).append(v)
+
+    for date_str, day_voyages in voyages_by_date.items():
+        total_seats = sum(v.bus.total_seats for v in day_voyages)
+        day_bookings = []
+        for v in day_voyages:
+            day_bookings.extend(bookings_by_voyage.get(v.id, []))
+
+        confirmed = len(day_bookings)
+        boarded = sum(1 for b in day_bookings if b.boarded_at)
+        expected_revenue = sum(float(b.fare or 0) for b in day_bookings)
+        collected = sum(float(b.advance_paid or 0) for b in day_bookings)
+        outstanding = sum(float(b.balance_due or 0) for b in day_bookings)
+        occupancy_pct = int(confirmed / total_seats * 100) if total_seats > 0 else 0
+
+        voyage_list = []
+        for v in day_voyages:
+            v_bkgs = bookings_by_voyage.get(v.id, [])
+            v_confirmed = len(v_bkgs)
+            v_boarded = sum(1 for b in v_bkgs if b.boarded_at)
+            v_revenue = sum(float(b.fare or 0) for b in v_bkgs)
+            v_collected = sum(float(b.advance_paid or 0) for b in v_bkgs)
+            v_outstanding = sum(float(b.balance_due or 0) for b in v_bkgs)
+            v_seats = v.bus.total_seats
+            voyage_list.append({
+                'id': v.id,
+                'origin': v.origin,
+                'destination': v.destination,
+                'departure': v.departure_at.strftime('%H:%M'),
+                'confirmed': v_confirmed,
+                'boarded': v_boarded,
+                'total_seats': v_seats,
+                'revenue': round(v_revenue, 2),
+                'collected': round(v_collected, 2),
+                'outstanding': round(v_outstanding, 2),
+                'occupancy_pct': int(v_confirmed / v_seats * 100) if v_seats > 0 else 0,
+                'bus': v.bus.registration,
+                'driver': v.driver.full_name if v.driver_id else None,
+                'passengers': [
+                    {
+                        'name': b.passenger_name,
+                        'seat': b.seat_id,
+                        'boarding': b.boarding_point or '',
+                        'dropping': b.dropping_point or '',
+                        'gender': b.gender or 'M',
+                        'checked_in': bool(b.boarded_at),
+                    }
+                    for b in sorted(v_bkgs, key=lambda x: (x.boarding_point or '', x.seat_id or ''))
+                ],
+            })
+
+        result[date_str] = {
+            'voyage_count': len(day_voyages),
+            'total_seats': total_seats,
+            'confirmed_bookings': confirmed,
+            'boarded': boarded,
+            'expected_revenue': round(expected_revenue, 2),
+            'collected': round(collected, 2),
+            'outstanding': round(outstanding, 2),
+            'occupancy_pct': occupancy_pct,
+            'voyages': voyage_list,
+        }
+
+    return jsonify(result)
+
+
+# ============================================================
+# DAY REPORT PDF
+# ============================================================
+
+@admin_bp.route('/reports/day')
+def day_report():
+    date_str = request.args.get('date', '')
+    try:
+        report_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        abort(400)
+
+    voyages = Voyage.query.filter(
+        func.date(Voyage.departure_at) == report_date
+    ).all()
+
+    voyage_ids = [v.id for v in voyages]
+    bookings_all = Booking.query.filter(
+        Booking.voyage_id.in_(voyage_ids),
+        Booking.status == 'confirmed',
+    ).all() if voyage_ids else []
+
+    bookings_by_voyage = {}
+    for b in bookings_all:
+        bookings_by_voyage.setdefault(b.voyage_id, []).append(b)
+
+    pdf_buf = _generate_day_report_pdf(report_date, voyages, bookings_by_voyage)
+    filename = f"day-report-{date_str}.pdf"
+    return send_file(pdf_buf, mimetype='application/pdf', as_attachment=True, download_name=filename)
+
+
+def _generate_day_report_pdf(report_date, voyages, bookings_by_voyage):
+    from reportlab.lib import colors as rl_colors
+    from reportlab.lib.units import mm
+    from reportlab.lib.pagesizes import A4
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable, PageBreak
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+
+    INK    = rl_colors.HexColor('#141b2d')
+    CREAM  = rl_colors.HexColor('#faf6ef')
+    CREAM2 = rl_colors.HexColor('#f3ecdf')
+    GOLD   = rl_colors.HexColor('#d4a84c')
+    MUTED  = rl_colors.HexColor('#6b6558')
+    LINE   = rl_colors.HexColor('#d9d0bf')
+    SAGE   = rl_colors.HexColor('#7a9a5a')
+    RUBY   = rl_colors.HexColor('#a83232')
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+        leftMargin=15*mm, rightMargin=15*mm,
+        topMargin=12*mm, bottomMargin=12*mm)
+    content_w = A4[0] - 30*mm
+
+    s_brand   = ParagraphStyle('brand', fontSize=16, textColor=INK, fontName='Helvetica-Bold', alignment=TA_LEFT, leading=20)
+    s_sub     = ParagraphStyle('sub', fontSize=8, textColor=MUTED, fontName='Helvetica', alignment=TA_LEFT, leading=10)
+    s_title   = ParagraphStyle('title', fontSize=22, textColor=INK, fontName='Helvetica-Bold', alignment=TA_LEFT, leading=26)
+    s_th      = ParagraphStyle('th', fontSize=7, textColor=MUTED, fontName='Helvetica-Bold', alignment=TA_LEFT, leading=9)
+    s_td      = ParagraphStyle('td', fontSize=8, textColor=INK, fontName='Helvetica', alignment=TA_LEFT, leading=10)
+    s_td_bold = ParagraphStyle('td_bold', fontSize=8, textColor=INK, fontName='Helvetica-Bold', alignment=TA_LEFT, leading=10)
+    s_td_r    = ParagraphStyle('td_r', fontSize=8, textColor=INK, fontName='Helvetica', alignment=TA_RIGHT, leading=10)
+    s_meta_l  = ParagraphStyle('meta_l', fontSize=6, textColor=GOLD, fontName='Helvetica-Bold', alignment=TA_LEFT, leading=8)
+    s_meta_v  = ParagraphStyle('meta_v', fontSize=10, textColor=INK, fontName='Helvetica-Bold', alignment=TA_LEFT, leading=12)
+    s_h2      = ParagraphStyle('h2', fontSize=13, textColor=INK, fontName='Helvetica-Bold', alignment=TA_LEFT, leading=16)
+    s_footer  = ParagraphStyle('footer', fontSize=7, textColor=MUTED, fontName='Helvetica', alignment=TA_CENTER, leading=9)
+
+    hr = HRFlowable(width='100%', thickness=0.4, color=LINE, spaceAfter=3*mm)
+    sp = Spacer(1, 3*mm)
+
+    all_bookings = [b for blist in bookings_by_voyage.values() for b in blist]
+    total_fare = sum(float(b.fare or 0) for b in all_bookings)
+    total_collected = sum(float(b.advance_paid or 0) for b in all_bookings)
+    total_outstanding = sum(float(b.balance_due or 0) for b in all_bookings)
+    total_passengers = len(all_bookings)
+    total_boarded = sum(1 for b in all_bookings if b.boarded_at)
+    total_seats = sum(v.bus.total_seats for v in voyages)
+
+    # Header
+    header_tbl = Table([[
+        Paragraph('SHRISAMARTH TRAVELS', s_brand),
+        Paragraph(f'Printed {datetime.now().strftime("%d %b %Y · %H:%M")}', s_sub),
+    ]], colWidths=[content_w * 0.65, content_w * 0.35])
+    header_tbl.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
+        ('ALIGN', (1,0), (1,0), 'RIGHT'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 2),
+    ]))
+
+    date_label = report_date.strftime('%d %B %Y')
+
+    # Summary totals
+    quarter = content_w / 4
+    totals_tbl = Table([[
+        Table([[Paragraph('VOYAGES', s_meta_l)], [Paragraph(str(len(voyages)), s_meta_v)]], colWidths=[quarter]),
+        Table([[Paragraph('PASSENGERS', s_meta_l)], [Paragraph(f'{total_passengers} / {total_seats}', s_meta_v)]], colWidths=[quarter]),
+        Table([[Paragraph('TOTAL REVENUE', s_meta_l)], [Paragraph(f'₹ {int(total_fare):,}', s_meta_v)]], colWidths=[quarter]),
+        Table([[Paragraph('COLLECTED', s_meta_l)], [Paragraph(f'₹ {int(total_collected):,}', s_meta_v)]], colWidths=[quarter]),
+    ]], colWidths=[quarter]*4)
+
+    # Per-voyage summary table
+    v_summary_data = [[
+        Paragraph('ROUTE', s_th),
+        Paragraph('DEP', s_th),
+        Paragraph('BUS', s_th),
+        Paragraph('PAX / SEATS', s_th),
+        Paragraph('OCC%', s_th),
+        Paragraph('REVENUE', s_th),
+        Paragraph('COLLECTED', s_th),
+        Paragraph('OUTSTANDING', s_th),
+    ]]
+    col_w_sum = [content_w*0.18, content_w*0.08, content_w*0.14, content_w*0.11, content_w*0.07,
+                 content_w*0.16, content_w*0.13, content_w*0.13]
+    for v in voyages:
+        v_bkgs = bookings_by_voyage.get(v.id, [])
+        v_pax = len(v_bkgs)
+        v_seats = v.bus.total_seats
+        v_occ = int(v_pax / v_seats * 100) if v_seats else 0
+        v_fare = sum(float(b.fare or 0) for b in v_bkgs)
+        v_coll = sum(float(b.advance_paid or 0) for b in v_bkgs)
+        v_out  = sum(float(b.balance_due or 0) for b in v_bkgs)
+        v_summary_data.append([
+            Paragraph(f'{v.origin} → {v.destination}', s_td_bold),
+            Paragraph(v.departure_at.strftime('%H:%M'), s_td),
+            Paragraph(v.bus.registration, s_td),
+            Paragraph(f'{v_pax} / {v_seats}', s_td),
+            Paragraph(f'{v_occ}%', s_td),
+            Paragraph(f'₹ {int(v_fare):,}', s_td_r),
+            Paragraph(f'₹ {int(v_coll):,}', s_td_r),
+            Paragraph(f'₹ {int(v_out):,}', s_td_r),
+        ])
+    v_summary_tbl = Table(v_summary_data, colWidths=col_w_sum, repeatRows=1)
+    v_summary_tbl.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+        ('LEFTPADDING', (0,0), (-1,-1), 4),
+        ('RIGHTPADDING', (0,0), (-1,-1), 4),
+        ('LINEBELOW', (0,0), (-1,0), 0.5, LINE),
+        ('LINEBELOW', (0,-1), (-1,-1), 0.5, LINE),
+        *[('BACKGROUND', (0,i), (-1,i), CREAM2) for i in range(2, len(v_summary_data), 2)],
+    ]))
+
+    story = [
+        header_tbl, sp,
+        Paragraph(f'Day Report — {date_label}', s_title), sp, hr,
+        totals_tbl, sp, hr,
+        Paragraph('Voyage Summary', s_h2), Spacer(1, 2*mm),
+        v_summary_tbl,
+    ]
+
+    # Per-voyage passenger pages
+    pax_col_widths = [12*mm, 42*mm, 10*mm, 26*mm, 26*mm, 18*mm, 18*mm, 18*mm, 16*mm]
+    for v in voyages:
+        v_bkgs = bookings_by_voyage.get(v.id, [])
+        sorted_bkgs = sorted(v_bkgs, key=lambda b: (b.boarding_point or '', b.seat_id or ''))
+        v_fare  = sum(float(b.fare or 0) for b in v_bkgs)
+        v_coll  = sum(float(b.advance_paid or 0) for b in v_bkgs)
+        v_out   = sum(float(b.balance_due or 0) for b in v_bkgs)
+        driver_name = v.driver.full_name if v.driver_id else 'Unassigned'
+
+        story.append(PageBreak())
+        story.append(Paragraph(f'{v.origin} → {v.destination}', s_title))
+        story.append(Paragraph(f'{v.departure_at.strftime("%d %B %Y · %H:%M")} · {v.bus.registration} · {driver_name}', s_sub))
+        story.append(sp)
+
+        pax_data = [[
+            Paragraph('SEAT', s_th),
+            Paragraph('PASSENGER', s_th),
+            Paragraph('G', s_th),
+            Paragraph('BOARDING', s_th),
+            Paragraph('DROPPING', s_th),
+            Paragraph('FARE', s_th),
+            Paragraph('PAID', s_th),
+            Paragraph('BALANCE', s_th),
+            Paragraph('CHK', s_th),
+        ]]
+        for b in sorted_bkgs:
+            fare = int(b.fare or 0)
+            paid = int(b.advance_paid or 0)
+            bal  = int(b.balance_due or 0)
+            bal_p = ParagraphStyle('bal', parent=s_td_r, textColor=(RUBY if bal > 0 else SAGE))
+            pax_data.append([
+                Paragraph(str(b.seat_id), s_td_bold),
+                Paragraph(b.passenger_name or '', s_td),
+                Paragraph('♂' if (b.gender or 'M') == 'M' else '♀', s_td),
+                Paragraph(b.boarding_point or '', s_td),
+                Paragraph(b.dropping_point or '', s_td),
+                Paragraph(f'₹{fare}', s_td_r),
+                Paragraph(f'₹{paid}', s_td_r),
+                Paragraph(f'₹{bal}' if bal > 0 else '✓', bal_p),
+                Paragraph('✓' if b.boarded_at else '', s_td),
+            ])
+
+        pax_tbl = Table(pax_data, colWidths=pax_col_widths, repeatRows=1)
+        pax_style = [
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('TOPPADDING', (0,0), (-1,-1), 5),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+            ('LEFTPADDING', (0,0), (-1,-1), 4),
+            ('RIGHTPADDING', (0,0), (-1,-1), 4),
+            ('LINEBELOW', (0,0), (-1,0), 0.5, LINE),
+            ('LINEBELOW', (0,-1), (-1,-1), 0.5, LINE),
+        ]
+        for i in range(1, len(pax_data)):
+            if i % 2 == 0:
+                pax_style.append(('BACKGROUND', (0,i), (-1,i), CREAM2))
+        pax_tbl.setStyle(TableStyle(pax_style))
+
+        story.append(pax_tbl)
+        story.append(sp)
+
+        # Summary row
+        sum_tbl = Table([[
+            Table([[Paragraph('TOTAL FARE', s_meta_l)], [Paragraph(f'₹ {int(v_fare):,}', s_meta_v)]], colWidths=[content_w/3]),
+            Table([[Paragraph('COLLECTED', s_meta_l)], [Paragraph(f'₹ {int(v_coll):,}', s_meta_v)]], colWidths=[content_w/3]),
+            Table([[Paragraph('OUTSTANDING', s_meta_l)], [Paragraph(f'₹ {int(v_out):,}', s_meta_v)]], colWidths=[content_w/3]),
+        ]], colWidths=[content_w/3]*3)
+        sum_tbl.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,-1), CREAM2),
+            ('TOPPADDING', (0,0), (-1,-1), 6),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ]))
+        story.append(sum_tbl)
+
+    doc.build(story)
+    buf.seek(0)
+    return buf
