@@ -1487,9 +1487,9 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
 }
 
 /* ===== Admin Calendar Layout ===== */
-.admin-calendar-layout { display: flex; gap: 32px; align-items: flex-start; }
-.admin-left-col { flex: 0 0 65%; min-width: 0; }
-.admin-right-col { flex: 0 0 35%; min-width: 0; position: sticky; top: 80px; max-height: calc(100vh - 100px); overflow-y: auto; }
+.admin-calendar-layout { display: flex; gap: 28px; align-items: flex-start; }
+.admin-left-col { flex: 1 1 0; min-width: 0; }
+.admin-right-col { flex: 0 0 340px; min-width: 280px; position: sticky; top: 80px; max-height: calc(100vh - 100px); overflow-y: auto; }
 
 /* Calendar wrapper */
 .calendar-wrapper { background: var(--cream-2); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
