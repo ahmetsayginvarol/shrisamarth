@@ -569,10 +569,174 @@ if (cancelBtn) {
 }
 
 // ============================================================
-// TOAST NOTIFICATION
+// QR SCANNER (driver)
 // ============================================================
 
-function toast(msg) {
+let scanStream = null;
+let scanInterval = null;
+
+function openScanner() {
+    document.getElementById('scannerModal').classList.remove('hidden');
+    startCamera();
+}
+
+function closeScanner() {
+    stopCamera();
+    document.getElementById('scannerModal').classList.add('hidden');
+    document.getElementById('scanStatus').textContent = 'Point camera at passenger\'s QR code';
+}
+
+async function startCamera() {
+    const video = document.getElementById('scanVideo');
+    const status = document.getElementById('scanStatus');
+    const manualDiv = document.getElementById('manualInput');
+    if (!video) return;
+    try {
+        scanStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }
+        });
+        video.srcObject = scanStream;
+        await video.play();
+        scanInterval = setInterval(scanFrame, 150);
+    } catch (err) {
+        status.textContent = 'Camera not available — enter code manually.';
+        if (manualDiv) manualDiv.style.display = 'flex';
+    }
+}
+
+function stopCamera() {
+    clearInterval(scanInterval);
+    scanInterval = null;
+    if (scanStream) {
+        scanStream.getTracks().forEach(t => t.stop());
+        scanStream = null;
+    }
+}
+
+function scanFrame() {
+    const video = document.getElementById('scanVideo');
+    const canvas = document.getElementById('scanCanvas');
+    if (!video || !canvas) return;
+    if (video.readyState < video.HAVE_ENOUGH_DATA) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    if (typeof jsQR === 'undefined') return;
+    const code = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: 'dontInvert',
+    });
+    if (code && code.data) {
+        document.getElementById('scanStatus').textContent = 'QR Code Detected!';
+        stopCamera();
+        const match = code.data.match(/\/verify\/([A-Za-z0-9\-]+)\s*$/);
+        const bookingCode = match ? match[1] : code.data.trim();
+        setTimeout(() => {
+            closeScanner();
+            fetchAndShowVerify(bookingCode);
+        }, 300);
+    }
+}
+
+function submitManualCode() {
+    const input = document.getElementById('manualCode');
+    if (!input || !input.value.trim()) return;
+    closeScanner();
+    fetchAndShowVerify(input.value.trim());
+}
+
+async function fetchAndShowVerify(code) {
+    try {
+        const res = await fetch('/verify/' + encodeURIComponent(code) + '?format=json');
+        const data = await res.json();
+        showScanResult(data, code);
+    } catch (err) {
+        toast('Could not load booking details');
+    }
+}
+
+function showScanResult(data, code) {
+    const el = document.getElementById('scanResultContent');
+    if (!el) return;
+
+    if (data.state === 'valid') {
+        el.innerHTML = `
+            <div style="text-align:center;padding:12px 0 8px;">
+                <div style="width:60px;height:60px;border-radius:50%;background:#dcfce7;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:28px;">✓</div>
+                <div style="font-size:13px;font-weight:700;letter-spacing:.06em;color:#22c55e;margin-bottom:4px;">BOARDING CONFIRMED</div>
+                <div style="font-size:22px;font-weight:700;color:var(--ink);margin:10px 0 4px;">${data.passenger_name}</div>
+                <div style="display:inline-block;background:var(--ink);color:var(--cream);font-size:24px;font-weight:800;padding:6px 18px;border-radius:6px;font-family:monospace;margin:4px 0 14px;">${data.seat_display}</div>
+            </div>
+            <div class="passenger-details" style="margin-bottom:16px;">
+                <div class="detail-row"><span class="muted">Route</span><span>${data.route}</span></div>
+                <div class="detail-row"><span class="muted">Departure</span><span>${data.departure}</span></div>
+                <div class="detail-row"><span class="muted">Boarding</span><span>${data.boarding_point}</span></div>
+                <div class="detail-row"><span class="muted">Dropping</span><span>${data.dropping_point}</span></div>
+                <div class="detail-row"><span class="muted">Fare</span><span>${data.has_balance ? '<span style="color:var(--marigold);font-weight:700;">⚠ Balance Due' + (data.balance_due ? ': ₹' + data.balance_due : '') + '</span>' : '<span style="color:var(--sage);font-weight:700;">Fully Paid ✓</span>'}</span></div>
+            </div>
+            <button class="btn btn-primary" id="scanBoardBtn"
+                    style="background:#22c55e;border:none;"
+                    onclick="markBoardedFromPanel('${code}','${data.passenger_name.replace(/'/g,"\\'")}')">
+                Mark as Boarded
+            </button>`;
+    } else if (data.state === 'boarded') {
+        el.innerHTML = `
+            <div style="text-align:center;padding:12px 0 16px;">
+                <div style="width:60px;height:60px;border-radius:50%;background:#fef3c7;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:28px;">⚠</div>
+                <div style="font-size:13px;font-weight:700;letter-spacing:.06em;color:var(--marigold);margin-bottom:4px;">ALREADY BOARDED</div>
+                <div style="font-size:22px;font-weight:700;color:var(--ink);margin:10px 0 4px;">${data.passenger_name}</div>
+                <div style="display:inline-block;background:var(--ink);color:var(--cream);font-size:24px;font-weight:800;padding:6px 18px;border-radius:6px;font-family:monospace;margin:4px 0 14px;">${data.seat_display}</div>
+                <div class="passenger-details" style="margin-bottom:12px;">
+                    <div class="detail-row"><span class="muted">Route</span><span>${data.route}</span></div>
+                    <div class="detail-row"><span class="muted">Boarded at</span><span style="color:var(--marigold);font-weight:700;">${data.boarded_at}</span></div>
+                </div>
+                <p class="muted" style="font-size:13px;">This passenger has already been checked in.</p>
+            </div>`;
+    } else {
+        el.innerHTML = `
+            <div style="text-align:center;padding:20px 0;">
+                <div style="width:60px;height:60px;border-radius:50%;background:#fee2e2;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:28px;">✕</div>
+                <div style="font-size:13px;font-weight:700;letter-spacing:.06em;color:var(--ruby);">INVALID TICKET</div>
+                <p class="muted" style="margin-top:12px;font-size:13px;line-height:1.6;">Booking code not found or cancelled.<br>Please check the ticket.</p>
+                <div class="mono" style="font-size:11px;color:var(--muted);margin-top:8px;">${code}</div>
+            </div>`;
+    }
+    showPanel('scan');
+}
+
+async function markBoardedFromPanel(code, name) {
+    if (!confirm('Confirm boarding for ' + name + '?')) return;
+    const btn = document.getElementById('scanBoardBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Marking…'; }
+    try {
+        const csrfEl = document.querySelector('input[name="csrf_token"]');
+        const headers = csrfEl ? { 'X-CSRFToken': csrfEl.value } : {};
+        const res = await fetch('/verify/' + encodeURIComponent(code) + '/board', {
+            method: 'POST', headers,
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+            toast('Boarded: ' + name);
+            fetchAndShowVerify(code);
+        } else if (data.status === 'already_boarded') {
+            toast('Already boarded at ' + data.boarded_at);
+            fetchAndShowVerify(code);
+        } else {
+            alert('Error marking as boarded.');
+            if (btn) { btn.disabled = false; btn.textContent = 'Mark as Boarded'; }
+        }
+    } catch (err) {
+        alert('Request failed. Please try again.');
+        if (btn) { btn.disabled = false; btn.textContent = 'Mark as Boarded'; }
+    }
+}
+
+// ============================================================
+// TOAST NOTIFICATION
+// ============================================================
     let t = document.getElementById('toast');
     if (!t) {
         t = document.createElement('div');
@@ -640,6 +804,25 @@ socket.on('seat_unlocked', (data) => {
         seat.classList.remove('locked');
         seat.title = `Seat ${data.seat_id}`;
     }
+});
+
+socket.on('passenger_boarded', (data) => {
+    if (parseInt(data.voyage_id) !== parseInt(VOYAGE_ID)) return;
+    const item = document.querySelector(`.manifest-item[data-seat="${data.seat_id}"]`);
+    if (item) {
+        item.classList.add('boarded');
+        const nameDiv = item.querySelector('.manifest-name');
+        if (nameDiv) {
+            let badge = item.querySelector('.boarding-badge');
+            if (!badge) {
+                badge = document.createElement('div');
+                badge.className = 'boarding-badge';
+                nameDiv.parentNode.appendChild(badge);
+            }
+            badge.textContent = '✓ Boarded ' + data.boarded_at;
+        }
+    }
+    toast(data.name + ' boarded ✓');
 });
 
 // ============================================================

@@ -52,6 +52,7 @@
                 <th>Route</th>
                 <th>Departure</th>
                 <th>Bookings</th>
+                <th>Boarded</th>
                 <th>Revenue</th>
                 <th>Collected</th>
                 <th>Outstanding</th>
@@ -64,6 +65,13 @@
                 <td><strong>{{ vs.voyage.origin }}</strong> → {{ vs.voyage.destination }}</td>
                 <td class="mono">{{ vs.voyage.departure_at.strftime('%d %b · %H:%M') }}</td>
                 <td>{{ vs.bookings }}</td>
+                <td>
+                    {% if vs.bookings > 0 %}
+                    <span style="color: {% if vs.boarded == vs.bookings %}var(--sage){% elif vs.boarded > 0 %}var(--marigold){% else %}var(--muted){% endif %};">
+                        {{ vs.boarded }}/{{ vs.bookings }}
+                    </span>
+                    {% else %}—{% endif %}
+                </td>
                 <td>₹ {{ '{:,.0f}'.format(vs.fare) }}</td>
                 <td style="color: var(--sage);">₹ {{ '{:,.0f}'.format(vs.collected) }}</td>
                 <td>

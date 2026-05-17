@@ -39,6 +39,9 @@
             </div>
         </div>
         {% endif %}
+        {% if role == 'driver' %}
+        <button class="btn btn-ghost" onclick="openScanner()" style="font-size:13px;">&#128247; Scan</button>
+        {% endif %}
         <span class="muted">{{ current_user.full_name }}</span>
         {% if role != 'admin' %}
         <a href="{{ url_for('auth.logout') }}" class="btn btn-ghost" data-i18n="nav.signout">Sign out</a>
@@ -223,7 +226,7 @@
             {% if seat_map %}
             <div class="manifest-list">
                 {% for seat_id, b in seat_map.items()|sort %}
-                <div class="manifest-item" data-seat="{{ seat_id }}"
+                <div class="manifest-item{% if b.boarded_at %} boarded{% endif %}" data-seat="{{ seat_id }}"
                      style="cursor: pointer;"
                      onclick="manifestClick('{{ seat_id }}')">
                     <div class="manifest-seat"
@@ -237,6 +240,9 @@
                         </div>
                         <div class="manifest-sub">{{ b.passenger_phone }}</div>
                         <div class="manifest-sub">{{ b.boarding_point }} → {{ b.dropping_point }}</div>
+                        {% if b.boarded_at %}
+                        <div class="boarding-badge">&#10003; Boarded {{ b.boarded_at.strftime('%H:%M') }}</div>
+                        {% endif %}
                     </div>
                     <div style="font-size:11px; color:var(--muted); text-align:right; line-height:1.6;">
                         <div>₹ {{ b.fare }}</div>
@@ -254,6 +260,14 @@
                 <span class="serif" style="font-size:20px;">No bookings yet</span>
             </div>
             {% endif %}
+        </div>
+
+        <div class="panel-view hidden" id="panel-scan">
+            <div class="panel-header">
+                <h3 class="serif">Scan Result</h3>
+                <button class="btn btn-ghost" onclick="showPanel('manifest')" style="padding:4px 10px;font-size:12px;">&#8592; Back</button>
+            </div>
+            <div id="scanResultContent"></div>
         </div>
 
         {% if role != 'driver' %}
@@ -440,8 +454,38 @@
 </div>
 {% endif %}
 
+<!-- QR Scanner Modal -->
+<div id="scannerModal" class="scanner-modal hidden">
+    <div class="scanner-backdrop" onclick="closeScanner()"></div>
+    <div class="scanner-container">
+        <div class="scanner-header">
+            <span style="font-family:'Instrument Serif',serif;font-size:18px;">Scan Ticket</span>
+            <button onclick="closeScanner()" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;padding:4px 8px;">&#10005;</button>
+        </div>
+        <div class="scanner-viewport">
+            <video id="scanVideo" playsinline autoplay muted></video>
+            <canvas id="scanCanvas" style="display:none;"></canvas>
+            <div class="scanner-overlay">
+                <div class="scanner-frame">
+                    <div class="sc-corner sc-tl"></div>
+                    <div class="sc-corner sc-tr"></div>
+                    <div class="sc-corner sc-bl"></div>
+                    <div class="sc-corner sc-br"></div>
+                    <div class="scan-line"></div>
+                </div>
+            </div>
+        </div>
+        <div class="scanner-status" id="scanStatus">Point camera at passenger's QR code</div>
+        <div class="scanner-manual" id="manualInput" style="display:none;">
+            <input type="text" id="manualCode" class="form-input" placeholder="Enter booking code manually" style="border-radius:6px 0 0 6px;border-right:none;">
+            <button onclick="submitManualCode()" class="btn btn-primary" style="border-radius:0 6px 6px 0;width:auto;white-space:nowrap;">Go</button>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
 {% endblock %}

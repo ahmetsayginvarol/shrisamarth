@@ -95,9 +95,11 @@ def dashboard():
         v_fare = sum(float(b.fare or 0) for b in v_bookings)
         v_collected = sum(float(b.advance_paid or 0) for b in v_bookings)
         v_outstanding = sum(float(b.balance_due or 0) for b in v_bookings)
+        v_boarded = sum(1 for b in v_bookings if b.boarded_at)
         voyage_stats.append({
             'voyage': v,
             'bookings': len(v_bookings),
+            'boarded': v_boarded,
             'fare': v_fare,
             'collected': v_collected,
             'outstanding': v_outstanding,

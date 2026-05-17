@@ -48,6 +48,10 @@ with app.app_context():
                 ))
                 db.session.commit()
                 print("  Added passenger_email column")
+            if 'boarded_at' not in columns:
+                db.session.execute(text('ALTER TABLE bookings ADD COLUMN boarded_at TIMESTAMP'))
+                db.session.commit()
+                print("  Added boarded_at column to bookings")
 
         # Create activity_log table if missing
         if 'activity_log' not in existing_tables:

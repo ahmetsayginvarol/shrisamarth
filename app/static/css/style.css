@@ -111,6 +111,29 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
 .legend-swatch.group::after { content: ''; position: absolute; top: 1px; right: 1px; width: 4px; height: 4px; border-radius: 50%; background: var(--gold); }
 .manifest-group-tag { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; color: var(--gold); margin-left: 4px; font-weight: 600; letter-spacing: 0.04em; vertical-align: middle; }
 
+/* ===== Scanner modal ===== */
+.scanner-modal { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; }
+.scanner-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.85); }
+.scanner-container { position: relative; z-index: 1; width: 100%; max-width: 380px; background: #0a0a0a; border-radius: 16px; overflow: hidden; margin: 0 16px; }
+.scanner-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; color: #fff; }
+.scanner-viewport { position: relative; width: 100%; aspect-ratio: 1; background: #000; overflow: hidden; }
+.scanner-viewport video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.scanner-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.scanner-frame { position: relative; width: 240px; height: 240px; }
+.sc-corner { position: absolute; width: 24px; height: 24px; border-color: var(--marigold); border-style: solid; }
+.sc-tl { top: 0; left: 0; border-width: 3px 0 0 3px; }
+.sc-tr { top: 0; right: 0; border-width: 3px 3px 0 0; }
+.sc-bl { bottom: 0; left: 0; border-width: 0 0 3px 3px; }
+.sc-br { bottom: 0; right: 0; border-width: 0 3px 3px 0; }
+.scan-line { position: absolute; left: 4px; right: 4px; height: 2px; background: linear-gradient(90deg, transparent, var(--marigold), transparent); animation: scanMove 2s ease-in-out infinite; }
+@keyframes scanMove { 0%,100% { top: 4px; } 50% { top: calc(100% - 6px); } }
+.scanner-status { padding: 12px 16px; color: rgba(255,255,255,0.75); font-size: 13px; text-align: center; min-height: 42px; }
+.scanner-manual { display: flex; padding: 0 16px 16px; }
+
+/* ===== Manifest boarding status ===== */
+.manifest-item.boarded { border-left: 3px solid var(--sage); }
+.boarding-badge { font-size: 11px; color: var(--sage); font-weight: 600; margin-top: 2px; }
+
 /* ===== Multi-seat controls ===== */
 .seat-section-header { flex-wrap: wrap; gap: 8px; }
 .multi-seat-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

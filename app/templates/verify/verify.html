@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>{% if state == 'valid' %}Valid Ticket{% elif state == 'boarded' %}Already Boarded{% else %}Invalid Ticket{% endif %} · SHRISAMARTH</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Segoe UI',sans-serif;background:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding-bottom:40px}
+.brand{padding:18px 20px 0;text-align:center;color:#6b6558;font-size:11px;letter-spacing:.2em;text-transform:uppercase;width:100%}
+.brand strong{font-family:serif;font-size:16px;letter-spacing:.15em;color:#141b2d;display:block;margin-bottom:2px}
+.card{width:100%;max-width:440px;padding:28px 20px;text-align:center}
+{% if state == 'valid' %}.accent{color:#22c55e}.bg-accent{background:#22c55e;color:#fff}.ic{background:#dcfce7}{% elif state == 'boarded' %}.accent{color:#c8761a}.bg-accent{background:#c8761a;color:#fff}.ic{background:#fef3c7}{% else %}.accent{color:#a83232}.bg-accent{background:#a83232;color:#fff}.ic{background:#fee2e2}{% endif %}
+.icon-circle{width:80px;height:80px;border-radius:50%;margin:0 auto 18px;display:flex;align-items:center;justify-content:center;font-size:38px;animation:pop .4s ease}
+@keyframes pop{0%{transform:scale(0);opacity:0}70%{transform:scale(1.2)}100%{transform:scale(1);opacity:1}}
+.state-title{font-size:20px;font-weight:800;letter-spacing:.06em;margin-bottom:4px}
+.passenger-name{font-size:26px;font-weight:700;color:#141b2d;margin:18px 0 4px;line-height:1.2}
+.seat-badge{display:inline-block;background:#141b2d;color:#fff;font-size:30px;font-weight:800;padding:8px 22px;border-radius:8px;margin:6px 0 18px;font-family:monospace;letter-spacing:.06em}
+.detail-grid{text-align:left;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;margin:14px 0}
+.dr{display:flex;padding:10px 14px;border-bottom:1px solid #f3f4f6;font-size:14px;gap:10px}
+.dr:last-child{border-bottom:none}
+.dl{color:#6b6558;min-width:80px;font-size:11px;text-transform:uppercase;letter-spacing:.1em;padding-top:2px;flex-shrink:0}
+.dv{color:#141b2d;font-weight:500;flex:1}
+.fare-ok{color:#22c55e;font-weight:700}
+.fare-due{color:#c8761a;font-weight:700}
+.board-btn{display:block;width:100%;padding:15px;border-radius:10px;border:none;font-size:16px;font-weight:700;letter-spacing:.04em;cursor:pointer;margin-top:18px;transition:opacity .15s}
+.board-btn:disabled{opacity:.5;cursor:default}
+.booking-code{font-family:monospace;font-size:11px;color:#9ca3af;margin-top:18px;word-break:break-all}
+.note{color:#6b7280;font-size:14px;line-height:1.6;margin:12px 0}
+.contact-link{display:inline-block;margin-top:14px;color:#22c55e;text-decoration:none;font-weight:600;font-size:16px;padding:10px 20px;border:2px solid #22c55e;border-radius:8px}
+</style>
+</head>
+<body>
+<div class="brand"><strong>SHRISAMARTH</strong>Travels &mdash; Boarding Verification</div>
+<div class="card">
+{% if state == 'valid' %}
+<div class="icon-circle ic">✓</div>
+<div class="state-title accent">BOARDING CONFIRMED</div>
+<div class="passenger-name">{{ passenger_name }}</div>
+<div class="seat-badge">{{ seat_display }}</div>
+<div class="detail-grid">
+  <div class="dr"><span class="dl">Route</span><span class="dv">{{ route }}</span></div>
+  <div class="dr"><span class="dl">Departure</span><span class="dv">{{ departure }}</span></div>
+  <div class="dr"><span class="dl">Boarding</span><span class="dv">{{ boarding_point }}</span></div>
+  <div class="dr"><span class="dl">Dropping</span><span class="dv">{{ dropping_point }}</span></div>
+  <div class="dr"><span class="dl">Bus</span><span class="dv">{{ bus_registration }}</span></div>
+  <div class="dr"><span class="dl">Fare</span><span class="dv">
+    {% if has_balance %}
+      {% if balance_due is not none %}<span class="fare-due">Balance Due: &#8377;{{ '{:,.0f}'.format(balance_due) }}</span>{% else %}<span class="fare-due">&#9888; Balance Due</span>{% endif %}
+    {% else %}<span class="fare-ok">Fully Paid &#10003;</span>{% endif %}
+  </span></div>
+</div>
+<button class="board-btn bg-accent" id="boardBtn" onclick="markBoarded('{{ booking_code }}','{{ passenger_name|replace("'","\\'") }}')">Mark as Boarded</button>
+<div class="booking-code">{{ booking_code }}</div>
+
+{% elif state == 'boarded' %}
+<div class="icon-circle ic">&#9888;</div>
+<div class="state-title accent">ALREADY BOARDED</div>
+<div class="passenger-name">{{ passenger_name }}</div>
+<div class="seat-badge">{{ seat_display }}</div>
+<div class="detail-grid">
+  <div class="dr"><span class="dl">Route</span><span class="dv">{{ route }}</span></div>
+  <div class="dr"><span class="dl">Departure</span><span class="dv">{{ departure }}</span></div>
+  <div class="dr"><span class="dl">Boarded at</span><span class="dv accent" style="font-weight:700">{{ boarded_at }}</span></div>
+</div>
+<p class="note" style="color:#c8761a;">This passenger has already been checked in.</p>
+<div class="booking-code">{{ booking_code }}</div>
+
+{% else %}
+<div class="icon-circle ic">&#10005;</div>
+<div class="state-title accent">INVALID TICKET</div>
+<p class="note">This booking code was not found or has been cancelled.<br>Please check the ticket or contact the office.</p>
+<a href="tel:{{ operator_phone }}" class="contact-link">&#128222; {{ operator_phone }}</a>
+{% endif %}
+</div>
+{% if state == 'valid' %}
+<script>
+function markBoarded(code,name){
+  if(!confirm('Confirm boarding for '+name+'?'))return;
+  var btn=document.getElementById('boardBtn');
+  btn.disabled=true;btn.textContent='Marking…';
+  fetch('/verify/'+code+'/board',{method:'POST'})
+    .then(function(r){return r.json()})
+    .then(function(d){
+      if(d.status==='ok'||d.status==='already_boarded'){location.reload()}
+      else{alert('Error. Please try again.');btn.disabled=false;btn.textContent='Mark as Boarded'}
+    });
+}
+</script>
+{% endif %}
+</body>
+</html>

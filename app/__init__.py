@@ -30,6 +30,10 @@ def create_app(config_class=Config):
     app.register_blueprint(admin_bp, url_prefix='/admin')
     app.register_blueprint(customer_bp)  # root — no prefix
 
+    from app.verify.routes import verify_bp
+    app.register_blueprint(verify_bp)
+    csrf.exempt(verify_bp)
+
     # Import models so migrations detect them
     from app import models  # noqa: F401
 
