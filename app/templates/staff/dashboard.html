@@ -451,24 +451,6 @@
                 </div>
             </form>
         </div>
-
-        {% if role != 'driver' %}
-        <!-- Multi-seat group booking panel — populated by JS -->
-        <div class="panel-view hidden" id="panel-group-booking">
-            <div class="panel-header">
-                <h3 class="serif" data-i18n="dash.newbooking">New Booking</h3>
-                <span class="seat-badge" id="groupBookingSeatBadge">—</span>
-            </div>
-            <div id="groupBookingBody"></div>
-        </div>
-
-        <!-- Group booking success panel -->
-        <div class="panel-view hidden" id="panel-group-success">
-            <div class="panel-header">
-                <h3 class="serif">✓ Booking Confirmed</h3>
-            </div>
-            <div id="groupSuccessBody"></div>
-        </div>
         {% endif %}
 
         {% if role != 'driver' %}
