@@ -112,7 +112,7 @@
         {% if voyage %}
         <div class="meta-item">
             <div class="meta-label" data-i18n="dash.departure">Departure</div>
-            <div class="meta-value">{{ voyage.departure_at.strftime('%d %b · %H:%M') }}</div>
+            <div class="meta-value">{{ voyage.departure_at.strftime('%d %b · %H:%M') }} <span id="departureCountdown" style="font-size:11px;font-weight:600;"></span></div>
         </div>
         <div class="meta-item">
             <div class="meta-label" data-i18n="dash.bus">Bus</div>
@@ -146,7 +146,7 @@
 </div>
 
 {% if voyage %}
-<main class="staff-main{% if role == 'driver' %} driver-view{% endif %}" data-voyage-id="{{ voyage.id }}" data-base-fare="{{ voyage.base_fare }}">
+<main class="staff-main{% if role == 'driver' %} driver-view{% endif %}" data-voyage-id="{{ voyage.id }}" data-base-fare="{{ voyage.base_fare }}" data-departure="{{ voyage.departure_at.isoformat() }}">
     <section class="seat-section">
         <div class="seat-section-header">
             <h2 class="serif" data-i18n="dash.seatmap">Seat Map</h2>
@@ -290,9 +290,9 @@
             <div id="manifestFilterCount" class="hidden" style="font-size:12px;color:var(--marigold);margin-bottom:6px;font-weight:600;"></div>
             {% endif %}
             {% set boarded_count = seat_map.values()|selectattr('boarded_at')|list|length %}
-            <div class="checkin-count">
+            <div class="checkin-count{% if role == 'driver' %} checkin-count-large{% endif %}">
                 <span id="checkinCountText" data-i18n-template="dash.checkin_progress">
-                    <span id="checkinNum">{{ boarded_count }}</span> / {{ seat_map|length }} <span data-i18n="dash.boarded">boarded</span>
+                    <span id="checkinNum">{{ boarded_count }}</span><span class="checkin-count-sep"> / {{ seat_map|length }}</span> <span class="checkin-count-label" data-i18n="dash.boarded">boarded</span>
                 </span>
             </div>
             <div class="checkin-progress">
@@ -318,6 +318,9 @@
                             </div>
                             <div class="manifest-sub">{{ b.passenger_phone }}</div>
                             <div class="manifest-sub">{{ b.boarding_point }} → {{ b.dropping_point }}</div>
+                            {% if b.balance_due and b.balance_due > 0 and not b.boarded_at %}
+                            <div class="manifest-balance-due">₹{{ b.balance_due|int }} due</div>
+                            {% endif %}
                             {% if b.boarded_at %}
                             <div class="boarding-badge" data-i18n-prefix="dash.checkedin_at">✓ {{ b.boarded_at.strftime('%H:%M') }}</div>
                             {% endif %}

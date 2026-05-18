@@ -780,6 +780,13 @@ function showBookingDetails(booking, readonly) {
     if (groupTicketBtn) groupTicketBtn.style.display = readonly ? 'none' : '';
     if (waBtn) waBtn.style.display = readonly ? 'none' : 'inline-block';
 
+    // Driver view: hide Fare / Advance / Balance / Booking ID rows — not relevant on-board
+    const detailRows = document.querySelectorAll('#panel-details .passenger-details .detail-row');
+    detailRows.forEach((row, i) => {
+        // rows: 0=Boarding, 1=Dropping, 2=Fare, 3=Advance, 4=Balance, 5=Booking ID
+        row.style.display = (readonly && i >= 2) ? 'none' : '';
+    });
+
     showPanel('details');
 }
 
@@ -910,10 +917,13 @@ async function checkInFromPanel() {
     const seatId = window._currentCheckinSeatId;
     if (!bookingId) return;
     const lang = document.documentElement.lang || 'en';
-    const msg = lang === 'hi'
-        ? `${name} को सीट ${seatId} के लिए चेक-इन करें?`
-        : `Check in ${name} for seat ${seatId}?`;
-    if (!confirm(msg)) return;
+    const isDriverView = !document.getElementById('panel-booking');
+    if (!isDriverView) {
+        const msg = lang === 'hi'
+            ? `${name} को सीट ${seatId} के लिए चेक-इन करें?`
+            : `Check in ${name} for seat ${seatId}?`;
+        if (!confirm(msg)) return;
+    }
 
     const headers = csrfHeaders();
     try {
@@ -1377,7 +1387,6 @@ function showScanResult(data, code) {
 }
 
 async function markBoardedFromPanel(code, name) {
-    if (!confirm('Confirm boarding for ' + name + '?')) return;
     const btn = document.getElementById('scanBoardBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Marking…'; }
     try {
@@ -1671,12 +1680,37 @@ document.addEventListener('click', (e) => {
 // Load on page load
 document.addEventListener('DOMContentLoaded', loadNotifications);
 
-// Single-seat phone country code initialization
+// Single-seat phone country code initialization + driver helpers
 document.addEventListener('DOMContentLoaded', function () {
     const singleCc = document.getElementById('singleCc');
     if (singleCc) buildCountrySelect(singleCc);
     initManifestSwipe();
+    initDepartureCountdown();
 });
+
+function initDepartureCountdown() {
+    const main = document.querySelector('.staff-main');
+    const el = document.getElementById('departureCountdown');
+    if (!main || !main.dataset.departure || !el) return;
+
+    function update() {
+        const dep = new Date(main.dataset.departure);
+        const diffMin = Math.round((dep - Date.now()) / 60000);
+        const lang = document.documentElement.lang || 'en';
+        if (Math.abs(diffMin) < 2) {
+            el.textContent = lang === 'hi' ? '· अभी प्रस्थान' : '· departing now';
+            el.style.color = 'var(--marigold)';
+        } else if (diffMin > 0) {
+            el.textContent = lang === 'hi' ? `· ${diffMin} मिनट में` : `· in ${diffMin}m`;
+            el.style.color = diffMin <= 30 ? 'var(--marigold)' : 'var(--muted)';
+        } else {
+            el.textContent = lang === 'hi' ? `· ${Math.abs(diffMin)} मिनट पहले` : `· departed ${Math.abs(diffMin)}m ago`;
+            el.style.color = 'var(--muted)';
+        }
+    }
+    update();
+    setInterval(update, 30000);
+}
 
 // ============================================================
 // STOP FILTER (driver view only)
