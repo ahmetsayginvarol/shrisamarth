@@ -306,35 +306,54 @@
                      data-boarding="{{ b.boarding_point or '' }}" data-dropping="{{ b.dropping_point or '' }}"
                      style="cursor: pointer;"
                      onclick="manifestClick('{{ seat_id }}')">
-                    <div class="manifest-seat"
-                         style="background: {{ '#3f6da8' if b.gender == 'M' else '#b85685' }};">
-                        {{ seat_id }}
-                    </div>
-                    <div>
-                        <div class="manifest-name">
-                            {{ b.passenger_name }}
-                            {% if b.group_booking_code %}<span class="manifest-group-tag" title="Group: {{ b.group_booking_code }}">⬡ GRP</span>{% endif %}
+                    <div class="manifest-item-inner">
+                        <div class="manifest-seat"
+                             style="background: {{ '#3f6da8' if b.gender == 'M' else '#b85685' }};">
+                            {{ seat_id }}
                         </div>
-                        <div class="manifest-sub">{{ b.passenger_phone }}</div>
-                        <div class="manifest-sub">{{ b.boarding_point }} → {{ b.dropping_point }}</div>
-                        {% if b.boarded_at %}
-                        <div class="boarding-badge" data-i18n-prefix="dash.checkedin_at">✓ {{ b.boarded_at.strftime('%H:%M') }}</div>
-                        {% endif %}
+                        <div>
+                            <div class="manifest-name">
+                                {{ b.passenger_name }}
+                                {% if b.group_booking_code %}<span class="manifest-group-tag" title="Group: {{ b.group_booking_code }}">⬡ GRP</span>{% endif %}
+                            </div>
+                            <div class="manifest-sub">{{ b.passenger_phone }}</div>
+                            <div class="manifest-sub">{{ b.boarding_point }} → {{ b.dropping_point }}</div>
+                            {% if b.boarded_at %}
+                            <div class="boarding-badge" data-i18n-prefix="dash.checkedin_at">✓ {{ b.boarded_at.strftime('%H:%M') }}</div>
+                            {% endif %}
+                        </div>
+                        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;margin-left:auto;">
+                            <button type="button"
+                                    class="checkin-btn{% if b.boarded_at %} checked{% endif %}"
+                                    data-booking-id="{{ b.id }}"
+                                    data-seat="{{ seat_id }}"
+                                    data-name="{{ b.passenger_name }}"
+                                    data-boarded="{{ b.boarded_at.strftime('%H:%M') if b.boarded_at else '' }}"
+                                    title="{{ 'Checked in ' + b.boarded_at.strftime('%H:%M') if b.boarded_at else 'Tap to check in' }}"
+                                    onclick="manifestCheckin(event, this)">
+                                {{ '✓' if b.boarded_at else '○' }}
+                            </button>
+                            {% if b.boarded_at %}
+                            <div class="manifest-checkin-time">{{ b.boarded_at.strftime('%H:%M') }}</div>
+                            {% endif %}
+                        </div>
                     </div>
-                    <div style="display:flex;flex-direction:column;align-items:center;gap:2px;margin-left:auto;">
-                        <button type="button"
-                                class="checkin-btn{% if b.boarded_at %} checked{% endif %}"
+                    <div class="manifest-swipe-action {% if b.boarded_at %}action-undo{% else %}action-checkin{% endif %}"
+                         onclick="event.stopPropagation()">
+                        <button class="manifest-swipe-btn"
                                 data-booking-id="{{ b.id }}"
                                 data-seat="{{ seat_id }}"
                                 data-name="{{ b.passenger_name }}"
                                 data-boarded="{{ b.boarded_at.strftime('%H:%M') if b.boarded_at else '' }}"
-                                title="{{ 'Checked in ' + b.boarded_at.strftime('%H:%M') if b.boarded_at else 'Tap to check in' }}"
-                                onclick="manifestCheckin(event, this)">
-                            {{ '✓' if b.boarded_at else '○' }}
+                                onclick="swipeCheckin(this)">
+                            {% if b.boarded_at %}
+                            <span class="manifest-swipe-icon">↩</span>
+                            <span data-i18n="dash.undo_checkin">Undo</span>
+                            {% else %}
+                            <span class="manifest-swipe-icon">✓</span>
+                            <span data-i18n="dash.checkin_btn">Check In</span>
+                            {% endif %}
                         </button>
-                        {% if b.boarded_at %}
-                        <div class="manifest-checkin-time">{{ b.boarded_at.strftime('%H:%M') }}</div>
-                        {% endif %}
                     </div>
                 </div>
                 {% endfor %}

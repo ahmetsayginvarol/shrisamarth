@@ -1032,6 +1032,173 @@ async function manifestCheckin(e, btn) {
     }
 }
 
+// ============================================================
+// SWIPE-TO-REVEAL CHECK-IN
+// ============================================================
+const SWIPE_ACTION_W = 90;
+let _swipeOpenItem = null;
+
+function _closeSwipeItem(item) {
+    if (!item) return;
+    item.classList.remove('swipe-open');
+    const inner = item.querySelector('.manifest-item-inner');
+    const action = item.querySelector('.manifest-swipe-action');
+    if (inner) { inner.style.transition = ''; inner.style.transform = ''; }
+    if (action) { action.style.transition = ''; action.style.transform = ''; }
+}
+
+function initManifestSwipe() {
+    document.querySelectorAll('.manifest-item').forEach(item => {
+        if (item._swipeInit) return;
+        item._swipeInit = true;
+
+        const inner = item.querySelector('.manifest-item-inner');
+        const action = item.querySelector('.manifest-swipe-action');
+        if (!inner || !action) return;
+
+        let startX, startY, dragging, horizontal;
+
+        item.addEventListener('touchstart', e => {
+            if (e.touches.length !== 1) return;
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+            dragging = false;
+            horizontal = false;
+        }, { passive: true });
+
+        item.addEventListener('touchmove', e => {
+            if (e.touches.length !== 1) return;
+            const dx = e.touches[0].clientX - startX;
+            const dy = e.touches[0].clientY - startY;
+            if (!dragging) {
+                if (Math.abs(dx) < 5 && Math.abs(dy) < 5) return;
+                if (Math.abs(dy) > Math.abs(dx)) { dragging = true; horizontal = false; return; }
+                dragging = true;
+                horizontal = true;
+            }
+            if (!horizontal) return;
+            e.preventDefault();
+
+            const isOpen = item.classList.contains('swipe-open');
+            let offset;
+            if (isOpen) {
+                // Already revealed: dx moves from fully-open position
+                offset = Math.min(0, Math.max(-SWIPE_ACTION_W, -SWIPE_ACTION_W + dx));
+            } else {
+                // Swipe right (dx > 0) slides content left (negative offset)
+                offset = Math.max(-SWIPE_ACTION_W, dx > 0 ? -dx : 0);
+            }
+
+            inner.style.transition = 'none';
+            action.style.transition = 'none';
+            inner.style.transform = `translateX(${offset}px)`;
+            action.style.transform = `translateX(${SWIPE_ACTION_W + offset}px)`;
+        }, { passive: false });
+
+        item.addEventListener('touchend', e => {
+            if (!dragging || !horizontal) return;
+            const dx = e.changedTouches[0].clientX - startX;
+            const isOpen = item.classList.contains('swipe-open');
+
+            inner.style.transition = '';
+            action.style.transition = '';
+            inner.style.transform = '';
+            action.style.transform = '';
+
+            if (!isOpen && dx > 55) {
+                if (_swipeOpenItem && _swipeOpenItem !== item) _closeSwipeItem(_swipeOpenItem);
+                item.classList.add('swipe-open');
+                _swipeOpenItem = item;
+            } else if (isOpen && dx < -40) {
+                item.classList.remove('swipe-open');
+                if (_swipeOpenItem === item) _swipeOpenItem = null;
+            }
+        }, { passive: true });
+    });
+
+    document.addEventListener('touchstart', e => {
+        if (_swipeOpenItem && !_swipeOpenItem.contains(e.target)) {
+            _closeSwipeItem(_swipeOpenItem);
+            _swipeOpenItem = null;
+        }
+    }, { passive: true, capture: false });
+}
+
+async function swipeCheckin(btn) {
+    const bookingId = btn.dataset.bookingId;
+    const seatId = btn.dataset.seat;
+    const name = btn.dataset.name;
+    const boarded = btn.dataset.boarded;
+    const lang = document.documentElement.lang || 'en';
+    const headers = csrfHeaders();
+    const item = btn.closest('.manifest-item');
+    const action = btn.closest('.manifest-swipe-action');
+
+    // Close swipe immediately for responsive feel
+    if (item) {
+        item.classList.remove('swipe-open');
+        if (_swipeOpenItem === item) _swipeOpenItem = null;
+    }
+
+    if (boarded) {
+        const res = await fetch(`/staff/booking/${bookingId}/uncheckin`, { method: 'POST', headers });
+        const data = await res.json();
+        if (data.status === 'ok') {
+            btn.dataset.boarded = '';
+            if (action) { action.classList.remove('action-undo'); action.classList.add('action-checkin'); }
+            const icon = btn.querySelector('.manifest-swipe-icon');
+            const label = btn.querySelector('[data-i18n]');
+            if (icon) icon.textContent = '✓';
+            if (label) { label.textContent = lang === 'hi' ? 'चेक-इन' : 'Check In'; label.dataset.i18n = 'dash.checkin_btn'; }
+            const circleBtn = item && item.querySelector('.checkin-btn');
+            if (circleBtn) {
+                circleBtn.textContent = '○';
+                circleBtn.classList.remove('checked');
+                circleBtn.dataset.boarded = '';
+                const timeEl = circleBtn.parentNode.querySelector('.manifest-checkin-time');
+                if (timeEl) timeEl.remove();
+            }
+            updateManifestRowUnchecked(seatId);
+            updateCheckinProgress(-1);
+            toast(lang === 'hi' ? `${name} का चेक-इन रद्द हुआ` : `Undo: ${name}`);
+        } else {
+            toast(data.message || 'Error');
+        }
+    } else {
+        const res = await fetch(`/staff/booking/${bookingId}/checkin`, { method: 'POST', headers });
+        const data = await res.json();
+        if (data.status === 'ok' || data.status === 'already_checked_in') {
+            const t = data.boarded_at;
+            btn.dataset.boarded = t;
+            if (action) { action.classList.remove('action-checkin'); action.classList.add('action-undo'); }
+            const icon = btn.querySelector('.manifest-swipe-icon');
+            const label = btn.querySelector('[data-i18n]');
+            if (icon) icon.textContent = '↩';
+            if (label) { label.textContent = lang === 'hi' ? 'रद्द करें' : 'Undo'; label.dataset.i18n = 'dash.undo_checkin'; }
+            const circleBtn = item && item.querySelector('.checkin-btn');
+            if (circleBtn) {
+                circleBtn.textContent = '✓';
+                circleBtn.classList.add('checked');
+                circleBtn.dataset.boarded = t;
+                let timeEl = circleBtn.parentNode.querySelector('.manifest-checkin-time');
+                if (!timeEl) { timeEl = document.createElement('div'); timeEl.className = 'manifest-checkin-time'; circleBtn.parentNode.appendChild(timeEl); }
+                timeEl.textContent = t;
+            }
+            updateManifestRowCheckedIn(seatId, t);
+            const seat = document.querySelector(`.seat[data-seat="${seatId}"]`);
+            if (seat) {
+                const gender = seat.classList.contains('booked-m') || seat.classList.contains('checked-in-m') ? 'm' : 'f';
+                seat.classList.remove('booked-m', 'booked-f');
+                seat.classList.add(`checked-in-${gender}`);
+            }
+            updateCheckinProgress(1);
+            toast(lang === 'hi' ? `${name} चेक-इन हो गए ✓` : `${name} checked in ✓`);
+        } else {
+            toast(data.message || 'Error');
+        }
+    }
+}
+
 function updateManifestRowCheckedIn(seatId, time) {
     const row = document.querySelector(`.manifest-item[data-seat="${seatId}"]`);
     if (!row) return;
@@ -1336,7 +1503,6 @@ socket.on('passenger_checkin', (data) => {
     }
     updateManifestRowCheckedIn(data.seat_id, data.boarded_at);
     updateCheckinProgress(1);
-    // Update checkin btn in manifest
     const btn = document.querySelector(`.checkin-btn[data-seat="${data.seat_id}"]`);
     if (btn) {
         btn.textContent = '✓';
@@ -1345,6 +1511,16 @@ socket.on('passenger_checkin', (data) => {
         let timeEl = btn.parentNode.querySelector('.manifest-checkin-time');
         if (!timeEl) { timeEl = document.createElement('div'); timeEl.className = 'manifest-checkin-time'; btn.parentNode.appendChild(timeEl); }
         timeEl.textContent = data.boarded_at;
+    }
+    const swipeBtn = document.querySelector(`.manifest-swipe-action[data-seat="${data.seat_id}"] .manifest-swipe-btn, .manifest-item[data-seat="${data.seat_id}"] .manifest-swipe-btn`);
+    if (swipeBtn) {
+        swipeBtn.dataset.boarded = data.boarded_at;
+        const icon = swipeBtn.querySelector('.manifest-swipe-icon');
+        const label = swipeBtn.querySelector('[data-i18n]');
+        if (icon) icon.textContent = '↩';
+        if (label) { label.textContent = 'Undo'; label.dataset.i18n = 'dash.undo_checkin'; }
+        const action = swipeBtn.closest('.manifest-swipe-action');
+        if (action) { action.classList.remove('action-checkin'); action.classList.add('action-undo'); }
     }
 });
 
@@ -1364,6 +1540,16 @@ socket.on('passenger_uncheckin', (data) => {
         btn.dataset.boarded = '';
         const timeEl = btn.parentNode.querySelector('.manifest-checkin-time');
         if (timeEl) timeEl.remove();
+    }
+    const swipeBtn = document.querySelector(`.manifest-item[data-seat="${data.seat_id}"] .manifest-swipe-btn`);
+    if (swipeBtn) {
+        swipeBtn.dataset.boarded = '';
+        const icon = swipeBtn.querySelector('.manifest-swipe-icon');
+        const label = swipeBtn.querySelector('[data-i18n]');
+        if (icon) icon.textContent = '✓';
+        if (label) { label.textContent = 'Check In'; label.dataset.i18n = 'dash.checkin_btn'; }
+        const action = swipeBtn.closest('.manifest-swipe-action');
+        if (action) { action.classList.remove('action-undo'); action.classList.add('action-checkin'); }
     }
 });
 
@@ -1488,6 +1674,7 @@ document.addEventListener('DOMContentLoaded', loadNotifications);
 document.addEventListener('DOMContentLoaded', function () {
     const singleCc = document.getElementById('singleCc');
     if (singleCc) buildCountrySelect(singleCc);
+    initManifestSwipe();
 });
 
 // ============================================================

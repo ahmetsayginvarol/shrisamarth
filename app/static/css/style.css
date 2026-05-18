@@ -81,7 +81,7 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
 .side-panel { padding: 32px; }
 .side-panel h3 { font-size: 22px; margin-bottom: 20px; }
 .manifest-list { display: flex; flex-direction: column; gap: 8px; }
-.manifest-item { display: grid; grid-template-columns: 40px 1fr; gap: 12px; padding: 10px; background: var(--cream-2); border-radius: 6px; align-items: center; }
+.manifest-item { position: relative; overflow: hidden; background: var(--cream-2); border-radius: 6px; }
 .manifest-seat { font-family: 'JetBrains Mono', monospace; font-weight: 600; text-align: center; padding: 6px; background: var(--ink); color: var(--cream); border-radius: 4px; font-size: 12px; }
 .manifest-name { font-weight: 500; font-size: 13px; }
 .manifest-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
@@ -410,17 +410,63 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
 
 /* ===== Manifest list (3 column) ===== */
 .manifest-item {
-    display: grid;
-    grid-template-columns: 40px 1fr auto;
-    gap: 12px;
-    padding: 10px 12px;
+    position: relative;
+    overflow: hidden;
     background: var(--cream-2);
     border-radius: 6px;
-    align-items: center;
     transition: background 0.15s;
 }
 
 .manifest-item:hover { background: #e8dece; }
+
+.manifest-item-inner {
+    display: grid;
+    grid-template-columns: 40px 1fr auto;
+    gap: 12px;
+    padding: 10px 12px;
+    align-items: center;
+    width: 100%;
+    transition: transform 0.25s cubic-bezier(.25,.46,.45,.94);
+    will-change: transform;
+}
+
+/* Swipe-to-reveal action panel */
+.manifest-swipe-action {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 90px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0 6px 6px 0;
+    transform: translateX(90px);
+    transition: transform 0.25s cubic-bezier(.25,.46,.45,.94);
+}
+.manifest-swipe-action.action-checkin { background: var(--sage); }
+.manifest-swipe-action.action-undo { background: #6b6558; }
+.manifest-item.swipe-open .manifest-item-inner { transform: translateX(-90px); }
+.manifest-item.swipe-open .manifest-swipe-action { transform: translateX(0); }
+.manifest-swipe-btn {
+    border: none;
+    background: transparent;
+    color: #fff;
+    font-weight: 700;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 8px 4px;
+    text-align: center;
+    line-height: 1.3;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+.manifest-swipe-icon { font-size: 18px; }
 /* ===== Stats grid ===== */
 .stats-grid {
     display: grid;
@@ -728,7 +774,7 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
     .passenger-name { font-size: 20px; }
 
     /* Manifest items — larger tap area */
-    .manifest-item { padding: 12px 10px; }
+    .manifest-item-inner { padding: 12px 10px; }
     .manifest-name { font-size: 14px; }
 
     /* Booking form */
