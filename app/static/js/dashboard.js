@@ -569,6 +569,13 @@ const bookingForm = document.getElementById('bookingForm');
 if (bookingForm) {
     bookingForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        // Combine country code + phone into hidden field before capturing FormData
+        const singleCc = document.getElementById('singleCc');
+        const singlePhone = document.getElementById('singlePhone');
+        const singlePhoneCombined = document.getElementById('singlePhoneCombined');
+        if (singleCc && singlePhone && singlePhoneCombined) {
+            singlePhoneCombined.value = getPhoneValue(singleCc, singlePhone);
+        }
         const formData = new FormData(e.target);
 
         if (window._isGroupBooking) {
@@ -1484,15 +1491,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const singlePhoneCombined = document.getElementById('singlePhoneCombined');
 
     if (singleCc) buildCountrySelect(singleCc);
-
-    // Intercept single-seat booking form submit to combine cc + number
-    const bookingForm = document.getElementById('bookingForm');
-    if (bookingForm && singleCc && singlePhone && singlePhoneCombined) {
-        bookingForm.addEventListener('submit', function (e) {
-            const combined = getPhoneValue(singleCc, singlePhone);
-            singlePhoneCombined.value = combined;
-        });
-    }
 });
 
 // ============================================================
