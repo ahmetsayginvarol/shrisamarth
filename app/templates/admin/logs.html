@@ -1,5 +1,10 @@
 {% extends 'admin/base_admin.html' %}
 {% block admin_content %}
+<style>
+details[open] summary span { transform: rotate(90deg); }
+details summary span { display: inline-block; transition: transform 0.15s; }
+details summary::-webkit-details-marker { display: none; }
+</style>
 
 <div class="page-header">
     <div>
@@ -63,10 +68,26 @@
             </td>
             <td>
                 <span class="badge badge-{{ 'cancelled' if 'cancel' in log.action else 'scheduled' if 'create' in log.action else 'departed' if 'edit' in log.action else 'active' if 'login' in log.action else 'completed' }}">
-                    {{ log.action|replace('_', ' ')|title }}
+                    {% if log.action == 'group_booking_created' %}Group Booking Created
+                    {% else %}{{ log.action|replace('_', ' ')|title }}{% endif %}
                 </span>
             </td>
-            <td>{{ log.description }}</td>
+            <td>
+                {% if ' | ' in log.description %}
+                    {% set parts = log.description.split(' | ') %}
+                    <details style="cursor:pointer;">
+                        <summary style="list-style:none; display:flex; align-items:center; gap:6px;">
+                            <span style="font-size:11px; color:var(--muted); user-select:none;">▶</span>
+                            {{ parts[0] }}
+                        </summary>
+                        <ul style="margin:6px 0 0 16px; padding:0; font-size:12px; color:var(--ink-2); list-style:disc;">
+                            {% for item in parts[1:] %}<li>{{ item }}</li>{% endfor %}
+                        </ul>
+                    </details>
+                {% else %}
+                    {{ log.description }}
+                {% endif %}
+            </td>
             <td class="mono muted" style="font-size: 11px;">{{ log.ip_address or '—' }}</td>
         </tr>
         {% endfor %}

@@ -243,8 +243,17 @@ def customer_book():
             'gender': b.gender,
             'name': b.passenger_name,
         })
-        action_desc = f'Customer group booking {group_code}: seat {b.seat_id} for {b.passenger_name}' if is_group else f'Customer booking {b.booking_code}: seat {b.seat_id} for {b.passenger_name}'
-        log_activity('booking_created', action_desc, 'booking', b.id)
+        if not is_group:
+            log_activity('booking_created',
+                         f'Customer booking {b.booking_code}: seat {b.seat_id} for {b.passenger_name} on {voyage.origin}→{voyage.destination}',
+                         'booking', b.id)
+    if is_group and bookings_created:
+        seat_detail = ' | '.join(f"{b.seat_id}: {b.passenger_name}" for b in bookings_created)
+        log_activity(
+            'group_booking_created',
+            f'Customer group booking {group_code}: {len(bookings_created)} seats · {voyage.origin}→{voyage.destination} | {seat_detail}',
+            'booking', bookings_created[0].id,
+        )
     db.session.commit()
 
     primary = bookings_created[0]

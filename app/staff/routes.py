@@ -397,15 +397,20 @@ def create_group_booking():
         db.session.rollback()
         return jsonify({'status': 'error', 'message': 'One or more seats were just booked. Please refresh.'}), 409
 
+    if is_group and bookings_created:
+        seat_detail = ' | '.join(f"{b.seat_id}: {b.passenger_name}" for b in bookings_created)
+        log_activity(
+            'group_booking_created',
+            f'Group booking {group_code}: {len(bookings_created)} seats · {voyage.origin}→{voyage.destination} | {seat_detail}',
+            'booking', bookings_created[0].id,
+        )
+    elif bookings_created:
+        b = bookings_created[0]
+        log_activity('booking_created',
+                     f'Booking {b.booking_code}: seat {b.seat_id} for {b.passenger_name} on {voyage.origin}→{voyage.destination}',
+                     'booking', b.id)
+
     for b in bookings_created:
-        if is_group:
-            log_activity('booking_created',
-                         f'Group booking {group_code}: seat {b.seat_id} for {b.passenger_name} on {voyage.origin}→{voyage.destination}',
-                         'booking', b.id)
-        else:
-            log_activity('booking_created',
-                         f'Booking {b.booking_code}: seat {b.seat_id} for {b.passenger_name} on {voyage.origin}→{voyage.destination}',
-                         'booking', b.id)
         socketio.emit('seat_booked', {
             'voyage_id': voyage.id,
             'seat_id': b.seat_id,
