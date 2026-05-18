@@ -256,21 +256,21 @@ def generate_group_ticket(bookings) -> io.BytesIO:
 
     route = f"{voyage.origin}  —  {voyage.destination}"
     dep = voyage.departure_at.strftime('%d %B %Y · %H:%M')
-    gender_label = 'Male' if first.gender == 'M' else 'Female'
-
-    # Seats table — one row per seat
+    # Seats table — one row per seat, with per-passenger name
     seat_rows = [[
         Paragraph('SEAT', s_label),
+        Paragraph('PASSENGER', s_label),
         Paragraph('TYPE', s_label),
         Paragraph('FARE', s_label),
         Paragraph('ADVANCE', s_label),
         Paragraph('BALANCE', s_label),
     ]]
-    col_w = [CONTENT_W * f for f in (0.14, 0.18, 0.22, 0.23, 0.23)]
+    col_w = [CONTENT_W * f for f in (0.10, 0.30, 0.13, 0.16, 0.15, 0.16)]
     for b in bookings:
-        window_label = 'Window' if b.is_window else 'Aisle'
+        window_label = 'Win' if b.is_window else 'Aisle'
         seat_rows.append([
             Paragraph(b.seat_id, s_val),
+            Paragraph(b.passenger_name, s_val_sm),
             Paragraph(window_label, s_val_sm),
             Paragraph(f'₹ {int(b.fare)}', s_val_sm),
             Paragraph(f'₹ {int(b.advance_paid or 0)}', s_val_sm),
@@ -293,6 +293,7 @@ def generate_group_ticket(bookings) -> io.BytesIO:
     totals_row = Table([[
         Paragraph('', s_label),
         Paragraph('TOTAL', s_label),
+        Paragraph('', s_label),
         Paragraph(f'₹ {total_fare}', s_val_sm),
         Paragraph(f'₹ {total_advance}', s_val_sm),
         Paragraph(f'₹ {total_balance}', s_val_sm),
@@ -343,15 +344,7 @@ def generate_group_ticket(bookings) -> io.BytesIO:
         Paragraph(dep, s_dep),
         sp,
         hr,
-        Table([[Paragraph('PASSENGER', s_label)], [Paragraph(first.passenger_name, s_val)]],
-              colWidths=[CONTENT_W]),
-        sp,
-        Table([[
-            Table([[Paragraph('GENDER', s_label)], [Paragraph(gender_label, s_val)]],
-                  colWidths=[half]),
-            Table([[Paragraph('CONTACT', s_label)], [Paragraph(first.passenger_phone, s_val_sm)]],
-                  colWidths=[half]),
-        ]], colWidths=[half, half]),
+        field_sm('CONTACT', first.passenger_phone),
         sp,
         hr,
         Table([[Paragraph(f'SEATS ({len(bookings)})', s_label)]], colWidths=[CONTENT_W]),

@@ -37,8 +37,12 @@
             <!-- Passenger Info -->
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;">
                 <div>
-                    <div class="form-label">Passenger</div>
+                    <div class="form-label">Passenger{% if is_group %}s{% endif %}</div>
+                    {% if is_group %}
+                    <div style="font-weight:500;">{{ bookings|map(attribute='passenger_name')|join(', ') }}</div>
+                    {% else %}
                     <div style="font-weight:500;">{{ booking.passenger_name }}</div>
+                    {% endif %}
                 </div>
                 <div>
                     <div class="form-label">Phone</div>
@@ -145,7 +149,8 @@
 <script>
 function shareWhatsApp() {
     const code = {{ code|tojson }};
-    const name = {{ booking.passenger_name|tojson }};
+    const allNames = {{ bookings|map(attribute='passenger_name')|list|tojson }};
+    const name = allNames.join(', ');
     const route = {{ (booking.voyage.origin + ' → ' + booking.voyage.destination)|tojson }};
     const depDate = {{ booking.voyage.departure_at.strftime('%d %b %Y')|tojson }};
     const depTime = {{ booking.voyage.departure_at.strftime('%H:%M')|tojson }};
