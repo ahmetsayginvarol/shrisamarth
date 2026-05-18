@@ -690,6 +690,8 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
     .topbar { padding: 10px 16px; }
     .topbar .pill-group { display: none; }
     .topbar .muted { display: none; }
+    /* Always show lang toggle for drivers — they primarily use phones */
+    .driver-topbar .pill-group { display: flex; }
 
     /* Voyage bar */
     .voyage-bar {

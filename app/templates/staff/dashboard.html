@@ -9,7 +9,7 @@
     <div class="admin-main" style="padding: 0;">
 {% endif %}
 
-<header class="topbar">
+<header class="topbar{% if role == 'driver' %} driver-topbar{% endif %}">
     <div class="brand">
         <span class="brand-mark">श्री</span>
         <div>
