@@ -217,10 +217,8 @@ function openGroupBookingForm() {
         return `<input type="text" class="form-input" id="grp_dropping_${id}" placeholder="${lang==='hi'?'जैसे शिवाजीनगर':'e.g. Shivajinagar'}">`;
     }
 
-    // One shared contact block + per-seat boarding/dropping
-    const seatsLabel = lang === 'hi' ? `सीटें: ${seats.join(', ')}` : `Seats: ${seats.join(', ')}`;
+    // One shared block: contact + boarding/dropping
     let html = `<div class="group-seat-section">
-        <div class="group-seat-section-header">${lang==='hi'?'संपर्क विवरण':'Contact Details'}</div>
         <div class="form-group">
             <label class="form-label">${lang==='hi'?'यात्री / समूह नाम':'Passenger / Group Name'}</label>
             <input type="text" class="form-input" id="grp_name" placeholder="${lang==='hi'?'जैसे रमेश परिवार':'e.g. Ramesh Family'}" required>
@@ -232,24 +230,17 @@ function openGroupBookingForm() {
                 <input type="text" class="form-input phone-number-input" id="grp_phone" placeholder="98765 43210">
             </div>
         </div>
-    </div>`;
-
-    // Per-seat boarding/dropping
-    seats.forEach(sid => {
-        html += `<div class="group-seat-section" data-seat="${sid}">
-            <div class="group-seat-section-header">${lang==='hi'?`सीट ${sid}`:`Seat ${sid}`}</div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">${lang==='hi'?'बोर्डिंग':'Boarding'}</label>
-                    ${makeBoardingField(sid)}
-                </div>
-                <div class="form-group">
-                    <label class="form-label">${lang==='hi'?'ड्रॉपिंग':'Dropping'}</label>
-                    ${makeDroppingField(sid)}
-                </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">${lang==='hi'?'बोर्डिंग':'Boarding'}</label>
+                ${makeBoardingField('grp')}
             </div>
-        </div>`;
-    });
+            <div class="form-group">
+                <label class="form-label">${lang==='hi'?'ड्रॉपिंग':'Dropping'}</label>
+                ${makeDroppingField('grp')}
+            </div>
+        </div>
+    </div>`;
 
     // Shared fare fields
     html += `<div class="group-seat-section" style="border-top: 2px solid var(--line); margin-top: 4px;">
@@ -306,27 +297,27 @@ function submitGroupBookingJSON() {
         return;
     }
 
-    // Per-seat boarding/dropping
-    const passengers = [];
-    for (const sid of seats) {
-        const boardingEl = document.getElementById(`grp_boarding_${sid}`);
-        const droppingEl = document.getElementById(`grp_dropping_${sid}`);
-        const boarding = (boardingEl?.value || '').trim();
-        const dropping = (droppingEl?.value || '').trim();
+    // Shared boarding/dropping
+    const boardingEl = document.getElementById('grp_boarding_grp');
+    const droppingEl = document.getElementById('grp_dropping_grp');
+    const sharedBoarding = (boardingEl?.value || '').trim();
+    const sharedDropping = (droppingEl?.value || '').trim();
 
-        if (!boarding) {
-            alert(lang === 'hi' ? `सीट ${sid}: बोर्डिंग पॉइंट आवश्यक है` : `Seat ${sid}: boarding point is required`);
-            boardingEl?.focus();
-            return;
-        }
-        if (!dropping) {
-            alert(lang === 'hi' ? `सीट ${sid}: ड्रॉपिंग पॉइंट आवश्यक है` : `Seat ${sid}: dropping point is required`);
-            droppingEl?.focus();
-            return;
-        }
-
-        passengers.push({ seat_id: sid, name: sharedName, phone: sharedPhone, gender: null, boarding_point: boarding, dropping_point: dropping });
+    if (!sharedBoarding) {
+        alert(lang === 'hi' ? 'बोर्डिंग पॉइंट आवश्यक है' : 'Boarding point is required');
+        boardingEl?.focus();
+        return;
     }
+    if (!sharedDropping) {
+        alert(lang === 'hi' ? 'ड्रॉपिंग पॉइंट आवश्यक है' : 'Dropping point is required');
+        droppingEl?.focus();
+        return;
+    }
+
+    const passengers = seats.map(sid => ({
+        seat_id: sid, name: sharedName, phone: sharedPhone, gender: null,
+        boarding_point: sharedBoarding, dropping_point: sharedDropping,
+    }));
 
     const farePerSeat = parseFloat(document.getElementById('grpFare')?.value) || 0;
     const advancePaid = parseFloat(document.getElementById('grpAdvance')?.value) || 0;
