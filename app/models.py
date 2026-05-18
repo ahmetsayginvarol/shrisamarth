@@ -141,7 +141,7 @@ class Booking(db.Model):
     passenger_name = db.Column(db.String(120), nullable=False)
     passenger_phone = db.Column(db.String(20), nullable=False)
     passenger_email = db.Column(db.String(120), nullable=True)
-    gender = db.Column(db.String(1), nullable=False)  # 'M' or 'F'
+    gender = db.Column(db.String(1), nullable=True)  # 'M' or 'F'; None for gender-neutral group bookings
 
     boarding_point = db.Column(db.String(80))
     dropping_point = db.Column(db.String(80))

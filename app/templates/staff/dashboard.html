@@ -239,7 +239,7 @@
                     {% set b = seat_map.get(seat_id) %}
                     <div class="seat
                         {% if seat_id in window_seats %}window{% endif %}
-                        {% if b %}{% if b.boarded_at %}checked-in-{{ b.gender|lower }}{% else %}booked-{{ b.gender|lower }}{% endif %}{% if b.group_booking_code %} group-seat{% endif %}{% elif seat_id in locked_seats %}locked{% endif %}"
+                        {% if b %}{% if b.boarded_at %}checked-in-{{ b.gender|lower if b.gender else 'g' }}{% else %}booked-{{ b.gender|lower if b.gender else 'g' }}{% endif %}{% if b.group_booking_code %} group-seat{% endif %}{% elif seat_id in locked_seats %}locked{% endif %}"
                         data-seat="{{ seat_id }}"
                         {% if b %}data-boarding="{{ b.boarding_point or '' }}" data-dropping="{{ b.dropping_point or '' }}"{% endif %}
                         {% if b and b.group_booking_code %}data-group="{{ b.group_booking_code }}"{% endif %}
@@ -256,7 +256,7 @@
                     {% set b = seat_map.get(seat_id) %}
                     <div class="seat
                         {% if seat_id in window_seats %}window{% endif %}
-                        {% if b %}{% if b.boarded_at %}checked-in-{{ b.gender|lower }}{% else %}booked-{{ b.gender|lower }}{% endif %}{% if b.group_booking_code %} group-seat{% endif %}{% elif seat_id in locked_seats %}locked{% endif %}"
+                        {% if b %}{% if b.boarded_at %}checked-in-{{ b.gender|lower if b.gender else 'g' }}{% else %}booked-{{ b.gender|lower if b.gender else 'g' }}{% endif %}{% if b.group_booking_code %} group-seat{% endif %}{% elif seat_id in locked_seats %}locked{% endif %}"
                         data-seat="{{ seat_id }}"
                         {% if b %}data-boarding="{{ b.boarding_point or '' }}" data-dropping="{{ b.dropping_point or '' }}"{% endif %}
                         {% if b and b.group_booking_code %}data-group="{{ b.group_booking_code }}"{% endif %}

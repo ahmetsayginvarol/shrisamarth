@@ -111,6 +111,8 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
 .legend-swatch.group::after { content: ''; position: absolute; top: 1px; right: 1px; width: 4px; height: 4px; border-radius: 50%; background: var(--gold); }
 
 /* ===== Checked-in seat states ===== */
+.seat.booked-g { background: var(--gold); border-color: var(--marigold); color: var(--ink); }
+.seat.checked-in-g { background: #15803d; border-color: #15803d; color: #fff; }
 .seat.checked-in-m { background: #15803d; border-color: #15803d; color: #fff; }
 .seat.checked-in-f { background: #0f766e; border-color: #0f766e; color: #fff; }
 .seat.checked-in-m::after, .seat.checked-in-f::after { content: '✓'; position: absolute; bottom: 1px; right: 2px; font-size: 8px; opacity: 0.85; }

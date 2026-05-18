@@ -217,39 +217,27 @@ function openGroupBookingForm() {
         return `<input type="text" class="form-input" id="grp_dropping_${id}" placeholder="${lang==='hi'?'जैसे शिवाजीनगर':'e.g. Shivajinagar'}">`;
     }
 
-    let html = '';
+    // One shared contact block + per-seat boarding/dropping
+    const seatsLabel = lang === 'hi' ? `सीटें: ${seats.join(', ')}` : `Seats: ${seats.join(', ')}`;
+    let html = `<div class="group-seat-section">
+        <div class="group-seat-section-header">${lang==='hi'?'संपर्क विवरण':'Contact Details'}</div>
+        <div class="form-group">
+            <label class="form-label">${lang==='hi'?'यात्री / समूह नाम':'Passenger / Group Name'}</label>
+            <input type="text" class="form-input" id="grp_name" placeholder="${lang==='hi'?'जैसे रमेश परिवार':'e.g. Ramesh Family'}" required>
+        </div>
+        <div class="form-group">
+            <label class="form-label">${lang==='hi'?'संपर्क':'Contact'}</label>
+            <div class="phone-input-row">
+                <select class="country-code-select" id="grp_cc"></select>
+                <input type="text" class="form-input phone-number-input" id="grp_phone" placeholder="98765 43210">
+            </div>
+        </div>
+    </div>`;
 
-    // Per-seat passenger sections
-    seats.forEach((sid, i) => {
-        const sectionLabel = lang === 'hi' ? `सीट ${sid} — यात्री विवरण` : `Seat ${sid} — Passenger Details`;
+    // Per-seat boarding/dropping
+    seats.forEach(sid => {
         html += `<div class="group-seat-section" data-seat="${sid}">
-            <div class="group-seat-section-header">${sectionLabel}</div>
-            <div class="form-group">
-                <label class="form-label">${lang==='hi'?'यात्री का नाम':'Passenger Name'}</label>
-                <input type="text" class="form-input" id="grp_name_${sid}" required>
-            </div>
-            <div class="form-group">
-                <label class="form-label">${lang==='hi'?'संपर्क':'Contact'}</label>
-                <div class="phone-input-row">
-                    <select class="country-code-select" id="grp_cc_${sid}"></select>
-                    <input type="text" class="form-input phone-number-input" id="grp_phone_${sid}" placeholder="98765 43210">
-                </div>
-            </div>
-            <div class="form-group">
-                <label class="form-label">${lang==='hi'?'लिंग':'Gender'}</label>
-                <div class="gender-choice">
-                    <label class="gender-btn">
-                        <input type="radio" name="grp_gender_${sid}" value="M" required>
-                        <span class="gender-dot male-dot"></span>
-                        <span>${lang==='hi'?'पुरुष':'Male'}</span>
-                    </label>
-                    <label class="gender-btn">
-                        <input type="radio" name="grp_gender_${sid}" value="F">
-                        <span class="gender-dot female-dot"></span>
-                        <span>${lang==='hi'?'महिला':'Female'}</span>
-                    </label>
-                </div>
-            </div>
+            <div class="group-seat-section-header">${lang==='hi'?`सीट ${sid}`:`Seat ${sid}`}</div>
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">${lang==='hi'?'बोर्डिंग':'Boarding'}</label>
@@ -282,12 +270,7 @@ function openGroupBookingForm() {
     </div>`;
 
     document.getElementById('groupBookingBody').innerHTML = html;
-
-    // Build country code selects
-    seats.forEach(sid => {
-        const ccEl = document.getElementById(`grp_cc_${sid}`);
-        if (ccEl) buildCountrySelect(ccEl);
-    });
+    buildCountrySelect(document.getElementById('grp_cc'));
 
     showPanel('group-booking');
 }
@@ -306,35 +289,31 @@ function submitGroupBookingJSON() {
         return;
     }
 
-    // Collect per-seat passenger data
+    // Shared contact info
+    const sharedName = (document.getElementById('grp_name')?.value || '').trim();
+    const ccEl = document.getElementById('grp_cc');
+    const phoneEl = document.getElementById('grp_phone');
+    const sharedPhone = getPhoneValue(ccEl, phoneEl).trim();
+
+    if (!sharedName) {
+        alert(lang === 'hi' ? 'यात्री / समूह नाम आवश्यक है' : 'Passenger / group name is required');
+        document.getElementById('grp_name')?.focus();
+        return;
+    }
+    if (!sharedPhone || sharedPhone === (ccEl?.value || '+91')) {
+        alert(lang === 'hi' ? 'संपर्क नंबर आवश्यक है' : 'Contact number is required');
+        phoneEl?.focus();
+        return;
+    }
+
+    // Per-seat boarding/dropping
     const passengers = [];
     for (const sid of seats) {
-        const name = (document.getElementById(`grp_name_${sid}`)?.value || '').trim();
-        const ccEl = document.getElementById(`grp_cc_${sid}`);
-        const phoneEl = document.getElementById(`grp_phone_${sid}`);
-        const phone = getPhoneValue(ccEl, phoneEl).trim();
-        const genderEl = document.querySelector(`input[name="grp_gender_${sid}"]:checked`);
-        const gender = genderEl ? genderEl.value : '';
-
         const boardingEl = document.getElementById(`grp_boarding_${sid}`);
         const droppingEl = document.getElementById(`grp_dropping_${sid}`);
         const boarding = (boardingEl?.value || '').trim();
         const dropping = (droppingEl?.value || '').trim();
 
-        if (!name) {
-            alert(lang === 'hi' ? `सीट ${sid}: यात्री का नाम आवश्यक है` : `Seat ${sid}: passenger name is required`);
-            document.getElementById(`grp_name_${sid}`)?.focus();
-            return;
-        }
-        if (!phone || phone.trim() === (ccEl?.value || '+91')) {
-            alert(lang === 'hi' ? `सीट ${sid}: संपर्क नंबर आवश्यक है` : `Seat ${sid}: contact number is required`);
-            phoneEl?.focus();
-            return;
-        }
-        if (!gender) {
-            alert(lang === 'hi' ? `सीट ${sid}: लिंग चुनें` : `Seat ${sid}: please select gender`);
-            return;
-        }
         if (!boarding) {
             alert(lang === 'hi' ? `सीट ${sid}: बोर्डिंग पॉइंट आवश्यक है` : `Seat ${sid}: boarding point is required`);
             boardingEl?.focus();
@@ -346,7 +325,7 @@ function submitGroupBookingJSON() {
             return;
         }
 
-        passengers.push({ seat_id: sid, name, phone, gender, boarding_point: boarding, dropping_point: dropping });
+        passengers.push({ seat_id: sid, name: sharedName, phone: sharedPhone, gender: null, boarding_point: boarding, dropping_point: dropping });
     }
 
     const farePerSeat = parseFloat(document.getElementById('grpFare')?.value) || 0;
@@ -890,7 +869,7 @@ if (cancelBtn) {
 
             if (data.status === 'success') {
                 const seat = document.querySelector(`.seat[data-seat="${data.seat_id}"]`);
-                seat.classList.remove('booked-m', 'booked-f', 'active-single', 'multi-selected', 'group-seat', 'group-highlight');
+                seat.classList.remove('booked-m', 'booked-f', 'booked-g', 'active-single', 'multi-selected', 'group-seat', 'group-highlight');
                 delete seat.dataset.group;
                 seat.title = `Seat ${data.seat_id}`;
 
@@ -935,8 +914,8 @@ async function checkInFromPanel() {
             // Update seat map
             const seat = document.querySelector(`.seat[data-seat="${seatId}"]`);
             if (seat) {
-                const gender = seat.classList.contains('booked-m') || seat.classList.contains('checked-in-m') ? 'm' : 'f';
-                seat.classList.remove('booked-m', 'booked-f');
+                const gender = seat.classList.contains('booked-m') || seat.classList.contains('checked-in-m') ? 'm' : seat.classList.contains('booked-f') || seat.classList.contains('checked-in-f') ? 'f' : 'g';
+                seat.classList.remove('booked-m', 'booked-f', 'booked-g');
                 seat.classList.add(`checked-in-${gender}`);
             }
             // Update manifest row
@@ -1034,7 +1013,7 @@ async function manifestCheckin(e, btn) {
         // Update seat map
         const seat = document.querySelector(`.seat[data-seat="${seatId}"]`);
         if (seat) {
-            const gender = seat.classList.contains('booked-m') || seat.classList.contains('checked-in-m') ? 'm' : 'f';
+            const gender = seat.classList.contains('booked-m') || seat.classList.contains('checked-in-m') ? 'm' : seat.classList.contains('booked-f') || seat.classList.contains('checked-in-f') ? 'f' : 'g';
             seat.classList.remove('booked-m', 'booked-f');
             seat.classList.add(`checked-in-${gender}`);
         }
@@ -1198,8 +1177,8 @@ async function swipeCheckin(btn) {
             updateManifestRowCheckedIn(seatId, t);
             const seat = document.querySelector(`.seat[data-seat="${seatId}"]`);
             if (seat) {
-                const gender = seat.classList.contains('booked-m') || seat.classList.contains('checked-in-m') ? 'm' : 'f';
-                seat.classList.remove('booked-m', 'booked-f');
+                const gender = seat.classList.contains('booked-m') || seat.classList.contains('checked-in-m') ? 'm' : seat.classList.contains('booked-f') || seat.classList.contains('checked-in-f') ? 'f' : 'g';
+                seat.classList.remove('booked-m', 'booked-f', 'booked-g');
                 seat.classList.add(`checked-in-${gender}`);
             }
             updateCheckinProgress(1);
@@ -1438,8 +1417,8 @@ socket.on('seat_booked', (data) => {
     if (parseInt(data.voyage_id) !== parseInt(VOYAGE_ID)) return;
     const seat = document.querySelector(`.seat[data-seat="${data.seat_id}"]`);
     if (!seat || seat.classList.contains('active-single')) return;
-    seat.classList.remove('booked-m', 'booked-f', 'multi-selected');
-    seat.classList.add('booked-' + data.gender.toLowerCase());
+    seat.classList.remove('booked-m', 'booked-f', 'booked-g', 'multi-selected');
+    seat.classList.add('booked-' + (data.gender ? data.gender.toLowerCase() : 'g'));
     if (data.group_code) {
         seat.classList.add('group-seat');
         seat.dataset.group = data.group_code;
@@ -1459,7 +1438,7 @@ socket.on('seat_freed', (data) => {
     if (parseInt(data.voyage_id) !== parseInt(VOYAGE_ID)) return;
     const seat = document.querySelector(`.seat[data-seat="${data.seat_id}"]`);
     if (!seat) return;
-    seat.classList.remove('booked-m', 'booked-f', 'active-single', 'multi-selected', 'group-seat', 'group-highlight');
+    seat.classList.remove('booked-m', 'booked-f', 'booked-g', 'active-single', 'multi-selected', 'group-seat', 'group-highlight');
     delete seat.dataset.group;
     seat.title = `Seat ${data.seat_id}`;
     const oc = document.getElementById('occupancyCount');
@@ -1508,8 +1487,8 @@ socket.on('passenger_checkin', (data) => {
     if (parseInt(data.voyage_id) !== parseInt(VOYAGE_ID)) return;
     const seat = document.querySelector(`.seat[data-seat="${data.seat_id}"]`);
     if (seat) {
-        seat.classList.remove('booked-m', 'booked-f');
-        seat.classList.add(`checked-in-${data.gender.toLowerCase()}`);
+        seat.classList.remove('booked-m', 'booked-f', 'booked-g');
+        seat.classList.add(`checked-in-${data.gender ? data.gender.toLowerCase() : 'g'}`);
     }
     updateManifestRowCheckedIn(data.seat_id, data.boarded_at);
     updateCheckinProgress(1);
@@ -1538,8 +1517,8 @@ socket.on('passenger_uncheckin', (data) => {
     if (parseInt(data.voyage_id) !== parseInt(VOYAGE_ID)) return;
     const seat = document.querySelector(`.seat[data-seat="${data.seat_id}"]`);
     if (seat) {
-        seat.classList.remove('checked-in-m', 'checked-in-f');
-        seat.classList.add(`booked-${data.gender.toLowerCase()}`);
+        seat.classList.remove('checked-in-m', 'checked-in-f', 'checked-in-g');
+        seat.classList.add(`booked-${data.gender ? data.gender.toLowerCase() : 'g'}`);
     }
     updateManifestRowUnchecked(data.seat_id);
     updateCheckinProgress(-1);
