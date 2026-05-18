@@ -234,21 +234,7 @@ function openGroupBookingForm() {
                     <input type="text" class="form-input phone-number-input" id="grp_phone_${sid}" placeholder="98765 43210">
                 </div>
             </div>
-            <div class="form-group">
-                <label class="form-label">${lang==='hi'?'लिंग':'Gender'}</label>
-                <div class="gender-choice">
-                    <label class="gender-btn">
-                        <input type="radio" name="grp_gender_${sid}" value="M" required>
-                        <span class="gender-dot male-dot"></span>
-                        <span>${lang==='hi'?'पुरुष':'Male'}</span>
-                    </label>
-                    <label class="gender-btn">
-                        <input type="radio" name="grp_gender_${sid}" value="F">
-                        <span class="gender-dot female-dot"></span>
-                        <span>${lang==='hi'?'महिला':'Female'}</span>
-                    </label>
-                </div>
-            </div>
+            <input type="hidden" name="grp_gender_${sid}" id="grp_gender_${sid}" value="M">
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">${lang==='hi'?'बोर्डिंग':'Boarding'}</label>
@@ -312,8 +298,7 @@ function submitGroupBookingJSON() {
         const ccEl = document.getElementById(`grp_cc_${sid}`);
         const phoneEl = document.getElementById(`grp_phone_${sid}`);
         const phone = getPhoneValue(ccEl, phoneEl).trim();
-        const genderEl = document.querySelector(`input[name="grp_gender_${sid}"]:checked`);
-        const gender = genderEl ? genderEl.value : '';
+        const gender = (document.getElementById(`grp_gender_${sid}`)?.value) || 'M';
 
         const boardingEl = document.getElementById(`grp_boarding_${sid}`);
         const droppingEl = document.getElementById(`grp_dropping_${sid}`);
@@ -328,10 +313,6 @@ function submitGroupBookingJSON() {
         if (!phone || phone.trim() === (ccEl?.value || '+91')) {
             alert(lang === 'hi' ? `सीट ${sid}: संपर्क नंबर आवश्यक है` : `Seat ${sid}: contact number is required`);
             phoneEl?.focus();
-            return;
-        }
-        if (!gender) {
-            alert(lang === 'hi' ? `सीट ${sid}: लिंग चुनें` : `Seat ${sid}: please select gender`);
             return;
         }
         if (!boarding) {
@@ -371,7 +352,7 @@ function submitGroupBookingJSON() {
     .then(r => r.json())
     .then(data => {
         if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = lang === 'hi' ? 'पुष्टि करें' : 'Confirm Booking'; }
-        if (data.status === 'ok' || data.status === 'warning') {
+        if (data.status === 'ok' || data.status === 'success' || data.status === 'warning') {
             renderGroupSuccess(data, farePerSeat, advancePaid, lang);
         } else {
             alert(data.error || (lang === 'hi' ? 'बुकिंग विफल हुई' : 'Booking failed'));
