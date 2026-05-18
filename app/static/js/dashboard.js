@@ -117,6 +117,7 @@ function closePanel() {
 
 // Manifest item click — highlights seat and shows details
 function manifestClick(seatId) {
+    currentSeatId = seatId;
     const seat = document.querySelector(`.seat[data-seat="${seatId}"]`);
     if (seat) {
         document.querySelectorAll('.seat.active-single').forEach(s => s.classList.remove('active-single'));
