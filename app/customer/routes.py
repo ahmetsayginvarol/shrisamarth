@@ -8,7 +8,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db, socketio, csrf
-from app.models import Voyage, Booking, RouteStop, SeatLock, User, WINDOW_SEATS
+from app.models import Voyage, Booking, RouteStop, SeatLock, User, WINDOW_SEATS, SEAT_ADJACENCY
 from app.customer.forms import CustomerLoginForm, CustomerRegisterForm, CustomerProfileForm
 from app.logging import log_activity, notify_staff
 from app.staff.ticket import generate_ticket, generate_group_ticket, generate_qr
