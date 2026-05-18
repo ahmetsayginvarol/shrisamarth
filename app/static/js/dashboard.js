@@ -1487,9 +1487,6 @@ document.addEventListener('DOMContentLoaded', loadNotifications);
 // Single-seat phone country code initialization
 document.addEventListener('DOMContentLoaded', function () {
     const singleCc = document.getElementById('singleCc');
-    const singlePhone = document.getElementById('singlePhone');
-    const singlePhoneCombined = document.getElementById('singlePhoneCombined');
-
     if (singleCc) buildCountrySelect(singleCc);
 });
 
