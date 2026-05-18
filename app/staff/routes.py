@@ -324,49 +324,64 @@ def create_group_booking():
     if not current_user.has_role('admin', 'reservation'):
         abort(403)
 
-    voyage_id = request.form.get('voyage_id', type=int)
-    seat_ids_raw = request.form.getlist('seat_ids[]')
-    passenger_name = (request.form.get('passenger_name') or '').strip()
-    passenger_phone = (request.form.get('passenger_phone') or '').strip()
-    gender = request.form.get('gender', '')
-    boarding_point = request.form.get('boarding_point', '')
-    dropping_point = request.form.get('dropping_point', '')
-    fare_per_seat = request.form.get('fare', type=float, default=0)
-    advance_paid = request.form.get('advance_paid', type=float, default=0)
+    # New JSON format: per-seat individual passengers
+    if request.is_json:
+        data = request.get_json()
+        voyage_id = data.get('voyage_id')
+        passengers = data.get('passengers', [])  # [{seat_id, name, phone, gender}, ...]
+        boarding_point = (data.get('boarding_point') or '').strip()
+        dropping_point = (data.get('dropping_point') or '').strip()
+        fare_per_seat = float(data.get('fare_per_seat', 0))
+        advance_paid = float(data.get('advance_paid', 0))
+        seat_ids = [str(p.get('seat_id', '')).strip() for p in passengers]
+    else:
+        # Legacy form-encoded format (backward compat)
+        voyage_id = request.form.get('voyage_id', type=int)
+        seat_ids_raw = request.form.getlist('seat_ids[]')
+        passenger_name = (request.form.get('passenger_name') or '').strip()
+        passenger_phone = (request.form.get('passenger_phone') or '').strip()
+        gender = request.form.get('gender', '')
+        boarding_point = (request.form.get('boarding_point') or '').strip()
+        dropping_point = (request.form.get('dropping_point') or '').strip()
+        fare_per_seat = request.form.get('fare', type=float, default=0)
+        advance_paid = request.form.get('advance_paid', type=float, default=0)
+        seat_ids = [s.strip() for s in seat_ids_raw if s.strip()]
+        passengers = [{'seat_id': sid, 'name': passenger_name, 'phone': passenger_phone, 'gender': gender} for sid in seat_ids]
 
-    seat_ids = [s.strip() for s in seat_ids_raw if s.strip()]
-
-    if not voyage_id or not seat_ids or not passenger_name or not passenger_phone or gender not in ('M', 'F'):
+    if not voyage_id or not passengers:
         return jsonify({'status': 'error', 'message': 'Missing required fields.'}), 400
+
+    # Validate each passenger record
+    for p in passengers:
+        if not p.get('name') or not p.get('phone') or p.get('gender') not in ('M', 'F') or not str(p.get('seat_id', '')).strip():
+            return jsonify({'status': 'error', 'message': f'Missing details for seat {p.get("seat_id", "?")}'}), 400
 
     voyage = Voyage.query.get_or_404(voyage_id)
 
-    # Verify all seats are still available
+    # Verify all seats still available
     for sid in seat_ids:
         existing = Booking.query.filter_by(voyage_id=voyage.id, seat_id=sid, status='confirmed').first()
         if existing:
             return jsonify({'status': 'error', 'message': f'Seat {sid} was just booked. Please refresh.'}), 409
-
-    total_fare = fare_per_seat * len(seat_ids)
-    balance = total_fare - advance_paid
 
     is_group = len(seat_ids) > 1
     group_code = f"GRP-{voyage.departure_at.strftime('%Y%m%d')}-{secrets.token_hex(4).upper()}" if is_group else None
 
     bookings_created = []
     try:
-        for sid in seat_ids:
-            per_seat_advance = round(advance_paid / len(seat_ids), 2)
+        for p in passengers:
+            sid = str(p['seat_id']).strip()
+            per_seat_advance = round(advance_paid / len(passengers), 2)
             per_seat_balance = fare_per_seat - per_seat_advance
             code = f"SHRI-{voyage.departure_at.strftime('%Y%m%d')}-{sid}-{secrets.token_hex(3).upper()}"
             b = Booking(
                 voyage_id=voyage.id,
                 seat_id=sid,
-                passenger_name=passenger_name,
-                passenger_phone=passenger_phone,
-                gender=gender,
-                boarding_point=boarding_point,
-                dropping_point=dropping_point,
+                passenger_name=p['name'].strip(),
+                passenger_phone=p['phone'].strip(),
+                gender=p['gender'],
+                boarding_point=(p.get('boarding_point') or boarding_point or '').strip(),
+                dropping_point=(p.get('dropping_point') or dropping_point or '').strip(),
                 fare=fare_per_seat,
                 advance_paid=per_seat_advance,
                 balance_due=per_seat_balance,
@@ -399,31 +414,30 @@ def create_group_booking():
             'group_code': group_code,
         })
 
+    first_name = bookings_created[0].passenger_name if bookings_created else ''
     if is_group:
         notify_staff(
             title='New Group Booking',
-            message=f"{passenger_name} — {len(seat_ids)} seats ({', '.join(seat_ids)}) — {voyage.origin}→{voyage.destination} {voyage.departure_at.strftime('%d %b %Y')}",
+            message=f"{first_name} +{len(seat_ids)-1} — {len(seat_ids)} seats ({', '.join(seat_ids)}) — {voyage.origin}→{voyage.destination} {voyage.departure_at.strftime('%d %b %Y')}",
             link=url_for('staff.dashboard', voyage_id=voyage.id, date=voyage.departure_at.strftime('%Y-%m-%d')),
             booking_id=bookings_created[0].id if bookings_created else None,
-            passenger_phone=passenger_phone,
+            passenger_phone=bookings_created[0].passenger_phone if bookings_created else '',
         )
     else:
         b = bookings_created[0]
         notify_staff(
             title='New Booking',
-            message=f"{passenger_name} — Seat {b.seat_id} — {voyage.origin}→{voyage.destination} {voyage.departure_at.strftime('%d %b %Y')}",
+            message=f"{b.passenger_name} — Seat {b.seat_id} — {voyage.origin}→{voyage.destination} {voyage.departure_at.strftime('%d %b %Y')}",
             link=url_for('staff.dashboard', voyage_id=voyage.id, date=voyage.departure_at.strftime('%Y-%m-%d')),
             booking_id=b.id,
-            passenger_phone=passenger_phone,
+            passenger_phone=b.passenger_phone,
         )
 
     return jsonify({
         'status': 'success',
         'group_code': group_code,
         'seat_ids': seat_ids,
-        'bookings': [{'id': b.id, 'seat_id': b.seat_id, 'code': b.booking_code} for b in bookings_created],
-        'name': passenger_name,
-        'gender': gender,
+        'bookings': [{'id': b.id, 'seat_id': b.seat_id, 'code': b.booking_code, 'name': b.passenger_name, 'gender': b.gender} for b in bookings_created],
     })
 
 

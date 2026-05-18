@@ -1648,3 +1648,13 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
 .driver-no-voyage { text-align: center; padding: 80px 40px; }
 .driver-no-voyage h2 { font-size: 24px; margin-bottom: 12px; }
 .driver-no-voyage p { font-size: 15px; }
+
+/* Group booking per-seat sections */
+.group-seat-section { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.group-seat-section:last-child { border-bottom: none; }
+.group-seat-section-header { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--marigold); margin-bottom: 10px; }
+
+/* Phone input row (country code + number) */
+.phone-input-row { display: flex; gap: 6px; align-items: center; }
+.country-code-select { flex: 0 0 auto; min-width: 90px; max-width: 110px; font-size: 13px; padding: 8px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--cream); color: var(--ink); cursor: pointer; }
+.phone-number-input { flex: 1; }

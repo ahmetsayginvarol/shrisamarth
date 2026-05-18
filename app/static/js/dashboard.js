@@ -6,6 +6,66 @@ const staffMain = document.querySelector('.staff-main');
 const VOYAGE_ID = staffMain ? staffMain.dataset.voyageId : null;
 const BASE_FARE = staffMain ? parseFloat(staffMain.dataset.baseFare) : 0;
 
+// ============================================================
+// COUNTRY CODE PHONE HELPER
+// ============================================================
+const COUNTRY_CODES = [
+    { dial: '+91', flag: '🇮🇳', name: 'India' },
+    { dial: '+1',  flag: '🇺🇸', name: 'USA / Canada' },
+    { dial: '+44', flag: '🇬🇧', name: 'UK' },
+    { dial: '+971', flag: '🇦🇪', name: 'UAE' },
+    { dial: '+966', flag: '🇸🇦', name: 'Saudi Arabia' },
+    { dial: '+974', flag: '🇶🇦', name: 'Qatar' },
+    { dial: '+965', flag: '🇰🇼', name: 'Kuwait' },
+    { dial: '+973', flag: '🇧🇭', name: 'Bahrain' },
+    { dial: '+968', flag: '🇴🇲', name: 'Oman' },
+    { dial: '+60',  flag: '🇲🇾', name: 'Malaysia' },
+    { dial: '+65',  flag: '🇸🇬', name: 'Singapore' },
+    { dial: '+61',  flag: '🇦🇺', name: 'Australia' },
+    { dial: '+64',  flag: '🇳🇿', name: 'New Zealand' },
+    { dial: '+49',  flag: '🇩🇪', name: 'Germany' },
+    { dial: '+33',  flag: '🇫🇷', name: 'France' },
+    { dial: '+39',  flag: '🇮🇹', name: 'Italy' },
+    { dial: '+34',  flag: '🇪🇸', name: 'Spain' },
+    { dial: '+31',  flag: '🇳🇱', name: 'Netherlands' },
+    { dial: '+41',  flag: '🇨🇭', name: 'Switzerland' },
+    { dial: '+46',  flag: '🇸🇪', name: 'Sweden' },
+    { dial: '+47',  flag: '🇳🇴', name: 'Norway' },
+    { dial: '+45',  flag: '🇩🇰', name: 'Denmark' },
+    { dial: '+32',  flag: '🇧🇪', name: 'Belgium' },
+    { dial: '+43',  flag: '🇦🇹', name: 'Austria' },
+    { dial: '+90',  flag: '🇹🇷', name: 'Turkey' },
+    { dial: '+7',   flag: '🇷🇺', name: 'Russia' },
+    { dial: '+86',  flag: '🇨🇳', name: 'China' },
+    { dial: '+81',  flag: '🇯🇵', name: 'Japan' },
+    { dial: '+82',  flag: '🇰🇷', name: 'South Korea' },
+    { dial: '+66',  flag: '🇹🇭', name: 'Thailand' },
+    { dial: '+62',  flag: '🇮🇩', name: 'Indonesia' },
+    { dial: '+63',  flag: '🇵🇭', name: 'Philippines' },
+    { dial: '+92',  flag: '🇵🇰', name: 'Pakistan' },
+    { dial: '+880', flag: '🇧🇩', name: 'Bangladesh' },
+    { dial: '+94',  flag: '🇱🇰', name: 'Sri Lanka' },
+    { dial: '+977', flag: '🇳🇵', name: 'Nepal' },
+    { dial: '+27',  flag: '🇿🇦', name: 'South Africa' },
+    { dial: '+55',  flag: '🇧🇷', name: 'Brazil' },
+    { dial: '+52',  flag: '🇲🇽', name: 'Mexico' },
+];
+
+function buildCountrySelect(selectEl) {
+    selectEl.innerHTML = COUNTRY_CODES.map(c =>
+        `<option value="${c.dial}">${c.flag} ${c.dial}</option>`
+    ).join('');
+    selectEl.value = '+91';
+}
+
+function getPhoneValue(ccSelectEl, numInputEl) {
+    const cc = ccSelectEl.value || '+91';
+    const num = numInputEl.value.trim();
+    return cc + ' ' + num;
+}
+
+// ============================================================
+
 function getCsrfToken() {
     // Prefer meta tag (always present), fall back to hidden input inside a form
     const meta = document.querySelector('meta[name="csrf-token"]');
@@ -129,33 +189,245 @@ function updateMultiSeatUI() {
 function openGroupBookingForm() {
     if (selectedSeats.size === 0) return;
     const seats = Array.from(selectedSeats).sort();
+    const lang = localStorage.getItem('lang') || 'en';
 
-    // Populate hidden seat inputs for group form
-    const container = document.getElementById('groupSeatInputs');
-    if (container) {
-        container.innerHTML = '';
-        seats.forEach(sid => {
-            const inp = document.createElement('input');
-            inp.type = 'hidden';
-            inp.name = 'seat_ids[]';
-            inp.value = sid;
-            container.appendChild(inp);
-        });
+    document.getElementById('groupBookingSeatBadge').textContent = seats.join(', ');
+
+    // Get boarding/dropping options from the seat map form (if they exist)
+    const boardingSelect = document.querySelector('#bookingForm select[name="boarding_point"]');
+    const droppingSelect = document.querySelector('#bookingForm select[name="dropping_point"]');
+    const boardingInput  = document.querySelector('#bookingForm input[name="boarding_point"]');
+    const droppingInput  = document.querySelector('#bookingForm input[name="dropping_point"]');
+
+    function makeBoardingField(id) {
+        if (boardingSelect) {
+            return `<select class="form-select" id="grp_boarding_${id}">` +
+                Array.from(boardingSelect.options).map(o => `<option value="${o.value}">${o.text}</option>`).join('') +
+                `</select>`;
+        }
+        return `<input type="text" class="form-input" id="grp_boarding_${id}" placeholder="${lang==='hi'?'जैसे दादर':'e.g. Dadar'}">`;
+    }
+    function makeDroppingField(id) {
+        if (droppingSelect) {
+            return `<select class="form-select" id="grp_dropping_${id}">` +
+                Array.from(droppingSelect.options).map(o => `<option value="${o.value}">${o.text}</option>`).join('') +
+                `</select>`;
+        }
+        return `<input type="text" class="form-input" id="grp_dropping_${id}" placeholder="${lang==='hi'?'जैसे शिवाजीनगर':'e.g. Shivajinagar'}">`;
     }
 
-    // Hide the single seat_id field — group uses seat_ids[] instead
-    const singleSeatInput = document.getElementById('formSeatId');
-    if (singleSeatInput) singleSeatInput.value = '';
+    let html = '';
 
-    document.getElementById('bookingSeatLabel').textContent = seats.join(', ');
-    document.getElementById('bookingForm').reset();
-    document.querySelector('input[name="fare"]').value = BASE_FARE;
-    document.querySelector('input[name="advance_paid"]').value = 0;
-    document.getElementById('genderWarning').classList.add('hidden');
-    window._adjacentGenders = [];
-    window._isGroupBooking = true;
+    // Per-seat passenger sections
+    seats.forEach((sid, i) => {
+        const sectionLabel = lang === 'hi' ? `सीट ${sid} — यात्री विवरण` : `Seat ${sid} — Passenger Details`;
+        html += `<div class="group-seat-section" data-seat="${sid}">
+            <div class="group-seat-section-header">${sectionLabel}</div>
+            <div class="form-group">
+                <label class="form-label">${lang==='hi'?'यात्री का नाम':'Passenger Name'}</label>
+                <input type="text" class="form-input" id="grp_name_${sid}" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">${lang==='hi'?'संपर्क':'Contact'}</label>
+                <div class="phone-input-row">
+                    <select class="country-code-select" id="grp_cc_${sid}"></select>
+                    <input type="text" class="form-input phone-number-input" id="grp_phone_${sid}" placeholder="98765 43210">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">${lang==='hi'?'लिंग':'Gender'}</label>
+                <div class="gender-choice">
+                    <label class="gender-btn">
+                        <input type="radio" name="grp_gender_${sid}" value="M" required>
+                        <span class="gender-dot male-dot"></span>
+                        <span>${lang==='hi'?'पुरुष':'Male'}</span>
+                    </label>
+                    <label class="gender-btn">
+                        <input type="radio" name="grp_gender_${sid}" value="F">
+                        <span class="gender-dot female-dot"></span>
+                        <span>${lang==='hi'?'महिला':'Female'}</span>
+                    </label>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">${lang==='hi'?'बोर्डिंग':'Boarding'}</label>
+                    ${makeBoardingField(sid)}
+                </div>
+                <div class="form-group">
+                    <label class="form-label">${lang==='hi'?'ड्रॉपिंग':'Dropping'}</label>
+                    ${makeDroppingField(sid)}
+                </div>
+            </div>
+        </div>`;
+    });
 
-    showPanel('booking');
+    // Shared fare fields
+    html += `<div class="group-seat-section" style="border-top: 2px solid var(--line); margin-top: 4px;">
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">${lang==='hi'?'किराया (₹) प्रति सीट':'Fare (₹) per seat'}</label>
+                <input type="number" class="form-input" id="grpFare" value="${BASE_FARE}" min="0" step="1">
+            </div>
+            <div class="form-group">
+                <label class="form-label">${lang==='hi'?'कुल अग्रिम (₹)':'Total Advance (₹)'}</label>
+                <input type="number" class="form-input" id="grpAdvance" value="0" min="0" step="1">
+            </div>
+        </div>
+        <div class="form-actions">
+            <button type="button" class="btn btn-ghost" onclick="closePanel()">${lang==='hi'?'रद्द करें':'Cancel'}</button>
+            <button type="button" class="btn btn-primary" onclick="submitGroupBookingJSON()">${lang==='hi'?'पुष्टि करें':'Confirm Booking'}</button>
+        </div>
+    </div>`;
+
+    document.getElementById('groupBookingBody').innerHTML = html;
+
+    // Build country code selects
+    seats.forEach(sid => {
+        const ccEl = document.getElementById(`grp_cc_${sid}`);
+        if (ccEl) buildCountrySelect(ccEl);
+    });
+
+    showPanel('group-booking');
+}
+
+// ============================================================
+// GROUP BOOKING SUBMIT
+// ============================================================
+
+function submitGroupBookingJSON() {
+    const seats = Array.from(selectedSeats).sort();
+    const lang = localStorage.getItem('lang') || 'en';
+    const voyageId = VOYAGE_ID;
+
+    if (!voyageId) {
+        alert(lang === 'hi' ? 'यात्रा आईडी नहीं मिली' : 'Voyage ID not found');
+        return;
+    }
+
+    // Collect per-seat passenger data
+    const passengers = [];
+    for (const sid of seats) {
+        const name = (document.getElementById(`grp_name_${sid}`)?.value || '').trim();
+        const ccEl = document.getElementById(`grp_cc_${sid}`);
+        const phoneEl = document.getElementById(`grp_phone_${sid}`);
+        const phone = getPhoneValue(ccEl, phoneEl).trim();
+        const genderEl = document.querySelector(`input[name="grp_gender_${sid}"]:checked`);
+        const gender = genderEl ? genderEl.value : '';
+
+        const boardingEl = document.getElementById(`grp_boarding_${sid}`);
+        const droppingEl = document.getElementById(`grp_dropping_${sid}`);
+        const boarding = (boardingEl?.value || '').trim();
+        const dropping = (droppingEl?.value || '').trim();
+
+        if (!name) {
+            alert(lang === 'hi' ? `सीट ${sid}: यात्री का नाम आवश्यक है` : `Seat ${sid}: passenger name is required`);
+            document.getElementById(`grp_name_${sid}`)?.focus();
+            return;
+        }
+        if (!phone || phone.trim() === (ccEl?.value || '+91')) {
+            alert(lang === 'hi' ? `सीट ${sid}: संपर्क नंबर आवश्यक है` : `Seat ${sid}: contact number is required`);
+            phoneEl?.focus();
+            return;
+        }
+        if (!gender) {
+            alert(lang === 'hi' ? `सीट ${sid}: लिंग चुनें` : `Seat ${sid}: please select gender`);
+            return;
+        }
+        if (!boarding) {
+            alert(lang === 'hi' ? `सीट ${sid}: बोर्डिंग पॉइंट आवश्यक है` : `Seat ${sid}: boarding point is required`);
+            boardingEl?.focus();
+            return;
+        }
+        if (!dropping) {
+            alert(lang === 'hi' ? `सीट ${sid}: ड्रॉपिंग पॉइंट आवश्यक है` : `Seat ${sid}: dropping point is required`);
+            droppingEl?.focus();
+            return;
+        }
+
+        passengers.push({ seat_id: sid, name, phone, gender, boarding_point: boarding, dropping_point: dropping });
+    }
+
+    const farePerSeat = parseFloat(document.getElementById('grpFare')?.value) || 0;
+    const advancePaid = parseFloat(document.getElementById('grpAdvance')?.value) || 0;
+
+    const payload = {
+        voyage_id: voyageId,
+        passengers,
+        boarding_point: passengers[0]?.boarding_point || '',
+        dropping_point: passengers[0]?.dropping_point || '',
+        fare_per_seat: farePerSeat,
+        advance_paid: advancePaid,
+    };
+
+    const submitBtn = document.querySelector('#panel-group-booking .btn-primary');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = lang === 'hi' ? 'हो रहा है…' : 'Booking…'; }
+
+    fetch('/staff/booking/create-group', {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: JSON.stringify(payload),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = lang === 'hi' ? 'पुष्टि करें' : 'Confirm Booking'; }
+        if (data.status === 'ok' || data.status === 'warning') {
+            renderGroupSuccess(data, farePerSeat, advancePaid, lang);
+        } else {
+            alert(data.error || (lang === 'hi' ? 'बुकिंग विफल हुई' : 'Booking failed'));
+        }
+    })
+    .catch(err => {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = lang === 'hi' ? 'पुष्टि करें' : 'Confirm Booking'; }
+        console.error('Group booking error:', err);
+        alert(lang === 'hi' ? 'नेटवर्क त्रुटि' : 'Network error, please try again');
+    });
+}
+
+function renderGroupSuccess(data, farePerSeat, advancePaid, lang) {
+    const bookings = data.bookings || [];
+    const groupCode = data.group_code || '';
+
+    let html = `<div style="text-align:center;padding:16px 0 8px;">
+        <div style="font-size:42px;margin-bottom:8px;">✅</div>
+        <div style="font-size:18px;font-weight:600;margin-bottom:4px;">${lang==='hi'?'बुकिंग पुष्टि हो गई':'Booking Confirmed'}</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:16px;">${lang==='hi'?'समूह कोड:':'Group Code:'} <b>${groupCode}</b></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">`;
+
+    bookings.forEach(b => {
+        const label = `${lang==='hi'?'सीट':'Seat'} ${b.seat_id} — ${b.name}`;
+        html += `<a href="/staff/booking/${b.id}/ticket" target="_blank"
+            style="display:flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid var(--line);border-radius:8px;text-decoration:none;color:var(--ink);font-size:13px;">
+            <span style="font-size:18px;">🎫</span>
+            <span style="flex:1;">${label}</span>
+            <span style="color:var(--marigold);font-weight:600;">${lang==='hi'?'डाउनलोड':'Download'} ↓</span>
+        </a>`;
+    });
+
+    if (bookings.length > 1 && groupCode) {
+        html += `<a href="/staff/booking/group/${groupCode}/tickets" target="_blank"
+            style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--ink);color:var(--cream);border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;margin-top:4px;">
+            <span style="font-size:18px;">📥</span>
+            <span style="flex:1;">${lang==='hi'?'सभी टिकट डाउनलोड करें':'Download All Tickets'}</span>
+        </a>`;
+    }
+
+    html += `</div>
+    <button class="btn btn-ghost" style="width:100%;" onclick="closePanel();resetMultiSeat();">
+        ${lang==='hi'?'बंद करें':'Close'}
+    </button>`;
+
+    document.getElementById('groupSuccessBody').innerHTML = html;
+    showPanel('group-success');
+
+    // Reset multi-seat selection
+    selectedSeats.forEach(sid => {
+        const seatEl = document.querySelector(`.seat[data-seat="${sid}"]`);
+        if (seatEl) seatEl.classList.remove('multi-selected');
+    });
+    selectedSeats.clear();
+    updateMultiSeatUI();
 }
 
 // ============================================================
@@ -1188,6 +1460,24 @@ document.addEventListener('click', (e) => {
 
 // Load on page load
 document.addEventListener('DOMContentLoaded', loadNotifications);
+
+// Single-seat phone country code initialization
+document.addEventListener('DOMContentLoaded', function () {
+    const singleCc = document.getElementById('singleCc');
+    const singlePhone = document.getElementById('singlePhone');
+    const singlePhoneCombined = document.getElementById('singlePhoneCombined');
+
+    if (singleCc) buildCountrySelect(singleCc);
+
+    // Intercept single-seat booking form submit to combine cc + number
+    const bookingForm = document.getElementById('bookingForm');
+    if (bookingForm && singleCc && singlePhone && singlePhoneCombined) {
+        bookingForm.addEventListener('submit', function (e) {
+            const combined = getPhoneValue(singleCc, singlePhone);
+            singlePhoneCombined.value = combined;
+        });
+    }
+});
 
 // ============================================================
 // STOP FILTER (driver view only)

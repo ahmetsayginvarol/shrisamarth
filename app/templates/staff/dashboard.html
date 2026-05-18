@@ -376,8 +376,12 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label" data-i18n="dash.contact">Contact</label>
-                        <input type="text" name="passenger_phone" class="form-input"
-                               placeholder="+91 98XXX XXXXX" required>
+                        <div class="phone-input-row">
+                            <select class="country-code-select" id="singleCc" aria-label="Country code"></select>
+                            <input type="text" id="singlePhone" class="form-input phone-number-input"
+                                   placeholder="98765 43210" required>
+                            <input type="hidden" name="passenger_phone" id="singlePhoneCombined">
+                        </div>
                     </div>
                     <div class="form-group">
                         <label class="form-label" data-i18n="dash.gender">Gender</label>
@@ -446,6 +450,24 @@
                             data-i18n="dash.confirm">Confirm Booking</button>
                 </div>
             </form>
+        </div>
+
+        {% if role != 'driver' %}
+        <!-- Multi-seat group booking panel — populated by JS -->
+        <div class="panel-view hidden" id="panel-group-booking">
+            <div class="panel-header">
+                <h3 class="serif" data-i18n="dash.newbooking">New Booking</h3>
+                <span class="seat-badge" id="groupBookingSeatBadge">—</span>
+            </div>
+            <div id="groupBookingBody"></div>
+        </div>
+
+        <!-- Group booking success panel -->
+        <div class="panel-view hidden" id="panel-group-success">
+            <div class="panel-header">
+                <h3 class="serif">✓ Booking Confirmed</h3>
+            </div>
+            <div id="groupSuccessBody"></div>
         </div>
         {% endif %}
 
