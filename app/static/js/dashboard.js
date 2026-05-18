@@ -1082,11 +1082,11 @@ function initManifestSwipe() {
             const isOpen = item.classList.contains('swipe-open');
             let offset;
             if (isOpen) {
-                // Already revealed: dx moves from fully-open position
+                // Already revealed: swipe right (dx > 0) closes it
                 offset = Math.min(0, Math.max(-SWIPE_ACTION_W, -SWIPE_ACTION_W + dx));
             } else {
-                // Swipe right (dx > 0) slides content left (negative offset)
-                offset = Math.max(-SWIPE_ACTION_W, dx > 0 ? -dx : 0);
+                // Swipe left (dx < 0) slides content left to reveal action
+                offset = Math.max(-SWIPE_ACTION_W, Math.min(0, dx));
             }
 
             inner.style.transition = 'none';
@@ -1105,11 +1105,11 @@ function initManifestSwipe() {
             inner.style.transform = '';
             action.style.transform = '';
 
-            if (!isOpen && dx > 55) {
+            if (!isOpen && dx < -55) {
                 if (_swipeOpenItem && _swipeOpenItem !== item) _closeSwipeItem(_swipeOpenItem);
                 item.classList.add('swipe-open');
                 _swipeOpenItem = item;
-            } else if (isOpen && dx < -40) {
+            } else if (isOpen && dx > 40) {
                 item.classList.remove('swipe-open');
                 if (_swipeOpenItem === item) _swipeOpenItem = null;
             }
