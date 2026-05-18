@@ -234,7 +234,21 @@ function openGroupBookingForm() {
                     <input type="text" class="form-input phone-number-input" id="grp_phone_${sid}" placeholder="98765 43210">
                 </div>
             </div>
-            <input type="hidden" name="grp_gender_${sid}" id="grp_gender_${sid}" value="M">
+            <div class="form-group">
+                <label class="form-label">${lang==='hi'?'लिंग':'Gender'}</label>
+                <div class="gender-choice">
+                    <label class="gender-btn">
+                        <input type="radio" name="grp_gender_${sid}" value="M" required>
+                        <span class="gender-dot male-dot"></span>
+                        <span>${lang==='hi'?'पुरुष':'Male'}</span>
+                    </label>
+                    <label class="gender-btn">
+                        <input type="radio" name="grp_gender_${sid}" value="F">
+                        <span class="gender-dot female-dot"></span>
+                        <span>${lang==='hi'?'महिला':'Female'}</span>
+                    </label>
+                </div>
+            </div>
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">${lang==='hi'?'बोर्डिंग':'Boarding'}</label>
@@ -298,7 +312,8 @@ function submitGroupBookingJSON() {
         const ccEl = document.getElementById(`grp_cc_${sid}`);
         const phoneEl = document.getElementById(`grp_phone_${sid}`);
         const phone = getPhoneValue(ccEl, phoneEl).trim();
-        const gender = (document.getElementById(`grp_gender_${sid}`)?.value) || 'M';
+        const genderEl = document.querySelector(`input[name="grp_gender_${sid}"]:checked`);
+        const gender = genderEl ? genderEl.value : '';
 
         const boardingEl = document.getElementById(`grp_boarding_${sid}`);
         const droppingEl = document.getElementById(`grp_dropping_${sid}`);
@@ -313,6 +328,10 @@ function submitGroupBookingJSON() {
         if (!phone || phone.trim() === (ccEl?.value || '+91')) {
             alert(lang === 'hi' ? `सीट ${sid}: संपर्क नंबर आवश्यक है` : `Seat ${sid}: contact number is required`);
             phoneEl?.focus();
+            return;
+        }
+        if (!gender) {
+            alert(lang === 'hi' ? `सीट ${sid}: लिंग चुनें` : `Seat ${sid}: please select gender`);
             return;
         }
         if (!boarding) {
@@ -344,18 +363,29 @@ function submitGroupBookingJSON() {
     const submitBtn = document.querySelector('#panel-group-booking .btn-primary');
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = lang === 'hi' ? 'हो रहा है…' : 'Booking…'; }
 
-    fetch('/staff/booking/create-group', {
-        method: 'POST',
-        headers: csrfHeaders(),
-        body: JSON.stringify(payload),
-    })
-    .then(r => r.json())
+    function postGroup(p) {
+        return fetch('/staff/booking/create-group', {
+            method: 'POST',
+            headers: csrfHeaders(),
+            body: JSON.stringify(p),
+        }).then(r => r.json());
+    }
+
+    postGroup(payload)
     .then(data => {
         if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = lang === 'hi' ? 'पुष्टि करें' : 'Confirm Booking'; }
         if (data.status === 'ok' || data.status === 'success' || data.status === 'warning') {
             renderGroupSuccess(data, farePerSeat, advancePaid, lang);
+        } else if (data.status === 'gender_conflict') {
+            if (confirm((data.message || 'Adjacent seat gender conflict.') + '\n\nBook anyway?')) {
+                payload.confirm_gender_conflict = 'yes';
+                postGroup(payload).then(d => {
+                    if (d.status === 'ok' || d.status === 'success') renderGroupSuccess(d, farePerSeat, advancePaid, lang);
+                    else alert(d.message || d.error || (lang === 'hi' ? 'बुकिंग विफल हुई' : 'Booking failed'));
+                });
+            }
         } else {
-            alert(data.error || (lang === 'hi' ? 'बुकिंग विफल हुई' : 'Booking failed'));
+            alert(data.message || data.error || (lang === 'hi' ? 'बुकिंग विफल हुई' : 'Booking failed'));
         }
     })
     .catch(err => {
@@ -550,28 +580,33 @@ if (bookingForm) {
 }
 
 async function submitSingleBooking(formData) {
-    try {
-        const res = await fetch('/staff/booking/create', {
-            method: 'POST',
-            body: formData,
-        });
-        const data = await res.json();
-
-        if (data.status === 'success') {
-            const seat = document.querySelector(`.seat[data-seat="${data.booking.seat_id}"]`);
+    function applySingleSuccess(data) {
+        const seat = document.querySelector(`.seat[data-seat="${data.booking.seat_id}"]`);
+        if (seat) {
             seat.classList.remove('active-single');
             seat.classList.add('booked-' + data.booking.gender.toLowerCase());
             seat.title = data.booking.name;
+        }
+        const oc = document.getElementById('occupancyCount');
+        if (oc) oc.textContent = parseInt(oc.textContent) + 1;
+        closePanel();
+        toast(`Seat ${data.booking.seat_id} booked for ${data.booking.name}`);
+    }
 
-            const oc = document.getElementById('occupancyCount');
-            if (oc) oc.textContent = parseInt(oc.textContent) + 1;
+    try {
+        const res = await fetch('/staff/booking/create', { method: 'POST', body: formData });
+        const data = await res.json();
 
-            closePanel();
-            toast(`Seat ${data.booking.seat_id} booked for ${data.booking.name}`);
-
+        if (data.status === 'success') {
+            applySingleSuccess(data);
         } else if (data.status === 'gender_conflict') {
-            alert(data.message);
-
+            if (confirm(data.message + '\n\nBook anyway?')) {
+                formData.set('confirm_gender_conflict', 'yes');
+                const res2 = await fetch('/staff/booking/create', { method: 'POST', body: formData });
+                const data2 = await res2.json();
+                if (data2.status === 'success') applySingleSuccess(data2);
+                else alert('Error: ' + (data2.message || JSON.stringify(data2.errors)));
+            }
         } else if (data.status === 'error') {
             alert('Error: ' + (data.message || JSON.stringify(data.errors)));
         }

@@ -364,6 +364,29 @@ def create_group_booking():
         if existing:
             return jsonify({'status': 'error', 'message': f'Seat {sid} was just booked. Please refresh.'}), 409
 
+    # Adjacent gender conflict check (staff: warn, not hard block)
+    confirm_conflict = (
+        data.get('confirm_gender_conflict') == 'yes' if request.is_json
+        else request.form.get('confirm_gender_conflict') == 'yes'
+    )
+    if not confirm_conflict:
+        seat_ids_set = set(seat_ids)
+        conflict_msgs = []
+        for p in passengers:
+            sid = str(p['seat_id']).strip()
+            pg = p.get('gender')
+            for adj_id in SEAT_ADJACENCY.get(sid, []):
+                if adj_id in seat_ids_set:
+                    continue  # adjacent group members — no conflict
+                adj = Booking.query.filter_by(voyage_id=voyage.id, seat_id=adj_id, status='confirmed').first()
+                if adj and adj.gender != pg:
+                    conflict_msgs.append(f"Seat {sid} ({p.get('name','')}) next to seat {adj_id} ({adj.passenger_name})")
+        if conflict_msgs:
+            return jsonify({
+                'status': 'gender_conflict',
+                'message': 'Adjacent seats have passengers of the opposite gender:\n' + '\n'.join(conflict_msgs),
+            }), 200
+
     is_group = len(seat_ids) > 1
     group_code = f"GRP-{voyage.departure_at.strftime('%Y%m%d')}-{secrets.token_hex(4).upper()}" if is_group else None
 
