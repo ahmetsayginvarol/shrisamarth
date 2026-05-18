@@ -809,6 +809,11 @@
     }
     content.innerHTML = dummy.innerHTML;
 
+    // Rewire × close buttons inside the sheet to close the sheet (not just the desktop panel)
+    content.querySelectorAll('.day-detail-close').forEach(function(btn) {
+      btn.onclick = window.closeBottomSheet;
+    });
+
     overlay.style.display = 'block';
     requestAnimationFrame(function() {
       sheet.classList.add('open');
@@ -821,6 +826,24 @@
     sheet.classList.remove('open');
     setTimeout(function() { overlay.style.display = 'none'; }, 320);
   };
+
+  // Handle tap + swipe-down on the sheet handle to close
+  (function() {
+    var handle = document.querySelector('.cal-sheet-handle');
+    if (!handle) return;
+    handle.style.cursor = 'pointer';
+    handle.addEventListener('click', window.closeBottomSheet);
+
+    var startY = 0;
+    var sheet = document.getElementById('calBottomSheet');
+    sheet.addEventListener('touchstart', function(e) {
+      startY = e.touches[0].clientY;
+    }, { passive: true });
+    sheet.addEventListener('touchend', function(e) {
+      var dy = e.changedTouches[0].clientY - startY;
+      if (dy > 60) window.closeBottomSheet();
+    }, { passive: true });
+  })();
 
   // Reuse desktop render logic for sheet
   function renderDetailPanel_noVoyages_into(dateStr, container) {
