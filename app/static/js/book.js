@@ -245,76 +245,47 @@ function renderGroupForm(seats) {
     document.getElementById('groupFormFareSummary').textContent =
         '₹ ' + (seats.length * BASE_FARE).toLocaleString('en-IN');
 
-    function makeBoardingField(sid) {
+    function makeBoardingField() {
         if (_boardingStops.length) {
-            return `<select class="form-select" id="cgrp_boarding_${sid}">` +
+            return `<select class="form-select" id="cgrp_boarding">` +
                 _boardingStops.map(s => `<option value="${s}">${s}</option>`).join('') +
                 `</select>`;
         }
-        return `<input type="text" class="form-input" id="cgrp_boarding_${sid}" placeholder="e.g. Dadar">`;
+        return `<input type="text" class="form-input" id="cgrp_boarding" placeholder="e.g. Dadar">`;
     }
-    function makeDroppingField(sid) {
+    function makeDroppingField() {
         if (_droppingStops.length) {
-            return `<select class="form-select" id="cgrp_dropping_${sid}">` +
+            return `<select class="form-select" id="cgrp_dropping">` +
                 _droppingStops.map(s => `<option value="${s}">${s}</option>`).join('') +
                 `</select>`;
         }
-        return `<input type="text" class="form-input" id="cgrp_dropping_${sid}" placeholder="e.g. Shivajinagar">`;
+        return `<input type="text" class="form-input" id="cgrp_dropping" placeholder="e.g. Shivajinagar">`;
     }
 
-    let html = '';
-    seats.forEach((sid, i) => {
-        const isPrimary = (i === 0);
-        const prefillName = isPrimary ? (_prefill.name || '') : '';
-        const prefillPhone = isPrimary ? (_prefill.phone || '') : '';
-        const prefillGenderM = isPrimary && _prefill.gender === 'M' ? 'checked' : '';
-        const prefillGenderF = isPrimary && _prefill.gender === 'F' ? 'checked' : '';
-
-        html += `<div class="group-seat-section">
-            <div class="group-seat-section-header">Seat ${sid} — Passenger Details</div>
-            <div class="form-group">
-                <label class="form-label">Passenger Name</label>
-                <input type="text" class="form-input" id="cgrp_name_${sid}" value="${prefillName}" placeholder="Full name" required>
+    const html = `<div class="group-seat-section">
+        <div class="form-group">
+            <label class="form-label">Passenger / Group Name</label>
+            <input type="text" class="form-input" id="cgrp_name" value="${_prefill.name || ''}" placeholder="Full name" required>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Phone</label>
+            <div class="phone-input-row">
+                <select class="country-code-select" id="cgrp_cc"></select>
+                <input type="text" class="form-input phone-number-input" id="cgrp_phone" placeholder="98765 43210" value="${_prefill.phone || ''}">
             </div>
-            <div class="form-group">
-                <label class="form-label">Phone</label>
-                <div class="phone-input-row">
-                    <select class="country-code-select" id="cgrp_cc_${sid}"></select>
-                    <input type="text" class="form-input phone-number-input" id="cgrp_phone_${sid}" placeholder="98765 43210" value="${prefillPhone}">
-                </div>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Gender</label>
-                <div class="gender-choice">
-                    <label class="gender-btn">
-                        <input type="radio" name="cgrp_gender_${sid}" value="M" ${prefillGenderM} required>
-                        <span class="gender-dot male-dot"></span>
-                        <span>Male</span>
-                    </label>
-                    <label class="gender-btn">
-                        <input type="radio" name="cgrp_gender_${sid}" value="F" ${prefillGenderF}>
-                        <span class="gender-dot female-dot"></span>
-                        <span>Female</span>
-                    </label>
-                </div>
-            </div>
-        </div>`;
-    });
-
-    // Shared boarding/dropping + email + submit
-    html += `<div class="group-seat-section" style="border-top: 2px solid var(--line); margin-top:4px;">
+        </div>
         <div class="form-row">
             <div class="form-group">
                 <label class="form-label">Boarding Point</label>
-                ${makeBoardingField('shared')}
+                ${makeBoardingField()}
             </div>
             <div class="form-group">
                 <label class="form-label">Dropping Point</label>
-                ${makeDroppingField('shared')}
+                ${makeDroppingField()}
             </div>
         </div>
         <div class="form-group">
-            <label class="form-label">Email (optional, for all)</label>
+            <label class="form-label">Email (optional)</label>
             <input type="email" class="form-input" id="cgrp_email" placeholder="you@email.com" value="${_prefill.email || ''}">
         </div>
         <div style="background:var(--cream-2); border:1px solid var(--line); border-radius:6px; padding:14px; margin-bottom:16px; font-size:13px; color:var(--muted);">
@@ -329,12 +300,7 @@ function renderGroupForm(seats) {
     </div>`;
 
     document.getElementById('groupFormBody').innerHTML = html;
-
-    // Initialize country selects
-    seats.forEach(sid => {
-        const ccEl = document.getElementById(`cgrp_cc_${sid}`);
-        if (ccEl) buildCountrySelect(ccEl);
-    });
+    buildCountrySelect(document.getElementById('cgrp_cc'));
 }
 
 function cancelForm() {
@@ -349,31 +315,23 @@ function cancelForm() {
 
 async function submitGroupCustomerBooking() {
     const seats = Array.from(selectedSeats).sort();
-    const passengers = [];
 
-    for (const sid of seats) {
-        const name = (document.getElementById(`cgrp_name_${sid}`)?.value || '').trim();
-        const ccEl = document.getElementById(`cgrp_cc_${sid}`);
-        const numEl = document.getElementById(`cgrp_phone_${sid}`);
-        const phone = getPhoneValue(ccEl, numEl).trim();
-        const genderEl = document.querySelector(`input[name="cgrp_gender_${sid}"]:checked`);
-        const gender = genderEl ? genderEl.value : '';
-
-        if (!name) { alert(`Seat ${sid}: passenger name is required`); document.getElementById(`cgrp_name_${sid}`)?.focus(); return; }
-        if (!numEl?.value.trim()) { alert(`Seat ${sid}: phone number is required`); numEl?.focus(); return; }
-        if (!gender) { alert(`Seat ${sid}: please select gender`); return; }
-
-        passengers.push({ seat_id: sid, name, phone, gender });
-    }
-
-    const boardingEl = document.getElementById('cgrp_boarding_shared');
-    const droppingEl = document.getElementById('cgrp_dropping_shared');
+    const name = (document.getElementById('cgrp_name')?.value || '').trim();
+    const ccEl = document.getElementById('cgrp_cc');
+    const numEl = document.getElementById('cgrp_phone');
+    const phone = getPhoneValue(ccEl, numEl).trim();
+    const boardingEl = document.getElementById('cgrp_boarding');
+    const droppingEl = document.getElementById('cgrp_dropping');
     const boarding = (boardingEl?.value || '').trim();
     const dropping = (droppingEl?.value || '').trim();
     const email = (document.getElementById('cgrp_email')?.value || '').trim() || null;
 
+    if (!name) { alert('Passenger / group name is required'); document.getElementById('cgrp_name')?.focus(); return; }
+    if (!numEl?.value.trim()) { alert('Phone number is required'); numEl?.focus(); return; }
     if (!boarding) { alert('Boarding point is required'); boardingEl?.focus(); return; }
     if (!dropping) { alert('Dropping point is required'); droppingEl?.focus(); return; }
+
+    const passengers = seats.map(sid => ({ seat_id: sid, name, phone, gender: null }));
 
     const submitBtn = document.querySelector('#panel-group-form button.btn-primary');
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Confirming…'; }
@@ -464,7 +422,7 @@ socket.on('seat_locked', (data) => {
     const sid = data.seat_id;
     if (myLockedSeats.has(sid)) return;  // it's ours
     const el = document.querySelector(`.seat[data-seat="${sid}"]`);
-    if (el && !el.classList.contains('booked-m') && !el.classList.contains('booked-f')) {
+    if (el && !el.classList.contains('booked-m') && !el.classList.contains('booked-f') && !el.classList.contains('booked-g')) {
         el.classList.add('locked');
         el.title = 'Being reserved by another passenger';
     }
@@ -485,7 +443,7 @@ socket.on('seat_booked', (data) => {
     const el = document.querySelector(`.seat[data-seat="${sid}"]`);
     if (el) {
         el.classList.remove('locked', 'active-single');
-        el.classList.add('booked-' + data.gender.toLowerCase());
+        el.classList.add('booked-' + (data.gender ? data.gender.toLowerCase() : 'g'));
         el.title = data.name;
 
         if (myLockedSeats.has(sid)) {

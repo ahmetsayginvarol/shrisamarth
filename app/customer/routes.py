@@ -194,29 +194,33 @@ def customer_book():
     if not voyage_id or not passengers:
         return jsonify({'status': 'error', 'message': 'Missing required fields.'}), 400
 
+    is_group = len(seat_ids) > 1
     for p in passengers:
-        if not p.get('name') or not p.get('phone') or p.get('gender') not in ('M', 'F'):
+        if not p.get('name') or not p.get('phone'):
             return jsonify({'status': 'error', 'message': f'Missing details for seat {p.get("seat_id", "?")}'}), 400
+        if not is_group and p.get('gender') not in ('M', 'F'):
+            return jsonify({'status': 'error', 'message': 'Gender is required'}), 400
 
     voyage = Voyage.query.get_or_404(voyage_id)
     fare = float(voyage.base_fare)
     dep_date = voyage.departure_at.strftime('%Y%m%d')
-    is_group = len(seat_ids) > 1
 
-    # Strict adjacent gender check for customers — hard block, no override
-    seat_ids_set = set(seat_ids)
-    for p in passengers:
-        sid = str(p['seat_id']).strip()
-        pg = p.get('gender')
-        for adj_id in SEAT_ADJACENCY.get(sid, []):
-            if adj_id in seat_ids_set:
-                continue  # booking together is fine
-            adj = Booking.query.filter_by(voyage_id=voyage.id, seat_id=adj_id, status='confirmed').first()
-            if adj and adj.gender != pg:
-                return jsonify({
-                    'status': 'error',
-                    'message': f'Seat {sid} is adjacent to seat {adj_id}, which is reserved by a passenger of the opposite gender. Please choose a different seat.'
-                }), 200
+    # Adjacent gender check only for single-seat bookings with gender
+    if not is_group:
+        seat_ids_set = set(seat_ids)
+        for p in passengers:
+            sid = str(p['seat_id']).strip()
+            pg = p.get('gender')
+            for adj_id in SEAT_ADJACENCY.get(sid, []):
+                if adj_id in seat_ids_set:
+                    continue
+                adj = Booking.query.filter_by(voyage_id=voyage.id, seat_id=adj_id, status='confirmed').first()
+                if adj and adj.gender and adj.gender != pg:
+                    return jsonify({
+                        'status': 'error',
+                        'message': f'Seat {sid} is adjacent to seat {adj_id}, which is reserved by a passenger of the opposite gender. Please choose a different seat.'
+                    }), 200
+
     group_code = f"GRP-{dep_date}-{secrets.token_hex(4).upper()}" if is_group else None
 
     bookings_created = []

@@ -60,7 +60,7 @@
                         {% set b = seat_map.get(seat_id) %}
                         <div class="seat
                             {% if seat_id in window_seats %}window{% endif %}
-                            {% if b %}booked-{{ b.gender|lower }}{% endif %}
+                            {% if b %}booked-{{ b.gender|lower if b.gender else 'g' }}{% endif %}
                             {% if seat_id in locked_other %}locked{% endif %}
                             {% if seat_id in locked_mine %}active-single{% endif %}"
                             data-seat="{{ seat_id }}"
@@ -77,7 +77,7 @@
                         {% set b = seat_map.get(seat_id) %}
                         <div class="seat
                             {% if seat_id in window_seats %}window{% endif %}
-                            {% if b %}booked-{{ b.gender|lower }}{% endif %}
+                            {% if b %}booked-{{ b.gender|lower if b.gender else 'g' }}{% endif %}
                             {% if seat_id in locked_other %}locked{% endif %}
                             {% if seat_id in locked_mine %}active-single{% endif %}"
                             data-seat="{{ seat_id }}"
