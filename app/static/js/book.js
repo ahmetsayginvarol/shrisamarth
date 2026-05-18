@@ -411,13 +411,18 @@ const bookingForm = document.getElementById('customerBookingForm');
 if (bookingForm) {
     bookingForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        // Combine country code + phone number before capturing FormData
+        const ccEl = document.getElementById('custSingleCc');
+        const numEl = document.getElementById('custSinglePhone');
+        const combined = document.getElementById('custSinglePhoneCombined');
+        if (ccEl && numEl && combined) combined.value = getPhoneValue(ccEl, numEl);
+
         const submitBtn = bookingForm.querySelector('button[type="submit"]');
         submitBtn.disabled = true;
         submitBtn.textContent = 'Confirming…';
 
         try {
             const formData = new FormData(bookingForm);
-            // Do NOT set Content-Type header — browser sets multipart boundary automatically for FormData
             const res = await fetch('/api/customer/book', {
                 method: 'POST',
                 body: formData,
@@ -446,15 +451,6 @@ if (bookingForm) {
 document.addEventListener('DOMContentLoaded', function() {
     const ccEl = document.getElementById('custSingleCc');
     if (ccEl) buildCountrySelect(ccEl);
-
-    const bookingForm = document.getElementById('customerBookingForm');
-    const combined = document.getElementById('custSinglePhoneCombined');
-    if (bookingForm && ccEl && combined) {
-        bookingForm.addEventListener('submit', function() {
-            const numEl = document.getElementById('custSinglePhone');
-            combined.value = getPhoneValue(ccEl, numEl);
-        });
-    }
 });
 
 // ============================================================
