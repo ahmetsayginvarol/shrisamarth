@@ -3,7 +3,7 @@ services:
     name: shrisamarth
     runtime: python
     plan: free
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt && flask db upgrade
     startCommand: gunicorn -w 1 --threads 100 run:app
     envVars:
       - key: SECRET_KEY

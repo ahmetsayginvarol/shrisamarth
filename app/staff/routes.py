@@ -386,7 +386,7 @@ def create_group_booking():
                 advance_paid=per_seat_advance,
                 balance_due=per_seat_balance,
                 booking_code=code,
-                group_booking_code=group_code,  # None for single-seat bookings
+                group_booking_code=group_code,
                 created_by_id=current_user.id,
                 status='confirmed',
             )
