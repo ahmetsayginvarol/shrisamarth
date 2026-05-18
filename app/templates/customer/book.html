@@ -2,7 +2,10 @@
 {% block title %}Book Seats · {{ voyage.origin }} → {{ voyage.destination }} · SHRISAMARTH{% endblock %}
 
 {% block customer_content %}
-<div id="bookApp" data-voyage-id="{{ voyage.id }}" data-base-fare="{{ voyage.base_fare }}">
+<div id="bookApp" data-voyage-id="{{ voyage.id }}" data-base-fare="{{ voyage.base_fare }}"
+    data-prefill='{{ prefill | tojson }}'
+    data-boarding-stops='{{ boarding_stops | map(attribute="stop_name") | list | tojson }}'
+    data-dropping-stops='{{ dropping_stops | map(attribute="stop_name") | list | tojson }}'>
 
     <div class="c-book-header">
         <div class="c-book-route serif">{{ voyage.origin }} → {{ voyage.destination }}</div>
@@ -146,8 +149,11 @@
 
                     <div class="form-group">
                         <label class="form-label">Phone Number</label>
-                        <input type="tel" name="passenger_phone" class="form-input" placeholder="+91 98XXX XXXXX"
-                               value="{{ prefill.get('phone', '') }}" required>
+                        <div class="phone-input-row">
+                            <select class="country-code-select" id="custSingleCc" aria-label="Country code"></select>
+                            <input type="text" id="custSinglePhone" class="form-input phone-number-input" placeholder="98765 43210" required>
+                            <input type="hidden" name="passenger_phone" id="custSinglePhoneCombined">
+                        </div>
                     </div>
 
                     <div class="form-group">
@@ -212,6 +218,21 @@
                         </button>
                     </div>
                 </form>
+            </div>
+
+            <!-- State 4: Multi-seat per-passenger form -->
+            <div id="panel-group-form" class="hidden">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                    <div>
+                        <div class="form-label">Seats</div>
+                        <div id="groupFormSeatSummary" class="mono" style="font-weight:600;"></div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div class="form-label">Total Fare</div>
+                        <div id="groupFormFareSummary" style="font-weight:600; color:var(--marigold);"></div>
+                    </div>
+                </div>
+                <div id="groupFormBody"></div>
             </div>
 
         </aside>

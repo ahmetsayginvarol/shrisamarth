@@ -169,133 +169,94 @@ def book(voyage_id):
 
 @customer_bp.route('/api/customer/book', methods=['POST'])
 def customer_book():
-    voyage_id = request.form.get('voyage_id', type=int)
-    seat_ids_raw = request.form.getlist('seat_ids[]')
-    passenger_name = (request.form.get('passenger_name') or '').strip()
-    passenger_phone = (request.form.get('passenger_phone') or '').strip()
-    passenger_email = (request.form.get('passenger_email') or '').strip() or None
-    gender = request.form.get('gender', '')
-    boarding_point = request.form.get('boarding_point', '')
-    dropping_point = request.form.get('dropping_point', '')
+    # --- Parse request ---
+    if request.is_json:
+        data = request.get_json()
+        voyage_id = data.get('voyage_id')
+        passengers = data.get('passengers', [])  # [{seat_id, name, phone, gender}, ...]
+        boarding_point = (data.get('boarding_point') or '').strip()
+        dropping_point = (data.get('dropping_point') or '').strip()
+        passenger_email = (data.get('email') or '').strip() or None
+        seat_ids = [str(p['seat_id']).strip() for p in passengers]
+    else:
+        voyage_id = request.form.get('voyage_id', type=int)
+        seat_ids_raw = request.form.getlist('seat_ids[]')
+        seat_ids = [s.strip() for s in seat_ids_raw if s.strip()]
+        passenger_name = (request.form.get('passenger_name') or '').strip()
+        passenger_phone = (request.form.get('passenger_phone') or '').strip()
+        passenger_email = (request.form.get('passenger_email') or '').strip() or None
+        gender = request.form.get('gender', '')
+        boarding_point = request.form.get('boarding_point', '')
+        dropping_point = request.form.get('dropping_point', '')
+        passengers = [{'seat_id': s, 'name': passenger_name, 'phone': passenger_phone, 'gender': gender} for s in seat_ids]
 
-    seat_ids = [s.strip() for s in seat_ids_raw if s.strip()]
-
-    if not voyage_id or not seat_ids or not passenger_name or not passenger_phone or gender not in ('M', 'F'):
+    # --- Validate ---
+    if not voyage_id or not passengers:
         return jsonify({'status': 'error', 'message': 'Missing required fields.'}), 400
+
+    for p in passengers:
+        if not p.get('name') or not p.get('phone') or p.get('gender') not in ('M', 'F'):
+            return jsonify({'status': 'error', 'message': f'Missing details for seat {p.get("seat_id", "?")}'}), 400
 
     voyage = Voyage.query.get_or_404(voyage_id)
     fare = float(voyage.base_fare)
     dep_date = voyage.departure_at.strftime('%Y%m%d')
-
     is_group = len(seat_ids) > 1
+    group_code = f"GRP-{dep_date}-{secrets.token_hex(4).upper()}" if is_group else None
 
-    if is_group:
-        group_code = f"GRP-{dep_date}-{secrets.token_hex(4).upper()}"
-        bookings_created = []
-        try:
-            for sid in seat_ids:
-                code = f"SHRI-{dep_date}-{sid}-{secrets.token_hex(3).upper()}"
-                b = Booking(
-                    voyage_id=voyage.id,
-                    seat_id=sid,
-                    passenger_name=passenger_name,
-                    passenger_phone=passenger_phone,
-                    passenger_email=passenger_email,
-                    gender=gender,
-                    boarding_point=boarding_point,
-                    dropping_point=dropping_point,
-                    fare=fare,
-                    advance_paid=0,
-                    balance_due=fare,
-                    booking_code=code,
-                    group_booking_code=group_code,
-                    created_by_id=current_user.id if current_user.is_authenticated else None,
-                    status='confirmed',
-                )
-                db.session.add(b)
-                bookings_created.append(b)
-            db.session.commit()
-        except IntegrityError:
-            db.session.rollback()
-            return jsonify({'status': 'error', 'message': 'One or more seats were just booked.'}), 409
-
-        cust_sid = session.get('cust_sid')
-        for b in bookings_created:
-            if cust_sid:
-                SeatLock.query.filter_by(
-                    voyage_id=voyage.id, seat_id=b.seat_id, session_id=cust_sid
-                ).delete()
-            socketio.emit('seat_booked', {
-                'voyage_id': voyage.id,
-                'seat_id': b.seat_id,
-                'gender': b.gender,
-                'name': b.passenger_name,
-            })
-            log_activity('booking_created',
-                         f'Customer group booking {group_code}: seat {b.seat_id} for {passenger_name}',
-                         'booking', b.id)
-        db.session.commit()
-        notify_staff(
-            title='New Customer Booking',
-            message=f"{passenger_name} — {len(seat_ids)} seats ({', '.join(seat_ids)}) — {voyage.origin}→{voyage.destination} {voyage.departure_at.strftime('%d %b %Y')}",
-            link=url_for('staff.dashboard', voyage_id=voyage.id, date=voyage.departure_at.strftime('%Y-%m-%d')),
-            booking_id=bookings_created[0].id if bookings_created else None,
-            passenger_phone=passenger_phone,
-        )
-
-        return jsonify({'status': 'success', 'code': group_code, 'is_group': True})
-
-    else:
-        sid = seat_ids[0]
-        code = f"SHRI-{dep_date}-{sid}-{secrets.token_hex(3).upper()}"
-        b = Booking(
-            voyage_id=voyage.id,
-            seat_id=sid,
-            passenger_name=passenger_name,
-            passenger_phone=passenger_phone,
-            passenger_email=passenger_email,
-            gender=gender,
-            boarding_point=boarding_point,
-            dropping_point=dropping_point,
-            fare=fare,
-            advance_paid=0,
-            balance_due=fare,
-            booking_code=code,
-            created_by_id=current_user.id if current_user.is_authenticated else None,
-            status='confirmed',
-        )
-        try:
+    bookings_created = []
+    try:
+        for p in passengers:
+            sid = str(p['seat_id']).strip()
+            code = f"SHRI-{dep_date}-{sid}-{secrets.token_hex(3).upper()}"
+            b = Booking(
+                voyage_id=voyage.id,
+                seat_id=sid,
+                passenger_name=p['name'].strip(),
+                passenger_phone=p['phone'].strip(),
+                passenger_email=passenger_email,
+                gender=p['gender'],
+                boarding_point=boarding_point,
+                dropping_point=dropping_point,
+                fare=fare,
+                advance_paid=0,
+                balance_due=fare,
+                booking_code=code,
+                group_booking_code=group_code,
+                created_by_id=current_user.id if current_user.is_authenticated else None,
+                status='confirmed',
+            )
             db.session.add(b)
-            db.session.commit()
-        except IntegrityError:
-            db.session.rollback()
-            return jsonify({'status': 'error', 'message': 'This seat was just booked.'}), 409
+            bookings_created.append(b)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': 'One or more seats were just booked.'}), 409
 
-        cust_sid = session.get('cust_sid')
+    cust_sid = session.get('cust_sid')
+    for b in bookings_created:
         if cust_sid:
-            SeatLock.query.filter_by(
-                voyage_id=voyage.id, seat_id=sid, session_id=cust_sid
-            ).delete()
-            db.session.commit()
-
+            SeatLock.query.filter_by(voyage_id=voyage.id, seat_id=b.seat_id, session_id=cust_sid).delete()
         socketio.emit('seat_booked', {
             'voyage_id': voyage.id,
             'seat_id': b.seat_id,
             'gender': b.gender,
             'name': b.passenger_name,
         })
-        log_activity('booking_created',
-                     f'Customer booking {code}: seat {sid} for {passenger_name}',
-                     'booking', b.id)
-        notify_staff(
-            title='New Customer Booking',
-            message=f"{passenger_name} — Seat {sid} — {voyage.origin}→{voyage.destination} {voyage.departure_at.strftime('%d %b %Y')}",
-            link=url_for('staff.dashboard', voyage_id=voyage.id, date=voyage.departure_at.strftime('%Y-%m-%d')),
-            booking_id=b.id,
-            passenger_phone=passenger_phone,
-        )
+        action_desc = f'Customer group booking {group_code}: seat {b.seat_id} for {b.passenger_name}' if is_group else f'Customer booking {b.booking_code}: seat {b.seat_id} for {b.passenger_name}'
+        log_activity('booking_created', action_desc, 'booking', b.id)
+    db.session.commit()
 
-        return jsonify({'status': 'success', 'code': code, 'is_group': False})
+    primary = bookings_created[0]
+    notify_staff(
+        title='New Customer Booking',
+        message=f"{primary.passenger_name}{'+ others' if is_group else ''} — {len(seat_ids)} seat{'s' if is_group else ''} ({', '.join(seat_ids)}) — {voyage.origin}→{voyage.destination} {voyage.departure_at.strftime('%d %b %Y')}",
+        link=url_for('staff.dashboard', voyage_id=voyage.id, date=voyage.departure_at.strftime('%Y-%m-%d')),
+        booking_id=primary.id,
+        passenger_phone=primary.passenger_phone,
+    )
+
+    return jsonify({'status': 'success', 'code': group_code if is_group else bookings_created[0].booking_code, 'is_group': is_group})
 
 
 # ============================================================

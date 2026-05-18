@@ -60,6 +60,7 @@
                 <thead>
                     <tr>
                         <th>Seat</th>
+                        <th>Passenger</th>
                         <th>Type</th>
                         <th>Fare</th>
                         <th>Status</th>
@@ -69,6 +70,7 @@
                     {% for b in bookings %}
                     <tr>
                         <td class="mono" style="font-weight:600;">{{ b.seat_id }}</td>
+                        <td>{{ b.passenger_name }}</td>
                         <td>{{ 'Window' if b.is_window else 'Aisle' }}</td>
                         <td>₹ {{ b.fare }}</td>
                         <td><span class="badge badge-scheduled">Pay on board</span></td>
@@ -104,10 +106,18 @@
     <!-- Action Buttons -->
     <div style="display:flex; gap:12px; flex-wrap:wrap; justify-content:center; margin-bottom:20px;">
         {% if is_group %}
+        <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px; width:100%;">
+            {% for b in bookings %}
+            <a href="{{ url_for('customer.download_ticket', booking_id=b.id) }}"
+               class="btn btn-ghost" style="display:flex; align-items:center; gap:8px; justify-content:center;">
+                🎫 E-Ticket: {{ b.passenger_name }} (Seat {{ b.seat_id }})
+            </a>
+            {% endfor %}
+        </div>
         <a href="{{ url_for('customer.download_group_ticket', group_code=code) }}"
            class="btn btn-ghost"
            style="display:flex; align-items:center; gap:8px;">
-            ↓ Download E-Ticket (Group)
+            ↓ Download All Tickets
         </a>
         {% else %}
         <a href="{{ url_for('customer.download_ticket', booking_id=booking.id) }}"

@@ -2,10 +2,49 @@
 // SHRISAMARTH Customer Booking — seat selection + real-time
 // ============================================================
 
+const COUNTRY_CODES = [
+    { dial: '+91', flag: '🇮🇳', name: 'India' },
+    { dial: '+1',  flag: '🇺🇸', name: 'USA / Canada' },
+    { dial: '+44', flag: '🇬🇧', name: 'UK' },
+    { dial: '+971', flag: '🇦🇪', name: 'UAE' },
+    { dial: '+966', flag: '🇸🇦', name: 'Saudi Arabia' },
+    { dial: '+974', flag: '🇶🇦', name: 'Qatar' },
+    { dial: '+965', flag: '🇰🇼', name: 'Kuwait' },
+    { dial: '+973', flag: '🇧🇭', name: 'Bahrain' },
+    { dial: '+968', flag: '🇴🇲', name: 'Oman' },
+    { dial: '+60',  flag: '🇲🇾', name: 'Malaysia' },
+    { dial: '+65',  flag: '🇸🇬', name: 'Singapore' },
+    { dial: '+61',  flag: '🇦🇺', name: 'Australia' },
+    { dial: '+64',  flag: '🇳🇿', name: 'New Zealand' },
+    { dial: '+49',  flag: '🇩🇪', name: 'Germany' },
+    { dial: '+33',  flag: '🇫🇷', name: 'France' },
+    { dial: '+39',  flag: '🇮🇹', name: 'Italy' },
+    { dial: '+34',  flag: '🇪🇸', name: 'Spain' },
+    { dial: '+92',  flag: '🇵🇰', name: 'Pakistan' },
+    { dial: '+880', flag: '🇧🇩', name: 'Bangladesh' },
+    { dial: '+94',  flag: '🇱🇰', name: 'Sri Lanka' },
+    { dial: '+977', flag: '🇳🇵', name: 'Nepal' },
+];
+
+function buildCountrySelect(selectEl) {
+    selectEl.innerHTML = COUNTRY_CODES.map(c =>
+        `<option value="${c.dial}">${c.flag} ${c.dial}</option>`
+    ).join('');
+    selectEl.value = '+91';
+}
+
+function getPhoneValue(ccEl, numEl) {
+    return (ccEl.value || '+91') + ' ' + numEl.value.trim();
+}
+
 const bookApp = document.getElementById('bookApp');
 const VOYAGE_ID = parseInt(bookApp.dataset.voyageId);
 const BASE_FARE = parseFloat(bookApp.dataset.baseFare);
 const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').content;
+
+const _prefill = JSON.parse(bookApp.dataset.prefill || '{}');
+const _boardingStops = JSON.parse(bookApp.dataset.boardingStops || '[]');
+const _droppingStops = JSON.parse(bookApp.dataset.droppingStops || '[]');
 
 let myLockedSeats = new Set();  // seat IDs locked by this session
 let selectedSeats = new Set();  // seats selected for booking (subset of myLockedSeats)
@@ -147,11 +186,13 @@ function updateSelectionUI() {
     const panelEmpty = document.getElementById('panel-empty');
     const panelSelected = document.getElementById('panel-selected');
     const panelForm = document.getElementById('panel-form');
+    const panelGroupForm = document.getElementById('panel-group-form');
 
     if (count > 0) {
         panelEmpty.classList.add('hidden');
         panelSelected.classList.remove('hidden');
         panelForm.classList.add('hidden');
+        panelGroupForm.classList.add('hidden');
 
         document.getElementById('selectedSeatsList').textContent =
             Array.from(selectedSeats).sort().join(', ');
@@ -165,38 +206,205 @@ function updateSelectionUI() {
         panelEmpty.classList.remove('hidden');
         panelSelected.classList.add('hidden');
         panelForm.classList.add('hidden');
+        panelGroupForm.classList.add('hidden');
     }
 }
 
 function showBookingForm() {
     document.getElementById('panel-empty').classList.add('hidden');
     document.getElementById('panel-selected').classList.add('hidden');
+    document.getElementById('panel-group-form').classList.add('hidden');
     scrollToPanel();
-    document.getElementById('panel-form').classList.remove('hidden');
 
-    // Inject seat_ids hidden inputs
-    const container = document.getElementById('seatInputsContainer');
-    container.innerHTML = '';
-    Array.from(selectedSeats).sort().forEach(sid => {
+    const seats = Array.from(selectedSeats).sort();
+
+    if (seats.length === 1) {
+        // Single seat: show static form
+        document.getElementById('panel-form').classList.remove('hidden');
+        // Inject seat_id
+        const container = document.getElementById('seatInputsContainer');
+        container.innerHTML = '';
         const inp = document.createElement('input');
-        inp.type = 'hidden';
-        inp.name = 'seat_ids[]';
-        inp.value = sid;
+        inp.type = 'hidden'; inp.name = 'seat_ids[]'; inp.value = seats[0];
         container.appendChild(inp);
+        document.getElementById('formSeatSummary').textContent = seats[0];
+        document.getElementById('formFareSummary').textContent = '₹ ' + BASE_FARE.toLocaleString('en-IN');
+        // Prefill phone number input
+        const custPhone = document.getElementById('custSinglePhone');
+        if (custPhone && _prefill.phone) custPhone.value = _prefill.phone;
+    } else {
+        // Multi-seat: show per-passenger form
+        document.getElementById('panel-form').classList.add('hidden');
+        renderGroupForm(seats);
+        document.getElementById('panel-group-form').classList.remove('hidden');
+    }
+}
+
+function renderGroupForm(seats) {
+    document.getElementById('groupFormSeatSummary').textContent = seats.join(', ');
+    document.getElementById('groupFormFareSummary').textContent =
+        '₹ ' + (seats.length * BASE_FARE).toLocaleString('en-IN');
+
+    function makeBoardingField(sid) {
+        if (_boardingStops.length) {
+            return `<select class="form-select" id="cgrp_boarding_${sid}">` +
+                _boardingStops.map(s => `<option value="${s}">${s}</option>`).join('') +
+                `</select>`;
+        }
+        return `<input type="text" class="form-input" id="cgrp_boarding_${sid}" placeholder="e.g. Dadar">`;
+    }
+    function makeDroppingField(sid) {
+        if (_droppingStops.length) {
+            return `<select class="form-select" id="cgrp_dropping_${sid}">` +
+                _droppingStops.map(s => `<option value="${s}">${s}</option>`).join('') +
+                `</select>`;
+        }
+        return `<input type="text" class="form-input" id="cgrp_dropping_${sid}" placeholder="e.g. Shivajinagar">`;
+    }
+
+    let html = '';
+    seats.forEach((sid, i) => {
+        const isPrimary = (i === 0);
+        const prefillName = isPrimary ? (_prefill.name || '') : '';
+        const prefillPhone = isPrimary ? (_prefill.phone || '') : '';
+        const prefillGenderM = isPrimary && _prefill.gender === 'M' ? 'checked' : '';
+        const prefillGenderF = isPrimary && _prefill.gender === 'F' ? 'checked' : '';
+
+        html += `<div class="group-seat-section">
+            <div class="group-seat-section-header">Seat ${sid} — Passenger Details</div>
+            <div class="form-group">
+                <label class="form-label">Passenger Name</label>
+                <input type="text" class="form-input" id="cgrp_name_${sid}" value="${prefillName}" placeholder="Full name" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Phone</label>
+                <div class="phone-input-row">
+                    <select class="country-code-select" id="cgrp_cc_${sid}"></select>
+                    <input type="text" class="form-input phone-number-input" id="cgrp_phone_${sid}" placeholder="98765 43210" value="${prefillPhone}">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Gender</label>
+                <div class="gender-choice">
+                    <label class="gender-btn">
+                        <input type="radio" name="cgrp_gender_${sid}" value="M" ${prefillGenderM} required>
+                        <span class="gender-dot male-dot"></span>
+                        <span>Male</span>
+                    </label>
+                    <label class="gender-btn">
+                        <input type="radio" name="cgrp_gender_${sid}" value="F" ${prefillGenderF}>
+                        <span class="gender-dot female-dot"></span>
+                        <span>Female</span>
+                    </label>
+                </div>
+            </div>
+        </div>`;
     });
 
-    document.getElementById('formSeatSummary').textContent =
-        Array.from(selectedSeats).sort().join(', ');
-    document.getElementById('formFareSummary').textContent =
-        '₹ ' + (selectedSeats.size * BASE_FARE).toLocaleString('en-IN');
+    // Shared boarding/dropping + email + submit
+    html += `<div class="group-seat-section" style="border-top: 2px solid var(--line); margin-top:4px;">
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Boarding Point</label>
+                ${makeBoardingField('shared')}
+            </div>
+            <div class="form-group">
+                <label class="form-label">Dropping Point</label>
+                ${makeDroppingField('shared')}
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Email (optional, for all)</label>
+            <input type="email" class="form-input" id="cgrp_email" placeholder="you@email.com" value="${_prefill.email || ''}">
+        </div>
+        <div style="background:var(--cream-2); border:1px solid var(--line); border-radius:6px; padding:14px; margin-bottom:16px; font-size:13px; color:var(--muted);">
+            Balance due on boarding — no advance payment required online.
+        </div>
+        <div class="form-actions" style="justify-content:space-between;">
+            <button type="button" class="btn btn-ghost" onclick="cancelForm()">← Back</button>
+            <button type="button" class="btn btn-primary" style="width:auto; flex:1; margin-left:10px;" onclick="submitGroupCustomerBooking()">
+                Confirm Booking
+            </button>
+        </div>
+    </div>`;
+
+    document.getElementById('groupFormBody').innerHTML = html;
+
+    // Initialize country selects
+    seats.forEach(sid => {
+        const ccEl = document.getElementById(`cgrp_cc_${sid}`);
+        if (ccEl) buildCountrySelect(ccEl);
+    });
 }
 
 function cancelForm() {
+    document.getElementById('panel-form').classList.add('hidden');
+    document.getElementById('panel-group-form').classList.add('hidden');
     updateSelectionUI();
 }
 
 // ============================================================
-// BOOKING FORM SUBMIT
+// GROUP BOOKING SUBMIT
+// ============================================================
+
+async function submitGroupCustomerBooking() {
+    const seats = Array.from(selectedSeats).sort();
+    const passengers = [];
+
+    for (const sid of seats) {
+        const name = (document.getElementById(`cgrp_name_${sid}`)?.value || '').trim();
+        const ccEl = document.getElementById(`cgrp_cc_${sid}`);
+        const numEl = document.getElementById(`cgrp_phone_${sid}`);
+        const phone = getPhoneValue(ccEl, numEl).trim();
+        const genderEl = document.querySelector(`input[name="cgrp_gender_${sid}"]:checked`);
+        const gender = genderEl ? genderEl.value : '';
+
+        if (!name) { alert(`Seat ${sid}: passenger name is required`); document.getElementById(`cgrp_name_${sid}`)?.focus(); return; }
+        if (!numEl?.value.trim()) { alert(`Seat ${sid}: phone number is required`); numEl?.focus(); return; }
+        if (!gender) { alert(`Seat ${sid}: please select gender`); return; }
+
+        passengers.push({ seat_id: sid, name, phone, gender });
+    }
+
+    const boardingEl = document.getElementById('cgrp_boarding_shared');
+    const droppingEl = document.getElementById('cgrp_dropping_shared');
+    const boarding = (boardingEl?.value || '').trim();
+    const dropping = (droppingEl?.value || '').trim();
+    const email = (document.getElementById('cgrp_email')?.value || '').trim() || null;
+
+    if (!boarding) { alert('Boarding point is required'); boardingEl?.focus(); return; }
+    if (!dropping) { alert('Dropping point is required'); droppingEl?.focus(); return; }
+
+    const submitBtn = document.querySelector('#panel-group-form button.btn-primary');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Confirming…'; }
+
+    try {
+        const res = await fetch('/api/customer/book', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+            body: JSON.stringify({
+                voyage_id: VOYAGE_ID,
+                passengers,
+                boarding_point: boarding,
+                dropping_point: dropping,
+                email,
+            }),
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+            window.location.href = `/booking/confirmation/${data.code}`;
+        } else {
+            alert('Booking failed: ' + (data.message || 'Unknown error'));
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Confirm Booking'; }
+        }
+    } catch (err) {
+        alert('Booking failed. Please try again.');
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Confirm Booking'; }
+    }
+}
+
+// ============================================================
+// BOOKING FORM SUBMIT (single-seat)
 // ============================================================
 
 const bookingForm = document.getElementById('customerBookingForm');
@@ -230,6 +438,24 @@ if (bookingForm) {
         }
     });
 }
+
+// ============================================================
+// DOM CONTENT LOADED — initialize single-seat CC dropdown
+// ============================================================
+
+document.addEventListener('DOMContentLoaded', function() {
+    const ccEl = document.getElementById('custSingleCc');
+    if (ccEl) buildCountrySelect(ccEl);
+
+    const bookingForm = document.getElementById('customerBookingForm');
+    const combined = document.getElementById('custSinglePhoneCombined');
+    if (bookingForm && ccEl && combined) {
+        bookingForm.addEventListener('submit', function() {
+            const numEl = document.getElementById('custSinglePhone');
+            combined.value = getPhoneValue(ccEl, numEl);
+        });
+    }
+});
 
 // ============================================================
 // SOCKET.IO REAL-TIME UPDATES
