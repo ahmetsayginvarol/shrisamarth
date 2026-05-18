@@ -129,10 +129,17 @@
             <div class="meta-value">₹ {{ voyage.base_fare }}</div>
         </div>
         <div class="meta-item">
-            <a href="{{ url_for('staff.download_manifest', voyage_id=voyage.id) }}"
-               class="btn btn-ghost" style="margin-top: 14px; font-size: 12px;">
+            <a href="{{ url_for('staff.download_manifest', voyage_id=voyage.id) }}?lang={{ request.cookies.get('lang', 'en') }}"
+               class="btn btn-ghost" style="margin-top: 14px; font-size: 12px;"
+               id="manifestLink">
                 ↓ Print Manifest
             </a>
+            <script>
+            (function(){
+              var l = document.getElementById('manifestLink');
+              if(l){ var lang = localStorage.getItem('lang') || 'en'; l.href = l.href.replace(/lang=[^&]*/, 'lang=' + lang); }
+            })();
+            </script>
         </div>
         {% endif %}
     </div>

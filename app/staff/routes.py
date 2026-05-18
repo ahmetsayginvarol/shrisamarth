@@ -639,7 +639,6 @@ def mark_all_notifications_read():
 def download_manifest(voyage_id):
     voyage = Voyage.query.get_or_404(voyage_id)
 
-    # Load relationships
     _ = voyage.bus
     _ = voyage.driver
 
@@ -647,7 +646,11 @@ def download_manifest(voyage_id):
         voyage_id=voyage.id, status='confirmed'
     ).all()
 
-    pdf = generate_manifest(voyage, bookings)
+    lang = request.args.get('lang', 'en')
+    if lang not in ('en', 'hi'):
+        lang = 'en'
+
+    pdf = generate_manifest(voyage, bookings, lang=lang)
 
     filename = f"manifest-{voyage.origin}-{voyage.destination}-{voyage.departure_at.strftime('%Y%m%d')}.pdf"
     return send_file(

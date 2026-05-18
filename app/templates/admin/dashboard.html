@@ -639,7 +639,7 @@
       // Actions
       html += '<div class="voyage-day-actions">';
       html += '<a href="/staff/dashboard?voyage_id=' + v.id + '">' + t('cal.view_seatmap') + '</a>';
-      html += '<a href="/staff/manifest/' + v.id + '/pdf" target="_blank">' + t('cal.print_manifest') + '</a>';
+      html += '<a href="/staff/manifest/' + v.id + '/pdf?lang=' + (localStorage.getItem('lang') || 'en') + '" target="_blank">' + t('cal.print_manifest') + '</a>';
       html += '</div>';
       // Passenger toggle
       if (v.passengers && v.passengers.length > 0) {
