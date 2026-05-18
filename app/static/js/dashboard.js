@@ -6,6 +6,77 @@ const staffMain = document.querySelector('.staff-main');
 const VOYAGE_ID = staffMain ? staffMain.dataset.voyageId : null;
 const BASE_FARE = staffMain ? parseFloat(staffMain.dataset.baseFare) : 0;
 
+// ============================================================
+// COUNTRY CODE PHONE HELPER
+// ============================================================
+const COUNTRY_CODES = [
+    { dial: '+91', flag: '🇮🇳', name: 'India' },
+    { dial: '+1',  flag: '🇺🇸', name: 'USA / Canada' },
+    { dial: '+44', flag: '🇬🇧', name: 'UK' },
+    { dial: '+971', flag: '🇦🇪', name: 'UAE' },
+    { dial: '+966', flag: '🇸🇦', name: 'Saudi Arabia' },
+    { dial: '+974', flag: '🇶🇦', name: 'Qatar' },
+    { dial: '+965', flag: '🇰🇼', name: 'Kuwait' },
+    { dial: '+973', flag: '🇧🇭', name: 'Bahrain' },
+    { dial: '+968', flag: '🇴🇲', name: 'Oman' },
+    { dial: '+60',  flag: '🇲🇾', name: 'Malaysia' },
+    { dial: '+65',  flag: '🇸🇬', name: 'Singapore' },
+    { dial: '+61',  flag: '🇦🇺', name: 'Australia' },
+    { dial: '+64',  flag: '🇳🇿', name: 'New Zealand' },
+    { dial: '+49',  flag: '🇩🇪', name: 'Germany' },
+    { dial: '+33',  flag: '🇫🇷', name: 'France' },
+    { dial: '+39',  flag: '🇮🇹', name: 'Italy' },
+    { dial: '+34',  flag: '🇪🇸', name: 'Spain' },
+    { dial: '+31',  flag: '🇳🇱', name: 'Netherlands' },
+    { dial: '+41',  flag: '🇨🇭', name: 'Switzerland' },
+    { dial: '+46',  flag: '🇸🇪', name: 'Sweden' },
+    { dial: '+47',  flag: '🇳🇴', name: 'Norway' },
+    { dial: '+45',  flag: '🇩🇰', name: 'Denmark' },
+    { dial: '+32',  flag: '🇧🇪', name: 'Belgium' },
+    { dial: '+43',  flag: '🇦🇹', name: 'Austria' },
+    { dial: '+90',  flag: '🇹🇷', name: 'Turkey' },
+    { dial: '+7',   flag: '🇷🇺', name: 'Russia' },
+    { dial: '+86',  flag: '🇨🇳', name: 'China' },
+    { dial: '+81',  flag: '🇯🇵', name: 'Japan' },
+    { dial: '+82',  flag: '🇰🇷', name: 'South Korea' },
+    { dial: '+66',  flag: '🇹🇭', name: 'Thailand' },
+    { dial: '+62',  flag: '🇮🇩', name: 'Indonesia' },
+    { dial: '+63',  flag: '🇵🇭', name: 'Philippines' },
+    { dial: '+92',  flag: '🇵🇰', name: 'Pakistan' },
+    { dial: '+880', flag: '🇧🇩', name: 'Bangladesh' },
+    { dial: '+94',  flag: '🇱🇰', name: 'Sri Lanka' },
+    { dial: '+977', flag: '🇳🇵', name: 'Nepal' },
+    { dial: '+27',  flag: '🇿🇦', name: 'South Africa' },
+    { dial: '+55',  flag: '🇧🇷', name: 'Brazil' },
+    { dial: '+52',  flag: '🇲🇽', name: 'Mexico' },
+];
+
+function buildCountrySelect(selectEl) {
+    selectEl.innerHTML = COUNTRY_CODES.map(c =>
+        `<option value="${c.dial}">${c.flag} ${c.dial}</option>`
+    ).join('');
+    selectEl.value = '+91';
+}
+
+function getPhoneValue(ccSelectEl, numInputEl) {
+    const cc = ccSelectEl.value || '+91';
+    const num = numInputEl.value.trim();
+    return cc + ' ' + num;
+}
+
+// ============================================================
+
+function getCsrfToken() {
+    // Prefer meta tag (always present), fall back to hidden input inside a form
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    if (meta) return meta.content;
+    const input = document.querySelector('input[name="csrf_token"]');
+    return input ? input.value : '';
+}
+function csrfHeaders() {
+    return { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken() };
+}
+
 let currentSeatId = null;
 let currentBookingId = null;
 
@@ -20,7 +91,15 @@ const selectedSeats = new Set();  // seat IDs pending group booking
 function showPanel(name) {
     document.querySelectorAll('.panel-view').forEach(p => p.classList.add('hidden'));
     const panel = document.getElementById('panel-' + name);
-    if (panel) panel.classList.remove('hidden');
+    if (panel) {
+        panel.classList.remove('hidden');
+        // On mobile the panel is below the seat map — scroll it into view
+        if (window.innerWidth < 900 && name !== 'empty' && name !== 'manifest') {
+            const sidePanel = document.querySelector('.side-panel') || document.querySelector('.panel');
+            const target = sidePanel || panel;
+            setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300);
+        }
+    }
 }
 
 function closePanel() {
@@ -110,33 +189,245 @@ function updateMultiSeatUI() {
 function openGroupBookingForm() {
     if (selectedSeats.size === 0) return;
     const seats = Array.from(selectedSeats).sort();
+    const lang = localStorage.getItem('lang') || 'en';
 
-    // Populate hidden seat inputs for group form
-    const container = document.getElementById('groupSeatInputs');
-    if (container) {
-        container.innerHTML = '';
-        seats.forEach(sid => {
-            const inp = document.createElement('input');
-            inp.type = 'hidden';
-            inp.name = 'seat_ids[]';
-            inp.value = sid;
-            container.appendChild(inp);
-        });
+    document.getElementById('groupBookingSeatBadge').textContent = seats.join(', ');
+
+    // Get boarding/dropping options from the seat map form (if they exist)
+    const boardingSelect = document.querySelector('#bookingForm select[name="boarding_point"]');
+    const droppingSelect = document.querySelector('#bookingForm select[name="dropping_point"]');
+    const boardingInput  = document.querySelector('#bookingForm input[name="boarding_point"]');
+    const droppingInput  = document.querySelector('#bookingForm input[name="dropping_point"]');
+
+    function makeBoardingField(id) {
+        if (boardingSelect) {
+            return `<select class="form-select" id="grp_boarding_${id}">` +
+                Array.from(boardingSelect.options).map(o => `<option value="${o.value}">${o.text}</option>`).join('') +
+                `</select>`;
+        }
+        return `<input type="text" class="form-input" id="grp_boarding_${id}" placeholder="${lang==='hi'?'जैसे दादर':'e.g. Dadar'}">`;
+    }
+    function makeDroppingField(id) {
+        if (droppingSelect) {
+            return `<select class="form-select" id="grp_dropping_${id}">` +
+                Array.from(droppingSelect.options).map(o => `<option value="${o.value}">${o.text}</option>`).join('') +
+                `</select>`;
+        }
+        return `<input type="text" class="form-input" id="grp_dropping_${id}" placeholder="${lang==='hi'?'जैसे शिवाजीनगर':'e.g. Shivajinagar'}">`;
     }
 
-    // Hide the single seat_id field — group uses seat_ids[] instead
-    const singleSeatInput = document.getElementById('formSeatId');
-    if (singleSeatInput) singleSeatInput.value = '';
+    let html = '';
 
-    document.getElementById('bookingSeatLabel').textContent = seats.join(', ');
-    document.getElementById('bookingForm').reset();
-    document.querySelector('input[name="fare"]').value = BASE_FARE;
-    document.querySelector('input[name="advance_paid"]').value = 0;
-    document.getElementById('genderWarning').classList.add('hidden');
-    window._adjacentGenders = [];
-    window._isGroupBooking = true;
+    // Per-seat passenger sections
+    seats.forEach((sid, i) => {
+        const sectionLabel = lang === 'hi' ? `सीट ${sid} — यात्री विवरण` : `Seat ${sid} — Passenger Details`;
+        html += `<div class="group-seat-section" data-seat="${sid}">
+            <div class="group-seat-section-header">${sectionLabel}</div>
+            <div class="form-group">
+                <label class="form-label">${lang==='hi'?'यात्री का नाम':'Passenger Name'}</label>
+                <input type="text" class="form-input" id="grp_name_${sid}" required>
+            </div>
+            <div class="form-group">
+                <label class="form-label">${lang==='hi'?'संपर्क':'Contact'}</label>
+                <div class="phone-input-row">
+                    <select class="country-code-select" id="grp_cc_${sid}"></select>
+                    <input type="text" class="form-input phone-number-input" id="grp_phone_${sid}" placeholder="98765 43210">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">${lang==='hi'?'लिंग':'Gender'}</label>
+                <div class="gender-choice">
+                    <label class="gender-btn">
+                        <input type="radio" name="grp_gender_${sid}" value="M" required>
+                        <span class="gender-dot male-dot"></span>
+                        <span>${lang==='hi'?'पुरुष':'Male'}</span>
+                    </label>
+                    <label class="gender-btn">
+                        <input type="radio" name="grp_gender_${sid}" value="F">
+                        <span class="gender-dot female-dot"></span>
+                        <span>${lang==='hi'?'महिला':'Female'}</span>
+                    </label>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">${lang==='hi'?'बोर्डिंग':'Boarding'}</label>
+                    ${makeBoardingField(sid)}
+                </div>
+                <div class="form-group">
+                    <label class="form-label">${lang==='hi'?'ड्रॉपिंग':'Dropping'}</label>
+                    ${makeDroppingField(sid)}
+                </div>
+            </div>
+        </div>`;
+    });
 
-    showPanel('booking');
+    // Shared fare fields
+    html += `<div class="group-seat-section" style="border-top: 2px solid var(--line); margin-top: 4px;">
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">${lang==='hi'?'किराया (₹) प्रति सीट':'Fare (₹) per seat'}</label>
+                <input type="number" class="form-input" id="grpFare" value="${BASE_FARE}" min="0" step="1">
+            </div>
+            <div class="form-group">
+                <label class="form-label">${lang==='hi'?'कुल अग्रिम (₹)':'Total Advance (₹)'}</label>
+                <input type="number" class="form-input" id="grpAdvance" value="0" min="0" step="1">
+            </div>
+        </div>
+        <div class="form-actions">
+            <button type="button" class="btn btn-ghost" onclick="closePanel()">${lang==='hi'?'रद्द करें':'Cancel'}</button>
+            <button type="button" class="btn btn-primary" onclick="submitGroupBookingJSON()">${lang==='hi'?'पुष्टि करें':'Confirm Booking'}</button>
+        </div>
+    </div>`;
+
+    document.getElementById('groupBookingBody').innerHTML = html;
+
+    // Build country code selects
+    seats.forEach(sid => {
+        const ccEl = document.getElementById(`grp_cc_${sid}`);
+        if (ccEl) buildCountrySelect(ccEl);
+    });
+
+    showPanel('group-booking');
+}
+
+// ============================================================
+// GROUP BOOKING SUBMIT
+// ============================================================
+
+function submitGroupBookingJSON() {
+    const seats = Array.from(selectedSeats).sort();
+    const lang = localStorage.getItem('lang') || 'en';
+    const voyageId = VOYAGE_ID;
+
+    if (!voyageId) {
+        alert(lang === 'hi' ? 'यात्रा आईडी नहीं मिली' : 'Voyage ID not found');
+        return;
+    }
+
+    // Collect per-seat passenger data
+    const passengers = [];
+    for (const sid of seats) {
+        const name = (document.getElementById(`grp_name_${sid}`)?.value || '').trim();
+        const ccEl = document.getElementById(`grp_cc_${sid}`);
+        const phoneEl = document.getElementById(`grp_phone_${sid}`);
+        const phone = getPhoneValue(ccEl, phoneEl).trim();
+        const genderEl = document.querySelector(`input[name="grp_gender_${sid}"]:checked`);
+        const gender = genderEl ? genderEl.value : '';
+
+        const boardingEl = document.getElementById(`grp_boarding_${sid}`);
+        const droppingEl = document.getElementById(`grp_dropping_${sid}`);
+        const boarding = (boardingEl?.value || '').trim();
+        const dropping = (droppingEl?.value || '').trim();
+
+        if (!name) {
+            alert(lang === 'hi' ? `सीट ${sid}: यात्री का नाम आवश्यक है` : `Seat ${sid}: passenger name is required`);
+            document.getElementById(`grp_name_${sid}`)?.focus();
+            return;
+        }
+        if (!phone || phone.trim() === (ccEl?.value || '+91')) {
+            alert(lang === 'hi' ? `सीट ${sid}: संपर्क नंबर आवश्यक है` : `Seat ${sid}: contact number is required`);
+            phoneEl?.focus();
+            return;
+        }
+        if (!gender) {
+            alert(lang === 'hi' ? `सीट ${sid}: लिंग चुनें` : `Seat ${sid}: please select gender`);
+            return;
+        }
+        if (!boarding) {
+            alert(lang === 'hi' ? `सीट ${sid}: बोर्डिंग पॉइंट आवश्यक है` : `Seat ${sid}: boarding point is required`);
+            boardingEl?.focus();
+            return;
+        }
+        if (!dropping) {
+            alert(lang === 'hi' ? `सीट ${sid}: ड्रॉपिंग पॉइंट आवश्यक है` : `Seat ${sid}: dropping point is required`);
+            droppingEl?.focus();
+            return;
+        }
+
+        passengers.push({ seat_id: sid, name, phone, gender, boarding_point: boarding, dropping_point: dropping });
+    }
+
+    const farePerSeat = parseFloat(document.getElementById('grpFare')?.value) || 0;
+    const advancePaid = parseFloat(document.getElementById('grpAdvance')?.value) || 0;
+
+    const payload = {
+        voyage_id: voyageId,
+        passengers,
+        boarding_point: passengers[0]?.boarding_point || '',
+        dropping_point: passengers[0]?.dropping_point || '',
+        fare_per_seat: farePerSeat,
+        advance_paid: advancePaid,
+    };
+
+    const submitBtn = document.querySelector('#panel-group-booking .btn-primary');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = lang === 'hi' ? 'हो रहा है…' : 'Booking…'; }
+
+    fetch('/staff/booking/create-group', {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: JSON.stringify(payload),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = lang === 'hi' ? 'पुष्टि करें' : 'Confirm Booking'; }
+        if (data.status === 'ok' || data.status === 'warning') {
+            renderGroupSuccess(data, farePerSeat, advancePaid, lang);
+        } else {
+            alert(data.error || (lang === 'hi' ? 'बुकिंग विफल हुई' : 'Booking failed'));
+        }
+    })
+    .catch(err => {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = lang === 'hi' ? 'पुष्टि करें' : 'Confirm Booking'; }
+        console.error('Group booking error:', err);
+        alert(lang === 'hi' ? 'नेटवर्क त्रुटि' : 'Network error, please try again');
+    });
+}
+
+function renderGroupSuccess(data, farePerSeat, advancePaid, lang) {
+    const bookings = data.bookings || [];
+    const groupCode = data.group_code || '';
+
+    let html = `<div style="text-align:center;padding:16px 0 8px;">
+        <div style="font-size:42px;margin-bottom:8px;">✅</div>
+        <div style="font-size:18px;font-weight:600;margin-bottom:4px;">${lang==='hi'?'बुकिंग पुष्टि हो गई':'Booking Confirmed'}</div>
+        <div style="font-size:13px;color:var(--muted);margin-bottom:16px;">${lang==='hi'?'समूह कोड:':'Group Code:'} <b>${groupCode}</b></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">`;
+
+    bookings.forEach(b => {
+        const label = `${lang==='hi'?'सीट':'Seat'} ${b.seat_id} — ${b.name}`;
+        html += `<a href="/staff/booking/${b.id}/ticket" target="_blank"
+            style="display:flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid var(--line);border-radius:8px;text-decoration:none;color:var(--ink);font-size:13px;">
+            <span style="font-size:18px;">🎫</span>
+            <span style="flex:1;">${label}</span>
+            <span style="color:var(--marigold);font-weight:600;">${lang==='hi'?'डाउनलोड':'Download'} ↓</span>
+        </a>`;
+    });
+
+    if (bookings.length > 1 && groupCode) {
+        html += `<a href="/staff/booking/group/${groupCode}/tickets" target="_blank"
+            style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--ink);color:var(--cream);border-radius:8px;text-decoration:none;font-size:13px;font-weight:600;margin-top:4px;">
+            <span style="font-size:18px;">📥</span>
+            <span style="flex:1;">${lang==='hi'?'सभी टिकट डाउनलोड करें':'Download All Tickets'}</span>
+        </a>`;
+    }
+
+    html += `</div>
+    <button class="btn btn-ghost" style="width:100%;" onclick="closePanel();resetMultiSeat();">
+        ${lang==='hi'?'बंद करें':'Close'}
+    </button>`;
+
+    document.getElementById('groupSuccessBody').innerHTML = html;
+    showPanel('group-success');
+
+    // Reset multi-seat selection
+    selectedSeats.forEach(sid => {
+        const seatEl = document.querySelector(`.seat[data-seat="${sid}"]`);
+        if (seatEl) seatEl.classList.remove('multi-selected');
+    });
+    selectedSeats.clear();
+    updateMultiSeatUI();
 }
 
 // ============================================================
@@ -191,6 +482,26 @@ document.querySelectorAll('.seat').forEach(seat => {
         }
     });
 });
+
+// ============================================================
+// GROUP SEAT HOVER HIGHLIGHT
+// ============================================================
+
+const seatMapEl = document.getElementById('seatMap');
+if (seatMapEl) {
+    seatMapEl.addEventListener('mouseover', (e) => {
+        const seat = e.target.closest('.seat.group-seat');
+        if (!seat) return;
+        const grp = seat.dataset.group;
+        if (!grp) return;
+        document.querySelectorAll(`.seat[data-group="${grp}"]`).forEach(s => s.classList.add('group-highlight'));
+    });
+    seatMapEl.addEventListener('mouseout', (e) => {
+        const seat = e.target.closest('.seat.group-seat');
+        if (!seat) return;
+        document.querySelectorAll('.seat.group-highlight').forEach(s => s.classList.remove('group-highlight'));
+    });
+}
 
 // ============================================================
 // BOOKING FORM (only exists for reservation/admin)
@@ -305,6 +616,10 @@ async function submitGroupBooking(formData) {
                 if (seat) {
                     seat.classList.remove('multi-selected', 'active-single');
                     seat.classList.add('booked-' + gender);
+                    if (data.group_code) {
+                        seat.classList.add('group-seat');
+                        seat.dataset.group = data.group_code;
+                    }
                     seat.title = data.name;
                 }
             });
@@ -315,13 +630,20 @@ async function submitGroupBooking(formData) {
             selectedSeats.clear();
             updateMultiSeatUI();
 
-            // Offer group ticket download
             closePanel();
-            toast(`${data.seat_ids.length} seats booked for ${data.name}`);
-
-            // Show a quick follow-up prompt for group ticket
-            if (confirm(`Group booking confirmed!\nSeats: ${data.seat_ids.join(', ')}\nBooking ID: ${data.group_code}\n\nDownload group e-ticket?`)) {
-                window.open(`/staff/booking/group/${data.group_code}/ticket`, '_blank');
+            if (data.group_code) {
+                // True multi-seat group booking
+                toast(`${data.seat_ids.length} seats booked for ${data.name}`);
+                if (confirm(`Group booking confirmed!\nSeats: ${data.seat_ids.join(', ')}\nBooking ID: ${data.group_code}\n\nDownload group e-ticket?`)) {
+                    window.open(`/staff/booking/group/${data.group_code}/ticket`, '_blank');
+                }
+            } else {
+                // Single seat submitted via multi-select UI
+                const b = data.bookings[0];
+                toast(`Seat ${b.seat_id} booked for ${data.name}`);
+                if (confirm(`Booking confirmed!\nSeat: ${b.seat_id}\nBooking ID: ${b.code}\n\nDownload e-ticket?`)) {
+                    window.open(`/staff/booking/${b.id}/ticket`, '_blank');
+                }
             }
 
         } else if (data.status === 'error') {
@@ -353,6 +675,33 @@ function showBookingDetails(booking, readonly) {
     document.getElementById('detailsAdvance').textContent = '₹ ' + booking.advance;
     document.getElementById('detailsBalance').textContent = '₹ ' + booking.balance;
     document.getElementById('detailsCode').textContent = booking.code;
+
+    // Check-in section (visible for all roles when booking is shown)
+    const checkinSection = document.getElementById('checkinSection');
+    const checkinStatus = document.getElementById('checkinStatus');
+    const checkinBtn = document.getElementById('checkinBtn');
+    if (checkinSection) {
+        window._currentCheckinBookingId = booking.id;
+        window._currentCheckinSeatId = booking.seat || currentSeatId;
+        window._currentCheckinName = booking.name;
+        if (booking.boarded_at) {
+            checkinStatus.innerHTML = `<div class="checkin-status-badge">✓ <span data-i18n="dash.checkedin">Checked In</span> ${booking.boarded_at}${booking.boarded_by ? ' · ' + booking.boarded_by : ''}</div>`;
+            if (checkinBtn) checkinBtn.classList.add('hidden');
+            // Undo link (shown always — admins can undo anytime, drivers within 5 min)
+            const undoEl = checkinStatus.querySelector('.btn-undo-checkin') || (() => {
+                const b = document.createElement('button');
+                b.className = 'btn-undo-checkin';
+                b.setAttribute('data-i18n', 'dash.undo_checkin');
+                b.textContent = 'Undo check-in';
+                b.onclick = undoCheckinFromPanel;
+                checkinStatus.appendChild(b);
+                return b;
+            })();
+        } else {
+            checkinStatus.innerHTML = '';
+            if (checkinBtn) checkinBtn.classList.remove('hidden');
+        }
+    }
 
     // Show group seats info if this is a group booking
     const groupSeatsDiv = document.getElementById('detailsGroupSeats');
@@ -396,6 +745,8 @@ function showBookingDetails(booking, readonly) {
         waBtn.dataset.fare = booking.fare;
         waBtn.dataset.balance = booking.balance;
         waBtn.dataset.bookingId = booking.id;
+        waBtn.dataset.departureDate = booking.departure_date || '';
+        waBtn.dataset.departureTime = booking.departure_time || '';
     }
 
     // Hide action buttons for drivers
@@ -457,6 +808,8 @@ if (waBtn) {
         const fare     = this.dataset.fare;
         const balance  = this.dataset.balance;
         const phone    = this.dataset.phone;
+        const depDate  = this.dataset.departureDate || '';
+        const depTime  = this.dataset.departureTime || '';
 
         if (!name) return;
 
@@ -467,6 +820,8 @@ if (waBtn) {
             `Your booking is confirmed! ✅\n\n` +
             `🎫 *Booking ID:* ${code}\n` +
             `💺 *Seat(s):* ${seat}\n` +
+            (depDate ? `📅 *Date:* ${depDate}\n` : ``) +
+            (depTime ? `⏰ *Departure:* ${depTime}\n` : ``) +
             `📍 *Boarding:* ${boarding}\n` +
             `📍 *Dropping:* ${dropping}\n` +
             `💰 *Fare:* ₹${fare}\n` +
@@ -494,9 +849,7 @@ if (cancelBtn) {
         if (!confirm('Cancel this booking? This cannot be undone.')) return;
 
         try {
-            const csrfEl = document.querySelector('input[name="csrf_token"]');
-            const headers = {};
-            if (csrfEl) headers['X-CSRFToken'] = csrfEl.value;
+            const headers = csrfHeaders();
 
             const res = await fetch(`/staff/booking/${currentBookingId}/cancel`, {
                 method: 'POST',
@@ -506,7 +859,8 @@ if (cancelBtn) {
 
             if (data.status === 'success') {
                 const seat = document.querySelector(`.seat[data-seat="${data.seat_id}"]`);
-                seat.classList.remove('booked-m', 'booked-f', 'active-single', 'multi-selected');
+                seat.classList.remove('booked-m', 'booked-f', 'active-single', 'multi-selected', 'group-seat', 'group-highlight');
+                delete seat.dataset.group;
                 seat.title = `Seat ${data.seat_id}`;
 
                 const oc = document.getElementById('occupancyCount');
@@ -520,6 +874,341 @@ if (cancelBtn) {
             alert('Could not cancel booking.');
         }
     });
+}
+
+// ============================================================
+// MANUAL CHECK-IN
+// ============================================================
+
+async function checkInFromPanel() {
+    const bookingId = window._currentCheckinBookingId;
+    const name = window._currentCheckinName;
+    const seatId = window._currentCheckinSeatId;
+    if (!bookingId) return;
+    const lang = document.documentElement.lang || 'en';
+    const msg = lang === 'hi'
+        ? `${name} को सीट ${seatId} के लिए चेक-इन करें?`
+        : `Check in ${name} for seat ${seatId}?`;
+    if (!confirm(msg)) return;
+
+    const headers = csrfHeaders();
+    try {
+        const res = await fetch(`/staff/booking/${bookingId}/checkin`, { method: 'POST', headers });
+        const data = await res.json();
+        if (data.status === 'ok' || data.status === 'already_checked_in') {
+            const lang = document.documentElement.lang || 'en';
+            toast(lang === 'hi' ? `${name} चेक-इन हो गए ✓` : `${name} checked in ✓`);
+            // Update seat map
+            const seat = document.querySelector(`.seat[data-seat="${seatId}"]`);
+            if (seat) {
+                const gender = seat.classList.contains('booked-m') || seat.classList.contains('checked-in-m') ? 'm' : 'f';
+                seat.classList.remove('booked-m', 'booked-f');
+                seat.classList.add(`checked-in-${gender}`);
+            }
+            // Update manifest row
+            updateManifestRowCheckedIn(seatId, data.boarded_at);
+            updateCheckinProgress(1);
+            // Re-fetch and redisplay panel
+            const res2 = await fetch(`/staff/api/seat/${VOYAGE_ID}/${seatId}`);
+            const d2 = await res2.json();
+            if (d2.status === 'booked') showBookingDetails(d2.booking, d2.readonly);
+        }
+    } catch (err) { console.error('Check-in failed', err); }
+}
+
+async function undoCheckinFromPanel() {
+    const bookingId = window._currentCheckinBookingId;
+    const name = window._currentCheckinName;
+    const seatId = window._currentCheckinSeatId;
+    if (!bookingId) return;
+    const lang = document.documentElement.lang || 'en';
+    const msg = lang === 'hi' ? `${name} का चेक-इन रद्द करें?` : `Undo check-in for ${name}?`;
+    if (!confirm(msg)) return;
+
+    const headers = csrfHeaders();
+    try {
+        const res = await fetch(`/staff/booking/${bookingId}/uncheckin`, { method: 'POST', headers });
+        const data = await res.json();
+        if (data.status === 'ok') {
+            const lang = document.documentElement.lang || 'en';
+            toast(lang === 'hi' ? `${name} का चेक-इन रद्द हुआ` : `Check-in undone for ${name}`);
+            const seat = document.querySelector(`.seat[data-seat="${seatId}"]`);
+            if (seat) {
+                const gender = seat.classList.contains('checked-in-m') ? 'm' : 'f';
+                seat.classList.remove('checked-in-m', 'checked-in-f');
+                seat.classList.add(`booked-${gender}`);
+            }
+            updateManifestRowUnchecked(seatId);
+            updateCheckinProgress(-1);
+            const res2 = await fetch(`/staff/api/seat/${VOYAGE_ID}/${seatId}`);
+            const d2 = await res2.json();
+            if (d2.status === 'booked') showBookingDetails(d2.booking, d2.readonly);
+        } else if (data.status === 'error') {
+            const lang = document.documentElement.lang || 'en';
+            alert(lang === 'hi' ? 'समय सीमा समाप्त (5 मिनट)' : data.message || 'Undo window expired');
+        }
+    } catch (err) { console.error('Undo check-in failed', err); }
+}
+
+async function manifestCheckin(e, btn) {
+    e.stopPropagation();
+    const bookingId = btn.dataset.bookingId;
+    const seatId = btn.dataset.seat;
+    const name = btn.dataset.name;
+    const boarded = btn.dataset.boarded;
+    const lang = document.documentElement.lang || 'en';
+
+    if (boarded) {
+        // Already checked in — offer undo
+        const msg = lang === 'hi' ? `${name} का चेक-इन रद्द करें?` : `Undo check-in for ${name}?`;
+        if (!confirm(msg)) return;
+        const headers = csrfHeaders();
+        const res = await fetch(`/staff/booking/${bookingId}/uncheckin`, { method: 'POST', headers });
+        const data = await res.json();
+        if (data.status === 'ok') {
+            btn.textContent = '○';
+            btn.classList.remove('checked');
+            btn.dataset.boarded = '';
+            const timeEl = btn.parentNode.querySelector('.manifest-checkin-time');
+            if (timeEl) timeEl.remove();
+            updateManifestRowUnchecked(seatId);
+            updateCheckinProgress(-1);
+            toast(lang === 'hi' ? `${name} का चेक-इन रद्द हुआ` : `Undo: ${name}`);
+        } else if (data.status === 'error') {
+            alert(lang === 'hi' ? 'समय सीमा समाप्त' : data.message || 'Undo window expired');
+        }
+        return;
+    }
+
+    // Not yet checked in
+    const msg = lang === 'hi'
+        ? `${name} को सीट ${seatId} के लिए चेक-इन करें?`
+        : `Check in ${name} for seat ${seatId}?`;
+    if (!confirm(msg)) return;
+    const headers = csrfHeaders();
+    const res = await fetch(`/staff/booking/${bookingId}/checkin`, { method: 'POST', headers });
+    const data = await res.json();
+    if (data.status === 'ok' || data.status === 'already_checked_in') {
+        const t = data.boarded_at;
+        btn.textContent = '✓';
+        btn.classList.add('checked');
+        btn.dataset.boarded = t;
+        let timeEl = btn.parentNode.querySelector('.manifest-checkin-time');
+        if (!timeEl) { timeEl = document.createElement('div'); timeEl.className = 'manifest-checkin-time'; btn.parentNode.appendChild(timeEl); }
+        timeEl.textContent = t;
+        updateManifestRowCheckedIn(seatId, t);
+        // Update seat map
+        const seat = document.querySelector(`.seat[data-seat="${seatId}"]`);
+        if (seat) {
+            const gender = seat.classList.contains('booked-m') || seat.classList.contains('checked-in-m') ? 'm' : 'f';
+            seat.classList.remove('booked-m', 'booked-f');
+            seat.classList.add(`checked-in-${gender}`);
+        }
+        updateCheckinProgress(1);
+        toast(lang === 'hi' ? `${name} चेक-इन हो गए ✓` : `${name} checked in ✓`);
+    }
+}
+
+function updateManifestRowCheckedIn(seatId, time) {
+    const row = document.querySelector(`.manifest-item[data-seat="${seatId}"]`);
+    if (!row) return;
+    row.classList.add('checked-in');
+    row.classList.remove('boarded');
+    let badge = row.querySelector('.boarding-badge');
+    if (!badge) { badge = document.createElement('div'); badge.className = 'boarding-badge'; row.querySelector('.manifest-name').parentNode.appendChild(badge); }
+    badge.textContent = '✓ ' + time;
+}
+
+function updateManifestRowUnchecked(seatId) {
+    const row = document.querySelector(`.manifest-item[data-seat="${seatId}"]`);
+    if (!row) return;
+    row.classList.remove('checked-in', 'boarded');
+    const badge = row.querySelector('.boarding-badge');
+    if (badge) badge.remove();
+}
+
+function updateCheckinProgress(delta) {
+    const numEl = document.getElementById('checkinNum');
+    if (!numEl) return;
+    const current = parseInt(numEl.textContent) || 0;
+    const next = Math.max(0, current + delta);
+    numEl.textContent = next;
+    const fill = document.getElementById('checkinProgressFill');
+    if (fill) {
+        const total = parseInt(fill.parentNode.previousElementSibling?.querySelector('span:last-child')?.textContent) || 1;
+        fill.style.width = Math.round(next / total * 100) + '%';
+    }
+}
+
+// ============================================================
+// QR SCANNER (driver)
+// ============================================================
+
+let scanStream = null;
+let scanInterval = null;
+
+function openScanner() {
+    const modal = document.getElementById('scannerModal');
+    if (!modal) return;
+    const manualDiv = document.getElementById('manualInput');
+    if (manualDiv) manualDiv.style.display = 'flex';
+    const codeInput = document.getElementById('manualCode');
+    if (codeInput) codeInput.value = '';
+    modal.classList.remove('hidden');
+    startCamera();
+}
+
+function closeScanner() {
+    stopCamera();
+    document.getElementById('scannerModal').classList.add('hidden');
+    document.getElementById('scanStatus').textContent = 'Point camera at passenger\'s QR code';
+}
+
+async function startCamera() {
+    const video = document.getElementById('scanVideo');
+    const status = document.getElementById('scanStatus');
+    const manualDiv = document.getElementById('manualInput');
+    if (!video) return;
+    try {
+        scanStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }
+        });
+        video.srcObject = scanStream;
+        await video.play();
+        scanInterval = setInterval(scanFrame, 150);
+    } catch (err) {
+        status.textContent = 'Camera not available — enter code manually.';
+        if (manualDiv) manualDiv.style.display = 'flex';
+    }
+}
+
+function stopCamera() {
+    clearInterval(scanInterval);
+    scanInterval = null;
+    if (scanStream) {
+        scanStream.getTracks().forEach(t => t.stop());
+        scanStream = null;
+    }
+}
+
+function scanFrame() {
+    const video = document.getElementById('scanVideo');
+    const canvas = document.getElementById('scanCanvas');
+    if (!video || !canvas) return;
+    if (video.readyState < video.HAVE_ENOUGH_DATA) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    if (typeof jsQR === 'undefined') return;
+    const code = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: 'dontInvert',
+    });
+    if (code && code.data) {
+        document.getElementById('scanStatus').textContent = 'QR Code Detected!';
+        stopCamera();
+        const match = code.data.match(/\/verify\/([A-Za-z0-9\-]+)\s*$/);
+        const bookingCode = match ? match[1] : code.data.trim();
+        setTimeout(() => {
+            closeScanner();
+            fetchAndShowVerify(bookingCode);
+        }, 300);
+    }
+}
+
+function submitManualCode() {
+    const input = document.getElementById('manualCode');
+    if (!input || !input.value.trim()) return;
+    closeScanner();
+    fetchAndShowVerify(input.value.trim());
+}
+
+async function fetchAndShowVerify(code) {
+    try {
+        const res = await fetch('/verify/' + encodeURIComponent(code) + '?format=json');
+        const data = await res.json();
+        showScanResult(data, code);
+    } catch (err) {
+        toast('Could not load booking details');
+    }
+}
+
+function showScanResult(data, code) {
+    const el = document.getElementById('scanResultContent');
+    if (!el) return;
+
+    if (data.state === 'valid') {
+        el.innerHTML = `
+            <div style="text-align:center;padding:12px 0 8px;">
+                <div style="width:60px;height:60px;border-radius:50%;background:#dcfce7;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:28px;">✓</div>
+                <div style="font-size:13px;font-weight:700;letter-spacing:.06em;color:#22c55e;margin-bottom:4px;">BOARDING CONFIRMED</div>
+                <div style="font-size:22px;font-weight:700;color:var(--ink);margin:10px 0 4px;">${data.passenger_name}</div>
+                <div style="display:inline-block;background:var(--ink);color:var(--cream);font-size:24px;font-weight:800;padding:6px 18px;border-radius:6px;font-family:monospace;margin:4px 0 14px;">${data.seat_display}</div>
+            </div>
+            <div class="passenger-details" style="margin-bottom:16px;">
+                <div class="detail-row"><span class="muted">Route</span><span>${data.route}</span></div>
+                <div class="detail-row"><span class="muted">Departure</span><span>${data.departure}</span></div>
+                <div class="detail-row"><span class="muted">Boarding</span><span>${data.boarding_point}</span></div>
+                <div class="detail-row"><span class="muted">Dropping</span><span>${data.dropping_point}</span></div>
+                <div class="detail-row"><span class="muted">Fare</span><span>${data.has_balance ? '<span style="color:var(--marigold);font-weight:700;">⚠ Balance Due' + (data.balance_due ? ': ₹' + data.balance_due : '') + '</span>' : '<span style="color:var(--sage);font-weight:700;">Fully Paid ✓</span>'}</span></div>
+            </div>
+            <button class="btn btn-primary" id="scanBoardBtn"
+                    style="background:#22c55e;border:none;"
+                    onclick="markBoardedFromPanel('${code}','${data.passenger_name.replace(/'/g,"\\'")}')">
+                Mark as Boarded
+            </button>`;
+    } else if (data.state === 'boarded') {
+        el.innerHTML = `
+            <div style="text-align:center;padding:12px 0 16px;">
+                <div style="width:60px;height:60px;border-radius:50%;background:#fef3c7;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:28px;">⚠</div>
+                <div style="font-size:13px;font-weight:700;letter-spacing:.06em;color:var(--marigold);margin-bottom:4px;">ALREADY BOARDED</div>
+                <div style="font-size:22px;font-weight:700;color:var(--ink);margin:10px 0 4px;">${data.passenger_name}</div>
+                <div style="display:inline-block;background:var(--ink);color:var(--cream);font-size:24px;font-weight:800;padding:6px 18px;border-radius:6px;font-family:monospace;margin:4px 0 14px;">${data.seat_display}</div>
+                <div class="passenger-details" style="margin-bottom:12px;">
+                    <div class="detail-row"><span class="muted">Route</span><span>${data.route}</span></div>
+                    <div class="detail-row"><span class="muted">Boarded at</span><span style="color:var(--marigold);font-weight:700;">${data.boarded_at}</span></div>
+                </div>
+                <p class="muted" style="font-size:13px;">This passenger has already been checked in.</p>
+            </div>`;
+    } else {
+        el.innerHTML = `
+            <div style="text-align:center;padding:20px 0;">
+                <div style="width:60px;height:60px;border-radius:50%;background:#fee2e2;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:28px;">✕</div>
+                <div style="font-size:13px;font-weight:700;letter-spacing:.06em;color:var(--ruby);">INVALID TICKET</div>
+                <p class="muted" style="margin-top:12px;font-size:13px;line-height:1.6;">Booking code not found or cancelled.<br>Please check the ticket.</p>
+                <div class="mono" style="font-size:11px;color:var(--muted);margin-top:8px;">${code}</div>
+            </div>`;
+    }
+    showPanel('scan');
+}
+
+async function markBoardedFromPanel(code, name) {
+    if (!confirm('Confirm boarding for ' + name + '?')) return;
+    const btn = document.getElementById('scanBoardBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Marking…'; }
+    try {
+        const headers = { 'X-CSRFToken': getCsrfToken() };
+        const res = await fetch('/verify/' + encodeURIComponent(code) + '/board', {
+            method: 'POST', headers,
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+            toast('Boarded: ' + name);
+            fetchAndShowVerify(code);
+        } else if (data.status === 'already_boarded') {
+            toast('Already boarded at ' + data.boarded_at);
+            fetchAndShowVerify(code);
+        } else {
+            alert('Error marking as boarded.');
+            if (btn) { btn.disabled = false; btn.textContent = 'Mark as Boarded'; }
+        }
+    } catch (err) {
+        alert('Request failed. Please try again.');
+        if (btn) { btn.disabled = false; btn.textContent = 'Mark as Boarded'; }
+    }
 }
 
 // ============================================================
@@ -551,6 +1240,10 @@ socket.on('seat_booked', (data) => {
     if (!seat || seat.classList.contains('active-single')) return;
     seat.classList.remove('booked-m', 'booked-f', 'multi-selected');
     seat.classList.add('booked-' + data.gender.toLowerCase());
+    if (data.group_code) {
+        seat.classList.add('group-seat');
+        seat.dataset.group = data.group_code;
+    }
     seat.title = data.name;
     // Remove from pending multi-select if it got booked by another agent
     if (selectedSeats.has(data.seat_id)) {
@@ -566,11 +1259,89 @@ socket.on('seat_freed', (data) => {
     if (parseInt(data.voyage_id) !== parseInt(VOYAGE_ID)) return;
     const seat = document.querySelector(`.seat[data-seat="${data.seat_id}"]`);
     if (!seat) return;
-    seat.classList.remove('booked-m', 'booked-f', 'active-single', 'multi-selected');
+    seat.classList.remove('booked-m', 'booked-f', 'active-single', 'multi-selected', 'group-seat', 'group-highlight');
+    delete seat.dataset.group;
     seat.title = `Seat ${data.seat_id}`;
     const oc = document.getElementById('occupancyCount');
     if (oc) oc.textContent = parseInt(oc.textContent) - 1;
     toast(`Seat ${data.seat_id} is now available`);
+});
+
+socket.on('seat_locked', (data) => {
+    if (parseInt(data.voyage_id) !== parseInt(VOYAGE_ID)) return;
+    const seat = document.querySelector(`.seat[data-seat="${data.seat_id}"]`);
+    if (seat && !seat.classList.contains('booked-m') && !seat.classList.contains('booked-f')) {
+        seat.classList.add('locked');
+        seat.title = 'Being reserved by a customer';
+    }
+});
+
+socket.on('seat_unlocked', (data) => {
+    if (parseInt(data.voyage_id) !== parseInt(VOYAGE_ID)) return;
+    const seat = document.querySelector(`.seat[data-seat="${data.seat_id}"]`);
+    if (seat && !seat.classList.contains('booked-m') && !seat.classList.contains('booked-f')) {
+        seat.classList.remove('locked');
+        seat.title = `Seat ${data.seat_id}`;
+    }
+});
+
+socket.on('passenger_boarded', (data) => {
+    if (parseInt(data.voyage_id) !== parseInt(VOYAGE_ID)) return;
+    const item = document.querySelector(`.manifest-item[data-seat="${data.seat_id}"]`);
+    if (item) {
+        item.classList.add('boarded');
+        const nameDiv = item.querySelector('.manifest-name');
+        if (nameDiv) {
+            let badge = item.querySelector('.boarding-badge');
+            if (!badge) {
+                badge = document.createElement('div');
+                badge.className = 'boarding-badge';
+                nameDiv.parentNode.appendChild(badge);
+            }
+            badge.textContent = '✓ Boarded ' + data.boarded_at;
+        }
+    }
+    toast(data.name + ' boarded ✓');
+});
+
+socket.on('passenger_checkin', (data) => {
+    if (parseInt(data.voyage_id) !== parseInt(VOYAGE_ID)) return;
+    const seat = document.querySelector(`.seat[data-seat="${data.seat_id}"]`);
+    if (seat) {
+        seat.classList.remove('booked-m', 'booked-f');
+        seat.classList.add(`checked-in-${data.gender.toLowerCase()}`);
+    }
+    updateManifestRowCheckedIn(data.seat_id, data.boarded_at);
+    updateCheckinProgress(1);
+    // Update checkin btn in manifest
+    const btn = document.querySelector(`.checkin-btn[data-seat="${data.seat_id}"]`);
+    if (btn) {
+        btn.textContent = '✓';
+        btn.classList.add('checked');
+        btn.dataset.boarded = data.boarded_at;
+        let timeEl = btn.parentNode.querySelector('.manifest-checkin-time');
+        if (!timeEl) { timeEl = document.createElement('div'); timeEl.className = 'manifest-checkin-time'; btn.parentNode.appendChild(timeEl); }
+        timeEl.textContent = data.boarded_at;
+    }
+});
+
+socket.on('passenger_uncheckin', (data) => {
+    if (parseInt(data.voyage_id) !== parseInt(VOYAGE_ID)) return;
+    const seat = document.querySelector(`.seat[data-seat="${data.seat_id}"]`);
+    if (seat) {
+        seat.classList.remove('checked-in-m', 'checked-in-f');
+        seat.classList.add(`booked-${data.gender.toLowerCase()}`);
+    }
+    updateManifestRowUnchecked(data.seat_id);
+    updateCheckinProgress(-1);
+    const btn = document.querySelector(`.checkin-btn[data-seat="${data.seat_id}"]`);
+    if (btn) {
+        btn.textContent = '○';
+        btn.classList.remove('checked');
+        btn.dataset.boarded = '';
+        const timeEl = btn.parentNode.querySelector('.manifest-checkin-time');
+        if (timeEl) timeEl.remove();
+    }
 });
 
 // ============================================================
@@ -592,4 +1363,208 @@ if (voyagePicker) {
         const date = datePicker ? datePicker.value : '';
         window.location.href = `/staff/dashboard?date=${date}&voyage_id=${voyageId}`;
     });
+}
+
+// ============================================================
+// CSRF TOKEN HELPER
+// ============================================================
+
+const CSRF_TOKEN = getCsrfToken();
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+let notifOpen = false;
+
+async function loadNotifications() {
+    try {
+        const res = await fetch('/staff/api/notifications');
+        const data = await res.json();
+
+        const badge = document.getElementById('notifBadge');
+        if (badge) {
+            if (data.unread > 0) {
+                badge.textContent = data.unread > 99 ? '99+' : data.unread;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        const list = document.getElementById('notifList');
+        if (!list) return;
+
+        if (!data.notifications || !data.notifications.length) {
+            list.innerHTML = '<div class="notif-empty">No notifications</div>';
+            return;
+        }
+
+        list.innerHTML = data.notifications.map(n => {
+            const icon = n.title.includes('Cancel') ? '❌' : '🎫';
+            const waBtn = n.passenger_phone ?
+                `<a class="notif-wa-btn" href="https://wa.me/${n.passenger_phone.replace(/\D/g,'')}" target="_blank" title="WhatsApp">💬</a>` : '';
+            return `<div class="notif-item ${n.is_read ? '' : 'unread'}" data-id="${n.id}" data-link="${n.link || ''}" onclick="handleNotifClick(this)">
+                <div class="notif-icon">${icon}</div>
+                <div>
+                    <div class="notif-title-row">${n.title}</div>
+                    <div class="notif-msg">${n.message}</div>
+                    <div class="notif-time">${n.time_ago}</div>
+                </div>
+                ${waBtn}
+            </div>`;
+        }).join('');
+    } catch(e) { console.error('Notif load failed', e); }
+}
+
+function toggleNotifDropdown() {
+    const dd = document.getElementById('notifDropdown');
+    if (!dd) return;
+    notifOpen = !notifOpen;
+    dd.classList.toggle('hidden', !notifOpen);
+    if (notifOpen) loadNotifications();
+}
+
+async function handleNotifClick(el) {
+    const id = el.dataset.id;
+    const link = el.dataset.link;
+    await fetch(`/staff/api/notifications/read/${id}`, { method: 'POST', headers: {'X-CSRFToken': CSRF_TOKEN} });
+    if (link) window.location.href = link;
+    else toggleNotifDropdown();
+}
+
+async function markAllRead() {
+    await fetch('/staff/api/notifications/read-all', { method: 'POST', headers: {'X-CSRFToken': CSRF_TOKEN} });
+    loadNotifications();
+}
+
+// Real-time: listen for new notifications
+socket.on('new_notification', (data) => {
+    const badge = document.getElementById('notifBadge');
+    if (badge && data.count > 0) {
+        badge.textContent = data.count > 99 ? '99+' : data.count;
+        badge.classList.remove('hidden');
+        badge.style.animation = 'none';
+        requestAnimationFrame(() => { badge.style.animation = ''; });
+    }
+    if (notifOpen) loadNotifications();
+});
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    if (notifOpen && !e.target.closest('#notifBell') && !e.target.closest('#notifDropdown')) {
+        notifOpen = false;
+        document.getElementById('notifDropdown')?.classList.add('hidden');
+    }
+});
+
+// Load on page load
+document.addEventListener('DOMContentLoaded', loadNotifications);
+
+// Single-seat phone country code initialization
+document.addEventListener('DOMContentLoaded', function () {
+    const singleCc = document.getElementById('singleCc');
+    const singlePhone = document.getElementById('singlePhone');
+    const singlePhoneCombined = document.getElementById('singlePhoneCombined');
+
+    if (singleCc) buildCountrySelect(singleCc);
+
+    // Intercept single-seat booking form submit to combine cc + number
+    const bookingForm = document.getElementById('bookingForm');
+    if (bookingForm && singleCc && singlePhone && singlePhoneCombined) {
+        bookingForm.addEventListener('submit', function (e) {
+            const combined = getPhoneValue(singleCc, singlePhone);
+            singlePhoneCombined.value = combined;
+        });
+    }
+});
+
+// ============================================================
+// STOP FILTER (driver view only)
+// ============================================================
+var _stopFilter = { boarding: 'ALL', dropping: 'ALL' };
+
+function setStopFilter(type, stop, btn) {
+    _stopFilter[type] = stop;
+
+    // Update active pill in that row
+    var pills = document.querySelectorAll('.stop-pill[data-type="' + type + '"]');
+    pills.forEach(function(p) { p.classList.toggle('active', p.dataset.stop === stop); });
+
+    applyStopFilter();
+}
+
+function applyStopFilter() {
+    var bFilter = _stopFilter.boarding;
+    var dFilter = _stopFilter.dropping;
+    var isFiltered = (bFilter !== 'ALL' || dFilter !== 'ALL');
+
+    var seats = document.querySelectorAll('#seatMap .seat');
+    var manifestItems = document.querySelectorAll('.manifest-item');
+    var shown = 0;
+    var total = manifestItems.length;
+
+    seats.forEach(function(seat) {
+        var boarding = seat.dataset.boarding || '';
+        var dropping = seat.dataset.dropping || '';
+        var isBooked = boarding !== '' || dropping !== '';
+
+        if (!isFiltered || !isBooked) {
+            // Unfiltered or empty seat: restore normal
+            seat.classList.remove('stop-dimmed', 'stop-highlighted');
+            seat.style.pointerEvents = '';
+        } else {
+            var bMatch = (bFilter === 'ALL' || boarding === bFilter);
+            var dMatch = (dFilter === 'ALL' || dropping === dFilter);
+            if (bMatch && dMatch) {
+                seat.classList.add('stop-highlighted');
+                seat.classList.remove('stop-dimmed');
+                seat.style.pointerEvents = '';
+            } else {
+                seat.classList.add('stop-dimmed');
+                seat.classList.remove('stop-highlighted');
+                seat.style.pointerEvents = 'none';
+            }
+        }
+    });
+
+    manifestItems.forEach(function(item) {
+        var boarding = item.dataset.boarding || '';
+        var dropping = item.dataset.dropping || '';
+
+        if (!isFiltered) {
+            item.style.display = '';
+            shown++;
+        } else {
+            var bMatch = (bFilter === 'ALL' || boarding === bFilter);
+            var dMatch = (dFilter === 'ALL' || dropping === dFilter);
+            if (bMatch && dMatch) {
+                item.style.display = '';
+                shown++;
+            } else {
+                item.style.display = 'none';
+            }
+        }
+    });
+
+    // Update count label
+    var countEl = document.getElementById('manifestFilterCount');
+    var stopCountEl = document.getElementById('stopFilterCount');
+
+    if (countEl) {
+        if (isFiltered && shown < total) {
+            countEl.textContent = shown + ' ' + (TRANSLATIONS && TRANSLATIONS[localStorage.getItem('lang')||'en']['dash.filter_shown'] || 'shown') + ' / ' + total + ' ' + (TRANSLATIONS && TRANSLATIONS[localStorage.getItem('lang')||'en']['dash.filter_total'] || 'total');
+            countEl.classList.remove('hidden');
+        } else {
+            countEl.classList.add('hidden');
+        }
+    }
+    if (stopCountEl) {
+        if (isFiltered && shown < total) {
+            stopCountEl.textContent = shown + ' / ' + total;
+            stopCountEl.classList.remove('hidden');
+        } else {
+            stopCountEl.classList.add('hidden');
+        }
+    }
 }

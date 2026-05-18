@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, SelectField, DecimalField, HiddenField, SubmitField
-from wtforms.validators import DataRequired, Length, Regexp, NumberRange
+from wtforms.validators import DataRequired, Length, Regexp, NumberRange, Optional
 
 
 class BookingForm(FlaskForm):
@@ -15,7 +15,7 @@ class BookingForm(FlaskForm):
         'Contact',
         validators=[
             DataRequired(),
-            Length(min=7, max=20),
+            Length(min=7, max=30),
             Regexp(r'^[\d\s\+\-\(\)]+$', message='Phone must contain only digits and + - ( ) spaces')
         ]
     )
@@ -25,21 +25,12 @@ class BookingForm(FlaskForm):
         validators=[DataRequired()]
     )
 
-    boarding_point = SelectField(
-        'Boarding',
-        choices=[('Dadar', 'Dadar'), ('Andheri', 'Andheri'),
-                 ('Borivali', 'Borivali'), ('Thane', 'Thane')],
-        validators=[DataRequired()]
-    )
-    dropping_point = SelectField(
-        'Dropping',
-        choices=[('Shivajinagar', 'Shivajinagar'), ('Swargate', 'Swargate'),
-                 ('Katraj', 'Katraj'), ('Hinjewadi', 'Hinjewadi')],
-        validators=[DataRequired()]
-    )
+    # StringField so any stop name from RouteStops passes validation
+    boarding_point = StringField('Boarding', validators=[DataRequired(), Length(max=120)])
+    dropping_point = StringField('Dropping', validators=[DataRequired(), Length(max=120)])
 
     fare = DecimalField('Fare', validators=[DataRequired(), NumberRange(min=0)])
-    advance_paid = DecimalField('Advance', validators=[NumberRange(min=0)], default=0)
+    advance_paid = DecimalField('Advance', validators=[Optional(), NumberRange(min=0)], default=0)
 
     confirm_gender_conflict = HiddenField('Confirm Gender Conflict', default='no')
     submit = SubmitField('Confirm Booking')
