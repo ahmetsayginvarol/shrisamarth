@@ -69,36 +69,55 @@ def verify(booking_code):
 
 @verify_bp.route('/verify/<booking_code>/board', methods=['POST'])
 def mark_boarded(booking_code):
+    # Try individual booking code first, then group code
     booking = Booking.query.filter_by(
         booking_code=booking_code, status='confirmed'
     ).first()
 
-    if not booking:
-        return jsonify({'status': 'error', 'message': 'Booking not found'}), 404
+    is_group_scan = False
+    group_bookings = []
 
-    if booking.boarded_at:
+    if not booking:
+        # Could be a group booking code
+        group_bookings = Booking.query.filter_by(
+            group_booking_code=booking_code, status='confirmed'
+        ).all()
+        if not group_bookings:
+            return jsonify({'status': 'error', 'message': 'Booking not found'}), 404
+        booking = group_bookings[0]
+        is_group_scan = True
+
+    if not is_group_scan:
+        group_bookings = [booking]
+
+    now = datetime.utcnow()
+    all_boarded = all(b.boarded_at for b in group_bookings)
+
+    if all_boarded:
         return jsonify({
             'status': 'already_boarded',
-            'boarded_at': booking.boarded_at.strftime('%H:%M'),
+            'boarded_at': group_bookings[0].boarded_at.strftime('%H:%M'),
         })
 
-    booking.boarded_at = datetime.utcnow()
+    voyage = booking.voyage
+    for b in group_bookings:
+        if not b.boarded_at:
+            b.boarded_at = now
     db.session.commit()
 
-    voyage = booking.voyage
-    log_activity('passenger_boarded',
-                 f'Passenger {booking.passenger_name} boarded seat {booking.seat_id} on {voyage.origin}→{voyage.destination}',
-                 'booking', booking.id)
-
-    socketio.emit('passenger_boarded', {
-        'voyage_id': voyage.id,
-        'seat_id': booking.seat_id,
-        'booking_code': booking.booking_code,
-        'name': booking.passenger_name,
-        'boarded_at': booking.boarded_at.strftime('%H:%M'),
-    })
+    for b in group_bookings:
+        log_activity('passenger_boarded',
+                     f'Passenger {b.passenger_name} boarded seat {b.seat_id} on {voyage.origin}→{voyage.destination}',
+                     'booking', b.id)
+        socketio.emit('passenger_boarded', {
+            'voyage_id': voyage.id,
+            'seat_id': b.seat_id,
+            'booking_code': b.booking_code,
+            'name': b.passenger_name,
+            'boarded_at': b.boarded_at.strftime('%H:%M'),
+        })
 
     return jsonify({
         'status': 'ok',
-        'boarded_at': booking.boarded_at.strftime('%H:%M'),
+        'boarded_at': now.strftime('%H:%M'),
     })
