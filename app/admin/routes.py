@@ -361,21 +361,74 @@ def voyage_edit(voyage_id):
     ]
 
     if form.validate_on_submit():
-        voyage.origin = form.origin.data.strip()
-        voyage.destination = form.destination.data.strip()
-        voyage.departure_at = form.departure_at.data
-        voyage.arrival_at = form.arrival_at.data
-        voyage.bus_id = form.bus_id.data
-        voyage.driver_id = form.driver_id.data if form.driver_id.data != 0 else None
-        voyage.base_fare = form.base_fare.data
-        voyage.notes = form.notes.data
-        RouteStop.query.filter_by(voyage_id=voyage.id).delete()
-        _save_stops(voyage.id)
+        apply_scope = request.form.get('apply_scope', 'this')
+
+        # Fields to update on every affected voyage
+        new_origin      = form.origin.data.strip()
+        new_destination = form.destination.data.strip()
+        new_departure   = form.departure_at.data
+        new_arrival     = form.arrival_at.data
+        new_bus_id      = form.bus_id.data
+        new_driver_id   = form.driver_id.data if form.driver_id.data != 0 else None
+        new_base_fare   = form.base_fare.data
+        new_notes       = form.notes.data
+
+        # Collect stops from POST (used for all affected voyages)
+        stop_names  = [n.strip() for n in request.form.getlist('stop_name[]')]
+        stop_types  = request.form.getlist('stop_type[]')
+        stop_times  = request.form.getlist('stop_time[]')
+        new_stops   = [
+            {'name': stop_names[i], 'type': stop_types[i] if i < len(stop_types) else 'boarding',
+             'time': stop_times[i].strip() if i < len(stop_times) else ''}
+            for i, n in enumerate(stop_names) if stop_names[i]
+        ]
+
+        def apply_to_voyage(v, new_dep, new_arr):
+            v.origin       = new_origin
+            v.destination  = new_destination
+            v.departure_at = new_dep
+            v.arrival_at   = new_arr
+            v.bus_id       = new_bus_id
+            v.driver_id    = new_driver_id
+            v.base_fare    = new_base_fare
+            v.notes        = new_notes
+            RouteStop.query.filter_by(voyage_id=v.id).delete()
+            for i, s in enumerate(new_stops):
+                db.session.add(RouteStop(
+                    voyage_id=v.id, stop_name=s['name'], stop_type=s['type'],
+                    stop_time=s['time'] or None, stop_order=i,
+                ))
+
+        # Always update this voyage
+        apply_to_voyage(voyage, new_departure, new_arrival)
+
+        affected = 1
+        if apply_scope == 'following' and voyage.recurrence_group:
+            # Time offsets from the edited voyage's new departure
+            dep_time = (new_departure.hour, new_departure.minute)
+            arr_time = (new_arrival.hour, new_arrival.minute) if new_arrival else None
+
+            siblings = Voyage.query.filter(
+                Voyage.recurrence_group == voyage.recurrence_group,
+                Voyage.id != voyage.id,
+                Voyage.departure_at >= voyage.departure_at,
+                Voyage.status == 'scheduled',
+            ).all()
+
+            for sib in siblings:
+                sib_dep = sib.departure_at.replace(hour=dep_time[0], minute=dep_time[1], second=0, microsecond=0)
+                sib_arr = None
+                if arr_time and sib.arrival_at:
+                    sib_arr = sib.arrival_at.replace(hour=arr_time[0], minute=arr_time[1], second=0, microsecond=0)
+                apply_to_voyage(sib, sib_dep, sib_arr)
+                affected += 1
+
         db.session.commit()
+        suffix = f' (and {affected - 1} following)' if affected > 1 else ''
         log_activity('voyage_edited',
-                     f'Edited voyage {voyage.origin}→{voyage.destination}',
+                     f'Edited voyage {new_origin}→{new_destination}{suffix}',
                      'voyage', voyage.id)
-        flash('Voyage updated.', 'success')
+        flash(f'Voyage updated{suffix}.', 'success')
         return redirect(url_for('admin.voyages'))
 
     import json
@@ -384,9 +437,19 @@ def voyage_edit(voyage_id):
          'time': s.stop_time or '', 'order': s.stop_order}
         for s in sorted(voyage.stops, key=lambda s: s.stop_order)
     ]
+    has_future_siblings = False
+    if voyage.recurrence_group:
+        has_future_siblings = Voyage.query.filter(
+            Voyage.recurrence_group == voyage.recurrence_group,
+            Voyage.id != voyage.id,
+            Voyage.departure_at >= voyage.departure_at,
+            Voyage.status == 'scheduled',
+        ).count() > 0
+
     return render_template('admin/voyage_form.html', form=form,
                            title='Edit Voyage', voyage=voyage,
-                           stops_json=json.dumps(existing))
+                           stops_json=json.dumps(existing),
+                           has_future_siblings=has_future_siblings)
 
 
 @admin_bp.route('/voyages/cancel-recurrence/<group>', methods=['POST'])

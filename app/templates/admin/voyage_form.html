@@ -123,11 +123,47 @@
     </div>
     {% endif %}
 
+    {% if voyage %}
+    <input type="hidden" name="apply_scope" id="applyScope" value="this">
+    {% endif %}
+
     <div class="form-actions" style="margin-top:24px;">
         <a href="{{ url_for('admin.voyages') }}" class="btn btn-ghost">Cancel</a>
         {{ form.submit(class="btn btn-primary", style="width:auto;") }}
     </div>
 </form>
+
+{% if voyage and has_future_siblings %}
+<div id="recurringModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:1000; align-items:center; justify-content:center;">
+    <div style="background:var(--cream); border-radius:10px; padding:28px 24px; max-width:380px; width:90%; box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+        <div class="serif" style="font-size:18px; color:var(--ink); margin-bottom:8px;">Edit recurring voyage</div>
+        <p style="font-size:13px; color:var(--muted); margin:0 0 20px;">This voyage is part of a recurring series. How should the changes apply?</p>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <button class="btn btn-ghost" style="text-align:left; justify-content:flex-start;" onclick="submitWithScope('this')">
+                <strong>This voyage only</strong><br>
+                <span style="font-size:12px; color:var(--muted); font-weight:400;">Only this date will be updated.</span>
+            </button>
+            <button class="btn btn-primary" style="text-align:left; justify-content:flex-start;" onclick="submitWithScope('following')">
+                <strong>This and all following voyages</strong><br>
+                <span style="font-size:12px; opacity:0.8; font-weight:400;">Updates this voyage and all future ones in the series.</span>
+            </button>
+        </div>
+        <button onclick="document.getElementById('recurringModal').style.display='none'" style="margin-top:16px; background:none; border:none; color:var(--muted); font-size:12px; cursor:pointer; width:100%; text-align:center;">Cancel</button>
+    </div>
+</div>
+<script>
+document.querySelector('form.admin-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    document.getElementById('recurringModal').style.display = 'flex';
+});
+
+function submitWithScope(scope) {
+    document.getElementById('applyScope').value = scope;
+    document.getElementById('recurringModal').style.display = 'none';
+    document.querySelector('form.admin-form').submit();
+}
+</script>
+{% endif %}
 
 {% if not voyage %}
 <script>
