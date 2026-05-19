@@ -128,7 +128,7 @@ def dashboard():
 def logs():
     page = request.args.get('page', 1, type=int)
     action_filter = request.args.get('action', 'all')
-    user_filter = request.args.get('user', 0, type=int)
+    user_filter = request.args.get('user', '')   # '' | 'customers' | '<int id>'
     date_from = request.args.get('date_from', '')
     date_to = request.args.get('date_to', '')
     is_print = request.args.get('format') == 'print'
@@ -137,8 +137,11 @@ def logs():
 
     if action_filter != 'all':
         query = query.filter_by(action=action_filter)
-    if user_filter:
-        query = query.filter_by(user_id=user_filter)
+    if user_filter == 'customers':
+        customer_ids = db.session.query(User.id).filter_by(role='customer').subquery()
+        query = query.filter(ActivityLog.user_id.in_(customer_ids))
+    elif user_filter and user_filter.isdigit():
+        query = query.filter_by(user_id=int(user_filter))
     if date_from:
         try:
             query = query.filter(ActivityLog.created_at >= datetime.strptime(date_from, '%Y-%m-%d'))
@@ -153,7 +156,7 @@ def logs():
 
     all_actions = db.session.query(ActivityLog.action).distinct().all()
     all_actions = sorted([a[0] for a in all_actions])
-    all_users = User.query.order_by(User.full_name).all()
+    staff_users = User.query.filter(User.role != 'customer').order_by(User.full_name).all()
 
     if is_print:
         all_logs = query.all()
@@ -163,7 +166,7 @@ def logs():
             user_filter=user_filter,
             date_from=date_from,
             date_to=date_to,
-            all_users=all_users,
+            staff_users=staff_users,
             now=datetime.utcnow(),
         )
 
@@ -176,7 +179,7 @@ def logs():
         date_from=date_from,
         date_to=date_to,
         all_actions=all_actions,
-        all_users=all_users,
+        staff_users=staff_users,
     )
 # ============================================================
 # BUSES

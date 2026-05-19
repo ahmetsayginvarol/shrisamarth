@@ -35,9 +35,10 @@ details summary::-webkit-details-marker { display: none; }
         <div class="filter-group">
             <label class="form-label">User</label>
             <select name="user" class="form-select" onchange="this.form.submit()">
-                <option value="0" {% if user_filter == 0 %}selected{% endif %}>All Users</option>
-                {% for u in all_users %}
-                <option value="{{ u.id }}" {% if user_filter == u.id %}selected{% endif %}>
+                <option value="" {% if not user_filter %}selected{% endif %}>All Users</option>
+                <option value="customers" {% if user_filter == 'customers' %}selected{% endif %}>Registered Passengers</option>
+                {% for u in staff_users %}
+                <option value="{{ u.id }}" {% if user_filter == u.id|string %}selected{% endif %}>
                     {{ u.full_name }} ({{ u.role }})
                 </option>
                 {% endfor %}
@@ -53,7 +54,7 @@ details summary::-webkit-details-marker { display: none; }
             <input type="date" name="date_to" class="form-input" value="{{ date_to }}"
                    style="width:auto;" onchange="this.form.submit()">
         </div>
-        {% if action_filter != 'all' or user_filter or date_from or date_to %}
+        {% if action_filter != 'all' or user_filter != '' or date_from or date_to %}
         <div class="filter-group" style="align-self:flex-end;">
             <a href="{{ url_for('admin.logs') }}" class="btn btn-ghost" style="font-size:12px;">✕ Clear</a>
         </div>
