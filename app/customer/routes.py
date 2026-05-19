@@ -18,8 +18,11 @@ customer_bp = Blueprint('customer', __name__, template_folder='../templates/cust
 
 def _get_cms() -> dict:
     """Return all site_content rows keyed by section_key."""
-    rows = SiteContent.query.all()
-    return {r.section_key: r for r in rows}
+    try:
+        rows = SiteContent.query.all()
+        return {r.section_key: r for r in rows}
+    except Exception:
+        return {}
 
 
 @customer_bp.context_processor

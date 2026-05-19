@@ -37,4 +37,7 @@ def create_app(config_class=Config):
     # Import models so migrations detect them
     from app import models  # noqa: F401
 
+    with app.app_context():
+        db.create_all()
+
     return app
