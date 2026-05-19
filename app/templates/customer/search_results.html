@@ -66,7 +66,7 @@
             {% for v in voyages %}
             {% set stops = voyage_stops.get(v.id, {}) %}
             {% set avail = v.bus.total_seats - v.seats_booked %}
-            <div class="c-result-card">
+            <div class="c-result-card" onclick="toggleCard(this)">
                 <div class="c-result-main">
                     <!-- Time + bus info -->
                     <div class="c-result-time-block">
@@ -103,48 +103,58 @@
                         {% endif %}
                     </div>
 
-                    <!-- Fare + CTA -->
+                    <!-- Fare + expand indicator -->
                     <div class="c-result-cta">
                         <div class="c-result-fare">₹ {{ v.base_fare | int }}</div>
                         <div class="c-result-fare-sub" data-i18n="c.per_seat">per seat</div>
-                        {% if avail > 0 %}
-                        <a href="{{ url_for('customer.book', voyage_id=v.id) }}"
-                           class="c-book-btn" data-i18n="c.select_seats">Select Seats →</a>
-                        {% else %}
-                        <span class="c-book-btn c-book-btn-disabled" data-i18n="c.sold_out">Sold Out</span>
-                        {% endif %}
+                        <div class="c-expand-chevron">&#8964;</div>
                     </div>
                 </div>
 
-                <!-- Stops row -->
-                {% if stops.boarding or stops.dropping %}
-                <div class="c-result-stops">
-                    {% if stops.boarding %}
-                    <div class="c-stops-row">
-                        <span class="c-stops-label boarding" data-i18n="c.boarding">Boarding</span>
-                        <div class="c-stops-chips">
-                            {% for s in stops.boarding %}
-                            <span class="c-stop-chip">
-                                {{ s.stop_name }}
-                            </span>
-                            {% endfor %}
+                <!-- Expandable panel: stops + book button -->
+                <div class="c-result-expandable">
+                    <div class="c-expand-inner">
+                        {% if stops.boarding or stops.dropping %}
+                        <div class="c-expand-stops">
+                            {% if stops.boarding %}
+                            <div class="c-stops-row">
+                                <span class="c-stops-label boarding" data-i18n="c.boarding">Boarding</span>
+                                <div class="c-stops-chips">
+                                    {% for s in stops.boarding %}
+                                    <span class="c-stop-chip">{{ s.stop_name }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+                            {% if stops.dropping %}
+                            <div class="c-stops-row" style="margin-top:8px;">
+                                <span class="c-stops-label dropping" data-i18n="c.dropping">Dropping</span>
+                                <div class="c-stops-chips">
+                                    {% for s in stops.dropping %}
+                                    <span class="c-stop-chip">{{ s.stop_name }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        <div class="c-expand-stops" style="color:var(--muted); font-size:13px;">
+                            No stop information available for this voyage.
+                        </div>
+                        {% endif %}
+
+                        <div class="c-expand-actions">
+                            {% if avail > 0 %}
+                            <a href="{{ url_for('customer.book', voyage_id=v.id) }}"
+                               class="c-expand-book-btn" onclick="event.stopPropagation()"
+                               data-i18n="c.select_seats">Book Seat(s) →</a>
+                            {% else %}
+                            <span class="c-expand-book-btn c-expand-book-btn-disabled"
+                                  data-i18n="c.sold_out">Sold Out</span>
+                            {% endif %}
                         </div>
                     </div>
-                    {% endif %}
-                    {% if stops.dropping %}
-                    <div class="c-stops-row">
-                        <span class="c-stops-label dropping" data-i18n="c.dropping">Dropping</span>
-                        <div class="c-stops-chips">
-                            {% for s in stops.dropping %}
-                            <span class="c-stop-chip">
-                                {{ s.stop_name }}
-                            </span>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    {% endif %}
                 </div>
-                {% endif %}
             </div>
             {% endfor %}
 
@@ -160,4 +170,14 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleCard(card) {
+    const isOpen = card.classList.contains('expanded');
+    document.querySelectorAll('.c-result-card.expanded').forEach(c => c.classList.remove('expanded'));
+    if (!isOpen) card.classList.add('expanded');
+}
+</script>
 {% endblock %}
