@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Activity Log — SHRISAMARTH</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #1a1a1a; background: #fff; padding: 24px 32px; }
+
+  .print-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; border-bottom: 2px solid #1a1a1a; padding-bottom: 14px; }
+  .print-header h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+  .print-header .sub { font-size: 12px; color: #666; margin-top: 4px; }
+  .print-meta { text-align: right; font-size: 11px; color: #666; line-height: 1.7; }
+
+  .filter-summary { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; font-size: 11px; }
+  .filter-tag { background: #f4f0e8; border: 1px solid #ddd; border-radius: 4px; padding: 2px 8px; color: #555; }
+  .filter-tag strong { color: #1a1a1a; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  thead tr { background: #1a1a1a; color: #fff; }
+  thead th { padding: 7px 10px; text-align: left; font-weight: 600; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }
+  tbody tr { border-bottom: 1px solid #e8e4dc; }
+  tbody tr:nth-child(even) { background: #faf8f4; }
+  tbody td { padding: 7px 10px; vertical-align: top; line-height: 1.4; }
+
+  .td-time { white-space: nowrap; font-family: monospace; color: #555; }
+  .td-action { white-space: nowrap; }
+  .action-badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; border: 1px solid; }
+  .badge-cancel  { color: #a83232; border-color: #a83232; background: rgba(168,50,50,0.08); }
+  .badge-create  { color: #3d7a3d; border-color: #3d7a3d; background: rgba(61,122,61,0.08); }
+  .badge-edit    { color: #7a6010; border-color: #7a6010; background: rgba(122,96,16,0.08); }
+  .badge-login   { color: #2a5aa0; border-color: #2a5aa0; background: rgba(42,90,160,0.08); }
+  .badge-default { color: #444; border-color: #aaa; background: #f0f0f0; }
+
+  .td-ip { font-family: monospace; color: #aaa; white-space: nowrap; }
+
+  .print-footer { margin-top: 20px; border-top: 1px solid #ddd; padding-top: 10px; font-size: 10px; color: #aaa; display: flex; justify-content: space-between; }
+  .record-count { font-size: 12px; color: #555; margin-bottom: 10px; }
+
+  @media print {
+    body { padding: 0; }
+    .no-print { display: none !important; }
+    thead { display: table-header-group; }
+    tr { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body onload="window.print()">
+
+<div class="print-header">
+  <div>
+    <h1>SHRISAMARTH · Activity Log</h1>
+    <div class="sub">Printed {{ now.strftime('%d %B %Y at %H:%M') }}</div>
+  </div>
+  <div class="print-meta">
+    {% if date_from or date_to %}
+    <div>
+      Period:
+      {% if date_from %}{{ date_from }}{% else %}beginning{% endif %}
+      →
+      {% if date_to %}{{ date_to }}{% else %}today{% endif %}
+    </div>
+    {% endif %}
+    {% if action_filter != 'all' %}
+    <div>Action: {{ action_filter|replace('_',' ')|title }}</div>
+    {% endif %}
+    {% if user_filter %}
+    {% set u = all_users | selectattr('id', 'equalto', user_filter) | first %}
+    <div>User: {{ u.full_name if u else user_filter }}</div>
+    {% endif %}
+  </div>
+</div>
+
+{% set active_filters = [] %}
+{% if date_from %}{% set _ = active_filters.append('From: ' ~ date_from) %}{% endif %}
+{% if date_to %}{% set _ = active_filters.append('To: ' ~ date_to) %}{% endif %}
+{% if action_filter != 'all' %}{% set _ = active_filters.append('Action: ' ~ (action_filter|replace('_',' ')|title)) %}{% endif %}
+{% if user_filter %}
+  {% set u = all_users | selectattr('id', 'equalto', user_filter) | first %}
+  {% if u %}{% set _ = active_filters.append('User: ' ~ u.full_name) %}{% endif %}
+{% endif %}
+
+{% if active_filters %}
+<div class="filter-summary">
+  {% for f in active_filters %}
+  <span class="filter-tag">{{ f }}</span>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="record-count">{{ all_logs|length }} record{{ 's' if all_logs|length != 1 }}</div>
+
+{% if all_logs %}
+<table>
+  <thead>
+    <tr>
+      <th>Time</th>
+      <th>User</th>
+      <th>Action</th>
+      <th>Details</th>
+      <th>IP</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for log in all_logs %}
+    {% set cat = 'cancel' if 'cancel' in log.action else 'create' if 'create' in log.action else 'edit' if 'edit' in log.action else 'login' if 'login' in log.action else 'default' %}
+    <tr>
+      <td class="td-time">{{ log.created_at.strftime('%d %b %Y') }}<br>{{ log.created_at.strftime('%H:%M') }}</td>
+      <td>
+        {% if log.user %}<strong>{{ log.user.full_name }}</strong><br><span style="color:#888; font-size:10px;">{{ log.user.role }}</span>
+        {% else %}<span style="color:#aaa;">System</span>{% endif %}
+      </td>
+      <td class="td-action">
+        <span class="action-badge badge-{{ cat }}">
+          {% if log.action == 'group_booking_created' %}Group Booking Created
+          {% else %}{{ log.action|replace('_',' ')|title }}{% endif %}
+        </span>
+      </td>
+      <td>
+        {% if ' | ' in log.description %}
+          {% set parts = log.description.split(' | ') %}
+          {{ parts[0] }}
+          <ul style="margin: 3px 0 0 14px; padding:0; list-style:disc; color:#555;">
+            {% for item in parts[1:] %}<li>{{ item }}</li>{% endfor %}
+          </ul>
+        {% else %}
+          {{ log.description }}
+        {% endif %}
+      </td>
+      <td class="td-ip">{{ log.ip_address or '—' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p style="color:#888; padding:40px 0; text-align:center;">No records match the selected filters.</p>
+{% endif %}
+
+<div class="print-footer">
+  <span>SHRISAMARTH Bus Services</span>
+  <span>{{ all_logs|length }} record{{ 's' if all_logs|length != 1 }} · Generated {{ now.strftime('%d %b %Y %H:%M') }}</span>
+</div>
+
+</body>
+</html>

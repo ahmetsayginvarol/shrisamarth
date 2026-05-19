@@ -11,11 +11,16 @@ details summary::-webkit-details-marker { display: none; }
         <div class="page-title serif">Activity Log</div>
         <div class="page-subtitle">{{ logs.total }} event(s) recorded</div>
     </div>
+    <a href="{{ url_for('admin.logs', action=action_filter, user=user_filter, date_from=date_from, date_to=date_to, format='print') }}"
+       target="_blank" class="btn btn-ghost" style="display:flex; align-items:center; gap:6px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Print
+    </a>
 </div>
 
 <!-- Filters -->
 <div class="log-filters">
-    <form method="GET" action="{{ url_for('admin.logs') }}" class="filter-form">
+    <form method="GET" action="{{ url_for('admin.logs') }}" class="filter-form" id="logFilterForm">
         <div class="filter-group">
             <label class="form-label">Action</label>
             <select name="action" class="form-select" onchange="this.form.submit()">
@@ -38,6 +43,21 @@ details summary::-webkit-details-marker { display: none; }
                 {% endfor %}
             </select>
         </div>
+        <div class="filter-group">
+            <label class="form-label">From Date</label>
+            <input type="date" name="date_from" class="form-input" value="{{ date_from }}"
+                   style="width:auto;" onchange="this.form.submit()">
+        </div>
+        <div class="filter-group">
+            <label class="form-label">To Date</label>
+            <input type="date" name="date_to" class="form-input" value="{{ date_to }}"
+                   style="width:auto;" onchange="this.form.submit()">
+        </div>
+        {% if action_filter != 'all' or user_filter or date_from or date_to %}
+        <div class="filter-group" style="align-self:flex-end;">
+            <a href="{{ url_for('admin.logs') }}" class="btn btn-ghost" style="font-size:12px;">✕ Clear</a>
+        </div>
+        {% endif %}
     </form>
 </div>
 
@@ -98,12 +118,12 @@ details summary::-webkit-details-marker { display: none; }
 {% if logs.pages > 1 %}
 <div class="pagination">
     {% if logs.has_prev %}
-    <a href="{{ url_for('admin.logs', page=logs.prev_num, action=action_filter, user=user_filter) }}"
+    <a href="{{ url_for('admin.logs', page=logs.prev_num, action=action_filter, user=user_filter, date_from=date_from, date_to=date_to) }}"
        class="btn btn-ghost">&larr; Newer</a>
     {% endif %}
     <span class="muted">Page {{ logs.page }} of {{ logs.pages }}</span>
     {% if logs.has_next %}
-    <a href="{{ url_for('admin.logs', page=logs.next_num, action=action_filter, user=user_filter) }}"
+    <a href="{{ url_for('admin.logs', page=logs.next_num, action=action_filter, user=user_filter, date_from=date_from, date_to=date_to) }}"
        class="btn btn-ghost">Older &rarr;</a>
     {% endif %}
 </div>

@@ -129,6 +129,9 @@ def logs():
     page = request.args.get('page', 1, type=int)
     action_filter = request.args.get('action', 'all')
     user_filter = request.args.get('user', 0, type=int)
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+    is_print = request.args.get('format') == 'print'
 
     query = ActivityLog.query.order_by(ActivityLog.created_at.desc())
 
@@ -136,18 +139,42 @@ def logs():
         query = query.filter_by(action=action_filter)
     if user_filter:
         query = query.filter_by(user_id=user_filter)
+    if date_from:
+        try:
+            query = query.filter(ActivityLog.created_at >= datetime.strptime(date_from, '%Y-%m-%d'))
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            dt_to = datetime.strptime(date_to, '%Y-%m-%d') + timedelta(days=1)
+            query = query.filter(ActivityLog.created_at < dt_to)
+        except ValueError:
+            pass
 
-    logs = query.paginate(page=page, per_page=50, error_out=False)
-
-    # Get unique actions and users for filter dropdowns
     all_actions = db.session.query(ActivityLog.action).distinct().all()
     all_actions = sorted([a[0] for a in all_actions])
     all_users = User.query.order_by(User.full_name).all()
+
+    if is_print:
+        all_logs = query.all()
+        return render_template('admin/logs_print.html',
+            all_logs=all_logs,
+            action_filter=action_filter,
+            user_filter=user_filter,
+            date_from=date_from,
+            date_to=date_to,
+            all_users=all_users,
+            now=datetime.utcnow(),
+        )
+
+    logs = query.paginate(page=page, per_page=50, error_out=False)
 
     return render_template('admin/logs.html',
         logs=logs,
         action_filter=action_filter,
         user_filter=user_filter,
+        date_from=date_from,
+        date_to=date_to,
         all_actions=all_actions,
         all_users=all_users,
     )
