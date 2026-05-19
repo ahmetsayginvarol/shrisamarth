@@ -284,23 +284,23 @@ def generate_group_ticket(bookings, lang: str = 'en') -> io.BytesIO:
         topMargin=6*mm, bottomMargin=6*mm,
     )
 
-    s_brand = ParagraphStyle('brand', fontSize=14, textColor=CREAM,
-        fontName='Helvetica-Bold', alignment=TA_LEFT, leading=16)
-    s_pass = ParagraphStyle('pass', fontSize=7, textColor=GOLD,
-        fontName='Helvetica-Bold', alignment=TA_RIGHT, leading=9)
-    s_route = ParagraphStyle('route', fontSize=14, textColor=INK,
-        fontName='Helvetica-Bold', alignment=TA_LEFT, leading=17)
-    s_dep = ParagraphStyle('dep', fontSize=8, textColor=MUTED,
-        fontName='Helvetica', alignment=TA_LEFT, leading=10)
-    s_label = ParagraphStyle('label', fontSize=6, textColor=GOLD,
-        fontName='Helvetica-Bold', alignment=TA_LEFT, leading=8)
-    s_val = ParagraphStyle('val', fontSize=9, textColor=INK,
-        fontName='Helvetica-Bold', alignment=TA_LEFT, leading=11)
-    s_val_sm = ParagraphStyle('val_sm', fontSize=8, textColor=INK,
-        fontName='Helvetica', alignment=TA_LEFT, leading=10)
-    s_center = ParagraphStyle('center', fontSize=7, textColor=MUTED,
-        fontName='Helvetica', alignment=TA_CENTER, leading=9)
-    s_code = ParagraphStyle('code', fontSize=6, textColor=MUTED,
+    s_brand = ParagraphStyle('brand2', fontSize=14, textColor=CREAM,
+        fontName=bold_font, alignment=TA_LEFT, leading=16)
+    s_pass = ParagraphStyle('pass2', fontSize=7, textColor=GOLD,
+        fontName=bold_font, alignment=TA_RIGHT, leading=9)
+    s_route = ParagraphStyle('route2', fontSize=14, textColor=INK,
+        fontName=bold_font, alignment=TA_LEFT, leading=17)
+    s_dep = ParagraphStyle('dep2', fontSize=8, textColor=MUTED,
+        fontName=base_font, alignment=TA_LEFT, leading=10)
+    s_label = ParagraphStyle('label2', fontSize=6, textColor=GOLD,
+        fontName=bold_font, alignment=TA_LEFT, leading=8)
+    s_val = ParagraphStyle('val2', fontSize=9, textColor=INK,
+        fontName=bold_font, alignment=TA_LEFT, leading=11)
+    s_val_sm = ParagraphStyle('val_sm2', fontSize=8, textColor=INK,
+        fontName=base_font, alignment=TA_LEFT, leading=10)
+    s_center = ParagraphStyle('center2', fontSize=7, textColor=MUTED,
+        fontName=base_font, alignment=TA_CENTER, leading=9)
+    s_code = ParagraphStyle('code2', fontSize=6, textColor=MUTED,
         fontName='Courier', alignment=TA_CENTER, leading=8)
 
     half = CONTENT_W / 2
@@ -314,7 +314,7 @@ def generate_group_ticket(bookings, lang: str = 'en') -> io.BytesIO:
 
     header = Table(
         [[Paragraph('SHRISAMARTH', s_brand),
-          Paragraph('GROUP BOARDING PASS', s_pass)]],
+          Paragraph(L['group_boarding_pass'], s_pass)]],
         colWidths=[half, half],
     )
     header.setStyle(TableStyle([
@@ -330,16 +330,16 @@ def generate_group_ticket(bookings, lang: str = 'en') -> io.BytesIO:
     dep = voyage.departure_at.strftime('%d %B %Y · %H:%M')
     # Seats table — one row per seat, with per-passenger name
     seat_rows = [[
-        Paragraph('SEAT', s_label),
-        Paragraph('PASSENGER', s_label),
-        Paragraph('TYPE', s_label),
-        Paragraph('FARE', s_label),
-        Paragraph('ADVANCE', s_label),
-        Paragraph('BALANCE', s_label),
+        Paragraph(L['seat'], s_label),
+        Paragraph(L['passenger'], s_label),
+        Paragraph(L['type'], s_label),
+        Paragraph(L['fare'], s_label),
+        Paragraph(L['advance'], s_label),
+        Paragraph(L['balance'], s_label),
     ]]
     col_w = [CONTENT_W * f for f in (0.10, 0.30, 0.13, 0.16, 0.15, 0.16)]
     for b in bookings:
-        window_label = 'Win' if b.is_window else 'Aisle'
+        window_label = L['win_short'] if b.is_window else L['aisle']
         seat_rows.append([
             Paragraph(b.seat_id, s_val),
             Paragraph(b.passenger_name, s_val_sm),
@@ -364,7 +364,7 @@ def generate_group_ticket(bookings, lang: str = 'en') -> io.BytesIO:
 
     totals_row = Table([[
         Paragraph('', s_label),
-        Paragraph('TOTAL', s_label),
+        Paragraph(L['total'], s_label),
         Paragraph('', s_label),
         Paragraph(f'₹ {total_fare}', s_val_sm),
         Paragraph(f'₹ {total_advance}', s_val_sm),
@@ -379,9 +379,9 @@ def generate_group_ticket(bookings, lang: str = 'en') -> io.BytesIO:
     ]))
 
     row_board_drop = Table([[
-        Table([[Paragraph('BOARDING', s_label)], [Paragraph(first.boarding_point, s_val)]],
+        Table([[Paragraph(L['boarding'], s_label)], [Paragraph(first.boarding_point, s_val)]],
               colWidths=[half]),
-        Table([[Paragraph('DROPPING', s_label)], [Paragraph(first.dropping_point, s_val)]],
+        Table([[Paragraph(L['dropping'], s_label)], [Paragraph(first.dropping_point, s_val)]],
               colWidths=[half]),
     ]], colWidths=[half, half])
 
@@ -392,10 +392,10 @@ def generate_group_ticket(bookings, lang: str = 'en') -> io.BytesIO:
     footer = Table([[
         qr_img,
         Table([
-            [Paragraph('GROUP BOOKING ID', s_label)],
+            [Paragraph(L['group_booking_id'], s_label)],
             [Paragraph(first.group_booking_code, s_code)],
             [Spacer(1, 2)],
-            [Paragraph('Show QR at boarding', s_center)],
+            [Paragraph(L['show_qr'], s_center)],
         ], colWidths=[CONTENT_W - 24*mm]),
     ]], colWidths=[24*mm, CONTENT_W - 24*mm])
     footer.setStyle(TableStyle([
@@ -416,17 +416,17 @@ def generate_group_ticket(bookings, lang: str = 'en') -> io.BytesIO:
         Paragraph(dep, s_dep),
         sp,
         hr,
-        field_sm('CONTACT', first.passenger_phone),
+        field_sm(L['contact'], first.passenger_phone),
         sp,
         hr,
-        Table([[Paragraph(f'SEATS ({len(bookings)})', s_label)]], colWidths=[CONTENT_W]),
+        Table([[Paragraph(f'{L["seats"]} ({len(bookings)})', s_label)]], colWidths=[CONTENT_W]),
         Spacer(1, 1*mm),
         seats_table,
         totals_row,
         sp,
         row_board_drop,
         sp,
-        field_sm('BUS', voyage.bus.registration),
+        field_sm(L['bus'], voyage.bus.registration),
         Spacer(1, 3*mm),
         hr_dash,
         footer,
