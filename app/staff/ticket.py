@@ -20,6 +20,80 @@ TICKET_W = 105 * mm
 TICKET_H = 190 * mm
 CONTENT_W = TICKET_W - 16 * mm  # margins on each side
 
+# ===== Ticket label translations =====
+_TICKET_LABELS = {
+    'en': {
+        'boarding_pass': 'BOARDING PASS',
+        'group_boarding_pass': 'GROUP BOARDING PASS',
+        'seat': 'SEAT',
+        'gender': 'GENDER',
+        'boarding': 'BOARDING',
+        'dropping': 'DROPPING',
+        'fare': 'FARE',
+        'advance': 'ADVANCE',
+        'balance': 'BALANCE',
+        'booking_id': 'BOOKING ID',
+        'group_booking_id': 'GROUP BOOKING ID',
+        'passenger': 'PASSENGER',
+        'contact': 'CONTACT',
+        'bus': 'BUS',
+        'show_qr': 'Show QR at boarding',
+        'male': 'Male',
+        'female': 'Female',
+        'window': 'Window',
+        'aisle': 'Aisle',
+        'win_short': 'Win',
+        'total': 'TOTAL',
+        'type': 'TYPE',
+        'seats': 'SEATS',
+    },
+    'hi': {
+        'boarding_pass': 'बोर्डिंग पास',
+        'group_boarding_pass': 'समूह बोर्डिंग पास',
+        'seat': 'सीट',
+        'gender': 'लिंग',
+        'boarding': 'बोर्डिंग',
+        'dropping': 'ड्रॉपिंग',
+        'fare': 'किराया',
+        'advance': 'अग्रिम',
+        'balance': 'शेष',
+        'booking_id': 'बुकिंग आईडी',
+        'group_booking_id': 'समूह बुकिंग आईडी',
+        'passenger': 'यात्री',
+        'contact': 'संपर्क',
+        'bus': 'बस',
+        'show_qr': 'बोर्डिंग पर QR दिखाएं',
+        'male': 'पुरुष',
+        'female': 'महिला',
+        'window': 'खिड़की',
+        'aisle': 'गलियारा',
+        'win_short': 'खि',
+        'total': 'कुल',
+        'type': 'प्रकार',
+        'seats': 'सीटें',
+    },
+}
+
+def _get_ticket_font(lang: str) -> str:
+    """Return the appropriate font name for the given language."""
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    import os
+    fonts_dir = os.path.join(os.path.dirname(__file__), '..', 'static', 'fonts')
+    if lang == 'hi':
+        regular = os.path.join(fonts_dir, 'FreeSans.ttf')
+        bold_path = os.path.join(fonts_dir, 'FreeSansBold.ttf')
+        try:
+            if 'FreeSans' not in pdfmetrics.getRegisteredFontNames():
+                if os.path.exists(regular):
+                    pdfmetrics.registerFont(TTFont('FreeSans', regular))
+                if os.path.exists(bold_path):
+                    pdfmetrics.registerFont(TTFont('FreeSansBold', bold_path))
+            return 'FreeSans'
+        except Exception:
+            pass
+    return 'Helvetica'
+
 
 def generate_qr(data: str) -> io.BytesIO:
     qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_M,
@@ -33,8 +107,11 @@ def generate_qr(data: str) -> io.BytesIO:
     return buf
 
 
-def generate_ticket(booking) -> io.BytesIO:
+def generate_ticket(booking, lang: str = 'en') -> io.BytesIO:
     buf = io.BytesIO()
+    L = _TICKET_LABELS.get(lang, _TICKET_LABELS['en'])
+    base_font = _get_ticket_font(lang)
+    bold_font = base_font + '-Bold' if lang == 'en' else ('FreeSansBold' if lang == 'hi' else base_font)
 
     doc = SimpleDocTemplate(
         buf,
@@ -45,30 +122,22 @@ def generate_ticket(booking) -> io.BytesIO:
 
     # ===== Styles =====
     s_brand = ParagraphStyle('brand', fontSize=14, textColor=CREAM,
-        fontName='Helvetica-Bold', alignment=TA_LEFT, leading=16)
-
+        fontName=bold_font, alignment=TA_LEFT, leading=16)
     s_pass = ParagraphStyle('pass', fontSize=7, textColor=GOLD,
-        fontName='Helvetica-Bold', alignment=TA_RIGHT, leading=9,
+        fontName=bold_font, alignment=TA_RIGHT, leading=9,
         spaceAfter=0)
-
     s_route = ParagraphStyle('route', fontSize=14, textColor=INK,
-        fontName='Helvetica-Bold', alignment=TA_LEFT, leading=17)
-
+        fontName=bold_font, alignment=TA_LEFT, leading=17)
     s_dep = ParagraphStyle('dep', fontSize=8, textColor=MUTED,
-        fontName='Helvetica', alignment=TA_LEFT, leading=10)
-
+        fontName=base_font, alignment=TA_LEFT, leading=10)
     s_label = ParagraphStyle('label', fontSize=6, textColor=GOLD,
-        fontName='Helvetica-Bold', alignment=TA_LEFT, leading=8)
-
+        fontName=bold_font, alignment=TA_LEFT, leading=8)
     s_val = ParagraphStyle('val', fontSize=9, textColor=INK,
-        fontName='Helvetica-Bold', alignment=TA_LEFT, leading=11)
-
+        fontName=bold_font, alignment=TA_LEFT, leading=11)
     s_val_sm = ParagraphStyle('val_sm', fontSize=8, textColor=INK,
-        fontName='Helvetica', alignment=TA_LEFT, leading=10)
-
+        fontName=base_font, alignment=TA_LEFT, leading=10)
     s_center = ParagraphStyle('center', fontSize=7, textColor=MUTED,
-        fontName='Helvetica', alignment=TA_CENTER, leading=9)
-
+        fontName=base_font, alignment=TA_CENTER, leading=9)
     s_code = ParagraphStyle('code', fontSize=6, textColor=MUTED,
         fontName='Courier', alignment=TA_CENTER, leading=8)
 
@@ -91,7 +160,7 @@ def generate_ticket(booking) -> io.BytesIO:
     # ===== Header =====
     header = Table(
         [[Paragraph('SHRISAMARTH', s_brand),
-          Paragraph('BOARDING PASS', s_pass)]],
+          Paragraph(L['boarding_pass'], s_pass)]],
         colWidths=[half, half],
     )
     header.setStyle(TableStyle([
@@ -108,13 +177,13 @@ def generate_ticket(booking) -> io.BytesIO:
     dep = booking.voyage.departure_at.strftime('%d %B %Y · %H:%M')
 
     # ===== Details grid =====
-    gender_label = 'Male' if booking.gender == 'M' else 'Female'
-    window_label = 'Window' if booking.is_window else 'Aisle'
+    gender_label = L['male'] if booking.gender == 'M' else L['female']
+    window_label = L['window'] if booking.is_window else L['aisle']
 
     row_seat_gender = Table([[
-        Table([[Paragraph('SEAT', s_label)], [Paragraph(f'{booking.seat_id}  ({window_label})', s_val)]],
+        Table([[Paragraph(L['seat'], s_label)], [Paragraph(f'{booking.seat_id}  ({window_label})', s_val)]],
               colWidths=[half]),
-        Table([[Paragraph('GENDER', s_label)], [Paragraph(gender_label, s_val)]],
+        Table([[Paragraph(L['gender'], s_label)], [Paragraph(gender_label, s_val)]],
               colWidths=[half]),
     ]], colWidths=[half, half])
 
@@ -123,18 +192,18 @@ def generate_ticket(booking) -> io.BytesIO:
     if stop_times.get(booking.boarding_point):
         board_label = f"{booking.boarding_point} ({stop_times[booking.boarding_point]})"
     row_board_drop = Table([[
-        Table([[Paragraph('BOARDING', s_label)], [Paragraph(board_label, s_val)]],
+        Table([[Paragraph(L['boarding'], s_label)], [Paragraph(board_label, s_val)]],
               colWidths=[half]),
-        Table([[Paragraph('DROPPING', s_label)], [Paragraph(booking.dropping_point, s_val)]],
+        Table([[Paragraph(L['dropping'], s_label)], [Paragraph(booking.dropping_point, s_val)]],
               colWidths=[half]),
     ]], colWidths=[half, half])
 
     row_money = Table([[
-        Table([[Paragraph('FARE', s_label)], [Paragraph(f'₹ {int(booking.fare)}', s_val_sm)]],
+        Table([[Paragraph(L['fare'], s_label)], [Paragraph(f'₹ {int(booking.fare)}', s_val_sm)]],
               colWidths=[third]),
-        Table([[Paragraph('ADVANCE', s_label)], [Paragraph(f'₹ {int(booking.advance_paid or 0)}', s_val_sm)]],
+        Table([[Paragraph(L['advance'], s_label)], [Paragraph(f'₹ {int(booking.advance_paid or 0)}', s_val_sm)]],
               colWidths=[third]),
-        Table([[Paragraph('BALANCE', s_label)], [Paragraph(f'₹ {int(booking.balance_due or 0)}', s_val_sm)]],
+        Table([[Paragraph(L['balance'], s_label)], [Paragraph(f'₹ {int(booking.balance_due or 0)}', s_val_sm)]],
               colWidths=[third]),
     ]], colWidths=[third, third, third])
 
@@ -146,10 +215,10 @@ def generate_ticket(booking) -> io.BytesIO:
     footer = Table([[
         qr_img,
         Table([
-            [Paragraph('BOOKING ID', s_label)],
+            [Paragraph(L['booking_id'], s_label)],
             [Paragraph(booking.booking_code, s_code)],
             [Spacer(1, 2)],
-            [Paragraph('Show QR at boarding', s_center)],
+            [Paragraph(L['show_qr'], s_center)],
         ], colWidths=[CONTENT_W - 24*mm]),
     ]], colWidths=[24*mm, CONTENT_W - 24*mm])
 
@@ -172,7 +241,7 @@ def generate_ticket(booking) -> io.BytesIO:
         Paragraph(dep, s_dep),
         sp,
         hr,
-        field('PASSENGER', booking.passenger_name),
+        field(L['passenger'], booking.passenger_name),
         sp,
         row_seat_gender,
         sp,
@@ -180,8 +249,8 @@ def generate_ticket(booking) -> io.BytesIO:
         sp,
         row_money,
         sp,
-        field_sm('BUS', booking.voyage.bus.registration),
-        field_sm('CONTACT', booking.passenger_phone),
+        field_sm(L['bus'], booking.voyage.bus.registration),
+        field_sm(L['contact'], booking.passenger_phone),
         Spacer(1, 3*mm),
         hr_dash,
         footer,
@@ -192,10 +261,13 @@ def generate_ticket(booking) -> io.BytesIO:
     return buf
 
 
-def generate_group_ticket(bookings) -> io.BytesIO:
+def generate_group_ticket(bookings, lang: str = 'en') -> io.BytesIO:
     """Generate a single e-ticket PDF for a multi-seat group booking."""
     if not bookings:
         raise ValueError("No bookings provided")
+    L = _TICKET_LABELS.get(lang, _TICKET_LABELS['en'])
+    base_font = _get_ticket_font(lang)
+    bold_font = base_font + '-Bold' if lang == 'en' else ('FreeSansBold' if lang == 'hi' else base_font)
 
     first = bookings[0]
     voyage = first.voyage

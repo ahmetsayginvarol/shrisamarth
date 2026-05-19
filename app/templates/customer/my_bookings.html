@@ -9,28 +9,28 @@
             <h1 class="page-title serif" data-i18n="c.my_bookings">My Bookings</h1>
             <div class="page-subtitle">{{ current_user.full_name }} · {{ current_user.email }}</div>
         </div>
-        <a href="{{ url_for('customer.home') }}" class="btn btn-ghost">+ New Booking</a>
+        <a href="{{ url_for('customer.home') }}" class="btn btn-ghost" data-i18n="c.new_booking">+ New Booking</a>
     </div>
 
     <!-- Stats row -->
     {% if stats %}
     <div class="c-stats-row">
         <div class="c-stat-card">
-            <div class="c-stat-label">Total Trips</div>
+            <div class="c-stat-label" data-i18n="c.total_trips">Total Trips</div>
             <div class="c-stat-value">{{ stats.total }}</div>
         </div>
         <div class="c-stat-card">
-            <div class="c-stat-label">Upcoming</div>
+            <div class="c-stat-label" data-i18n="c.upcoming">Upcoming</div>
             <div class="c-stat-value" style="color:var(--sage);">{{ stats.upcoming }}</div>
         </div>
         <div class="c-stat-card">
-            <div class="c-stat-label">Total Fare</div>
+            <div class="c-stat-label" data-i18n="c.total_fare">Total Fare</div>
             <div class="c-stat-value" style="font-size:20px;">₹{{ stats.spent|int }}</div>
         </div>
         <div class="c-stat-card">
-            <div class="c-stat-label">Balance Due</div>
+            <div class="c-stat-label" data-i18n="c.balance_due">Balance Due</div>
             <div class="c-stat-value" style="font-size:20px; color:var(--marigold);">₹{{ stats.balance|int }}</div>
-            <div class="c-stat-sub">Pay on board</div>
+            <div class="c-stat-sub" data-i18n="c.pay_on_board">Pay on board</div>
         </div>
     </div>
     {% endif %}
@@ -79,11 +79,11 @@
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Seat</th>
-                            <th>Type</th>
-                            <th>Boarding → Dropping</th>
-                            <th>Fare</th>
-                            <th>Status</th>
+                            <th data-i18n="c.seat_label">Seat</th>
+                            <th data-i18n="c.type">Type</th>
+                            <th data-i18n="c.boarding_dropping">Boarding → Dropping</th>
+                            <th data-i18n="c.fare">Fare</th>
+                            <th data-i18n="c.status">Status</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -95,9 +95,9 @@
                             <td>₹ {{ b.fare|int }}</td>
                             <td>
                                 {% if b.status == 'confirmed' %}
-                                <span class="badge badge-scheduled">Confirmed</span>
+                                <span class="badge badge-scheduled" data-i18n="c.confirmed">Confirmed</span>
                                 {% else %}
-                                <span class="badge badge-cancelled">Cancelled</span>
+                                <span class="badge badge-cancelled" data-i18n="c.cancelled">Cancelled</span>
                                 {% endif %}
                             </td>
                         </tr>
@@ -107,7 +107,8 @@
 
                 <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; align-items:center;">
                     <a href="{{ url_for('customer.confirmation', code=item.code) }}"
-                       class="btn btn-ghost" style="font-size:12px; padding:6px 14px;">
+                       class="btn btn-ghost" style="font-size:12px; padding:6px 14px;"
+                       data-i18n="c.view_details">
                         View Details
                     </a>
                     {% if item.type == 'group' %}
@@ -143,9 +144,9 @@
     {% else %}
     <div style="text-align:center; padding:80px 20px; color:var(--muted);">
         <div style="font-size:48px; margin-bottom:16px;">🎫</div>
-        <div class="serif" style="font-size:28px; color:var(--ink); margin-bottom:8px;">No bookings yet</div>
-        <p style="font-size:13px; margin-bottom:24px;">Search for buses and book your first trip!</p>
-        <a href="{{ url_for('customer.home') }}" class="btn btn-primary" style="width:auto; display:inline-block;">
+        <div class="serif" style="font-size:28px; color:var(--ink); margin-bottom:8px;" data-i18n="c.no_bookings">No bookings yet</div>
+        <p style="font-size:13px; margin-bottom:24px;" data-i18n="c.no_bookings_sub">Search for buses and book your first trip!</p>
+        <a href="{{ url_for('customer.home') }}" class="btn btn-primary" style="width:auto; display:inline-block;" data-i18n="c.search_buses">
             Search Buses
         </a>
     </div>

@@ -20,7 +20,8 @@
            data-i18n="c.my_bookings">My Bookings</a>
         <a href="{{ url_for('customer.profile') }}"
            class="btn btn-ghost"
-           style="font-size:12px; padding:6px 14px;">Profile</a>
+           style="font-size:12px; padding:6px 14px;"
+           data-i18n="c.profile">Profile</a>
         <a href="{{ url_for('customer.logout') }}"
            class="btn btn-ghost"
            style="font-size:12px; padding:6px 14px;"
@@ -29,7 +30,8 @@
         {# Staff/admin landed on a customer page — show a link back to their panel #}
         <a href="{{ url_for('admin.dashboard') if current_user.role == 'admin' else url_for('staff.dashboard') }}"
            class="btn btn-ghost"
-           style="font-size:12px; padding:6px 14px;">Staff Panel ↗</a>
+           style="font-size:12px; padding:6px 14px;"
+           data-i18n="c.staff_panel">Staff Panel ↗</a>
         {% else %}
         <a href="{{ url_for('customer.login') }}"
            class="btn btn-ghost"
@@ -55,7 +57,7 @@
                 <span class="c-footer-mark serif">श्री</span>
                 <span class="c-footer-name">SHRISAMARTH TRAVELS</span>
             </div>
-            <div class="c-footer-sub">Reliable overnight bus travel across Maharashtra.</div>
+            <div class="c-footer-sub" data-i18n="c.footer_tagline">Reliable overnight bus travel across Maharashtra.</div>
         </div>
         <div class="c-footer-contact">
             <div>📞 +91 98200 00000</div>

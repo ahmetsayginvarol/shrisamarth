@@ -8,12 +8,12 @@
             <span class="brand-mark serif">श्री</span>
             <div>
                 <div class="brand-name">SHRISAMARTH</div>
-                <div class="brand-sub">Passenger Portal</div>
+                <div class="brand-sub" data-i18n="c.passenger_portal">Passenger Portal</div>
             </div>
         </div>
 
-        <h1 class="serif" style="font-size:28px; margin-bottom:6px;">Welcome back</h1>
-        <p style="color:var(--muted); font-size:13px; margin-bottom:24px;">
+        <h1 class="serif" style="font-size:28px; margin-bottom:6px;" data-i18n="c.welcome_back">Welcome back</h1>
+        <p style="color:var(--muted); font-size:13px; margin-bottom:24px;" data-i18n="c.login_sub">
             Sign in to view your bookings and tickets.
         </p>
 
@@ -46,8 +46,8 @@
         </form>
 
         <div style="text-align:center; margin-top:20px; font-size:13px; color:var(--muted);">
-            New to SHRISAMARTH?
-            <a href="{{ url_for('customer.register') }}" style="color:var(--marigold); text-decoration:none; font-weight:500;">
+            <span data-i18n="c.new_to_us">New to SHRISAMARTH?</span>
+            <a href="{{ url_for('customer.register') }}" style="color:var(--marigold); text-decoration:none; font-weight:500;" data-i18n="c.create_account_link">
                 Create an account
             </a>
         </div>

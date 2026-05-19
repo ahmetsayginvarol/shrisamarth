@@ -15,7 +15,7 @@
 
     <!-- Booking Code -->
     <div style="text-align:center; margin-bottom:32px;">
-        <div class="form-label" style="margin-bottom:8px;">Booking Reference</div>
+        <div class="form-label" style="margin-bottom:8px;" data-i18n="c.booking_reference">Booking Reference</div>
         <div class="mono" style="font-size:22px; font-weight:600; color:var(--ink); letter-spacing:0.1em; background:var(--cream-2); display:inline-block; padding:10px 24px; border-radius:8px; border:1px solid var(--line);">
             {{ code }}
         </div>
@@ -37,7 +37,7 @@
             <!-- Passenger Info -->
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;">
                 <div>
-                    <div class="form-label">Passenger{% if is_group %}s{% endif %}</div>
+                    <div class="form-label" data-i18n="{{ 'c.passengers' if is_group else 'c.passenger' }}">Passenger{% if is_group %}s{% endif %}</div>
                     {% if is_group %}
                     <div style="font-weight:500;">{{ bookings|map(attribute='passenger_name')|join(', ') }}</div>
                     {% else %}
@@ -45,29 +45,29 @@
                     {% endif %}
                 </div>
                 <div>
-                    <div class="form-label">Phone</div>
+                    <div class="form-label" data-i18n="c.phone">Phone</div>
                     <div>{{ booking.passenger_phone }}</div>
                 </div>
                 <div>
-                    <div class="form-label">Boarding</div>
+                    <div class="form-label" data-i18n="c.boarding">Boarding</div>
                     <div>{{ booking.boarding_point or '—' }}</div>
                 </div>
                 <div>
-                    <div class="form-label">Dropping</div>
+                    <div class="form-label" data-i18n="c.dropping">Dropping</div>
                     <div>{{ booking.dropping_point or '—' }}</div>
                 </div>
             </div>
 
             <!-- Seats Table -->
-            <div class="form-label" style="margin-bottom:8px;">Seat{% if bookings|length > 1 %}s{% endif %}</div>
+            <div class="form-label" style="margin-bottom:8px;" data-i18n="{{ 'c.seats_label' if bookings|length > 1 else 'c.seat_label' }}">Seat{% if bookings|length > 1 %}s{% endif %}</div>
             <table class="data-table" style="margin-bottom:16px;">
                 <thead>
                     <tr>
-                        <th>Seat</th>
-                        <th>Passenger</th>
-                        <th>Type</th>
-                        <th>Fare</th>
-                        <th>Status</th>
+                        <th data-i18n="c.seat_label">Seat</th>
+                        <th data-i18n="c.passenger">Passenger</th>
+                        <th data-i18n="c.type">Type</th>
+                        <th data-i18n="c.fare">Fare</th>
+                        <th data-i18n="c.status">Status</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -77,12 +77,12 @@
                         <td>{{ b.passenger_name }}</td>
                         <td>{{ 'Window' if b.is_window else 'Aisle' }}</td>
                         <td>₹ {{ b.fare }}</td>
-                        <td><span class="badge badge-scheduled">Pay on board</span></td>
+                        <td><span class="badge badge-scheduled" data-i18n="c.pay_on_board">Pay on board</span></td>
                     </tr>
                     {% endfor %}
                     {% if bookings|length > 1 %}
                     <tr style="background:var(--cream-2);">
-                        <td colspan="2" style="font-weight:500;">Total</td>
+                        <td colspan="2" style="font-weight:500;" data-i18n="c.total">Total</td>
                         <td style="font-weight:600; color:var(--marigold);">
                             ₹ {{ bookings|sum(attribute='fare')|int }}
                         </td>
@@ -101,7 +101,7 @@
 
     <!-- QR Code -->
     <div style="text-align:center; margin-bottom:32px;">
-        <div class="form-label" style="margin-bottom:12px;">Show at Boarding</div>
+        <div class="form-label" style="margin-bottom:12px;" data-i18n="c.show_at_boarding">Show at Boarding</div>
         <img src="data:image/png;base64,{{ qr_b64 }}"
              alt="Booking QR Code"
              style="width:180px; height:180px; border:1px solid var(--line); border-radius:8px; padding:8px; background:#fff;">
@@ -120,13 +120,15 @@
         </div>
         <a href="{{ url_for('customer.download_group_ticket', group_code=code) }}"
            class="btn btn-ghost"
-           style="display:flex; align-items:center; gap:8px;">
+           style="display:flex; align-items:center; gap:8px;"
+           data-i18n="c.download_all">
             ↓ Download All Tickets
         </a>
         {% else %}
         <a href="{{ url_for('customer.download_ticket', booking_id=booking.id) }}"
            class="btn btn-ghost"
-           style="display:flex; align-items:center; gap:8px;">
+           style="display:flex; align-items:center; gap:8px;"
+           data-i18n="c.download_eticket">
             ↓ Download E-Ticket
         </a>
         {% endif %}
@@ -140,7 +142,7 @@
     </div>
 
     <div style="text-align:center;">
-        <a href="{{ url_for('customer.home') }}" style="color:var(--muted); font-size:13px; text-decoration:none;">
+        <a href="{{ url_for('customer.home') }}" style="color:var(--muted); font-size:13px; text-decoration:none;" data-i18n="c.search_more">
             ← Search More Buses
         </a>
     </div>

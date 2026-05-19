@@ -131,14 +131,14 @@ async function lockSeat(sid) {
         if (res.status === 409) {
             const d = await res.json();
             if (d.error === 'already_booked') {
-                alert('This seat was just booked. Please choose another.');
+                alert(t('c.seat_just_booked'));
                 const el = document.querySelector(`.seat[data-seat="${sid}"]`);
                 if (el) {
                     el.classList.add('booked-m');  // generic placeholder until refresh
                     el.title = 'Booked';
                 }
             } else if (d.error === 'locked_by_other') {
-                alert('Another passenger is reserving this seat. Please choose another.');
+                alert(t('c.seat_being_reserved'));
                 const el = document.querySelector(`.seat[data-seat="${sid}"]`);
                 if (el) {
                     el.classList.add('locked');
@@ -264,11 +264,11 @@ function renderGroupForm(seats) {
 
     const html = `<div class="group-seat-section">
         <div class="form-group">
-            <label class="form-label">Passenger / Group Name</label>
+            <label class="form-label">${t('c.group_name_label')}</label>
             <input type="text" class="form-input" id="cgrp_name" value="${_prefill.name || ''}" placeholder="Full name" required>
         </div>
         <div class="form-group">
-            <label class="form-label">Phone</label>
+            <label class="form-label">${t('c.contact')}</label>
             <div class="phone-input-row">
                 <select class="country-code-select" id="cgrp_cc"></select>
                 <input type="text" class="form-input phone-number-input" id="cgrp_phone" placeholder="98765 43210" value="${_prefill.phone || ''}">
@@ -276,25 +276,25 @@ function renderGroupForm(seats) {
         </div>
         <div class="form-row">
             <div class="form-group">
-                <label class="form-label">Boarding Point</label>
+                <label class="form-label">${t('c.boarding')}</label>
                 ${makeBoardingField()}
             </div>
             <div class="form-group">
-                <label class="form-label">Dropping Point</label>
+                <label class="form-label">${t('c.dropping')}</label>
                 ${makeDroppingField()}
             </div>
         </div>
         <div class="form-group">
-            <label class="form-label">Email (optional)</label>
+            <label class="form-label">${t('c.email_optional')}</label>
             <input type="email" class="form-input" id="cgrp_email" placeholder="you@email.com" value="${_prefill.email || ''}">
         </div>
         <div style="background:var(--cream-2); border:1px solid var(--line); border-radius:6px; padding:14px; margin-bottom:16px; font-size:13px; color:var(--muted);">
-            Balance due on boarding — no advance payment required online.
+            ${t('c.balance_info')}
         </div>
         <div class="form-actions" style="justify-content:space-between;">
-            <button type="button" class="btn btn-ghost" onclick="cancelForm()">← Back</button>
+            <button type="button" class="btn btn-ghost" onclick="cancelForm()">${t('c.back')}</button>
             <button type="button" class="btn btn-primary" style="width:auto; flex:1; margin-left:10px;" onclick="submitGroupCustomerBooking()">
-                Confirm Booking
+                ${t('c.confirm_booking')}
             </button>
         </div>
     </div>`;
@@ -326,15 +326,15 @@ async function submitGroupCustomerBooking() {
     const dropping = (droppingEl?.value || '').trim();
     const email = (document.getElementById('cgrp_email')?.value || '').trim() || null;
 
-    if (!name) { alert('Passenger / group name is required'); document.getElementById('cgrp_name')?.focus(); return; }
-    if (!numEl?.value.trim()) { alert('Phone number is required'); numEl?.focus(); return; }
-    if (!boarding) { alert('Boarding point is required'); boardingEl?.focus(); return; }
-    if (!dropping) { alert('Dropping point is required'); droppingEl?.focus(); return; }
+    if (!name) { alert(t('c.name_required')); document.getElementById('cgrp_name')?.focus(); return; }
+    if (!numEl?.value.trim()) { alert(t('c.phone_required')); numEl?.focus(); return; }
+    if (!boarding) { alert(t('c.boarding_required')); boardingEl?.focus(); return; }
+    if (!dropping) { alert(t('c.dropping_required')); droppingEl?.focus(); return; }
 
     const passengers = seats.map(sid => ({ seat_id: sid, name, phone, gender: null }));
 
     const submitBtn = document.querySelector('#panel-group-form button.btn-primary');
-    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Confirming…'; }
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = t('c.confirming'); }
 
     try {
         const res = await fetch('/api/customer/book', {
@@ -352,12 +352,12 @@ async function submitGroupCustomerBooking() {
         if (data.status === 'success') {
             window.location.href = `/booking/confirmation/${data.code}`;
         } else {
-            alert('Booking failed: ' + (data.message || 'Unknown error'));
-            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Confirm Booking'; }
+            alert(t('c.booking_failed_err'));
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = t('c.confirm_booking'); }
         }
     } catch (err) {
-        alert('Booking failed. Please try again.');
-        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Confirm Booking'; }
+        alert(t('c.booking_failed_err'));
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = t('c.confirm_booking'); }
     }
 }
 
@@ -377,7 +377,7 @@ if (bookingForm) {
 
         const submitBtn = bookingForm.querySelector('button[type="submit"]');
         submitBtn.disabled = true;
-        submitBtn.textContent = 'Confirming…';
+        submitBtn.textContent = t('c.confirming');
 
         try {
             const formData = new FormData(bookingForm);
@@ -390,14 +390,14 @@ if (bookingForm) {
             if (data.status === 'success') {
                 window.location.href = `/booking/confirmation/${data.code}`;
             } else {
-                alert('Booking failed: ' + (data.message || 'Unknown error'));
+                alert(t('c.booking_failed_err'));
                 submitBtn.disabled = false;
-                submitBtn.textContent = 'Confirm Booking';
+                submitBtn.textContent = t('c.confirm_booking');
             }
         } catch (err) {
-            alert('Booking failed. Please try again.');
+            alert(t('c.booking_failed_err'));
             submitBtn.disabled = false;
-            submitBtn.textContent = 'Confirm Booking';
+            submitBtn.textContent = t('c.confirm_booking');
         }
     });
 }

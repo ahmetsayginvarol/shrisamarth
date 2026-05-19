@@ -8,12 +8,12 @@
             <span class="brand-mark serif">श्री</span>
             <div>
                 <div class="brand-name">SHRISAMARTH</div>
-                <div class="brand-sub">Passenger Portal</div>
+                <div class="brand-sub" data-i18n="c.passenger_portal">Passenger Portal</div>
             </div>
         </div>
 
-        <h1 class="serif" style="font-size:28px; margin-bottom:6px;">Create account</h1>
-        <p style="color:var(--muted); font-size:13px; margin-bottom:24px;">
+        <h1 class="serif" style="font-size:28px; margin-bottom:6px;" data-i18n="c.create_account">Create account</h1>
+        <p style="color:var(--muted); font-size:13px; margin-bottom:24px;" data-i18n="c.register_sub">
             Book seats and access your tickets anytime.
         </p>
 
@@ -51,17 +51,17 @@
             </div>
 
             <div class="form-group">
-                <label class="form-label">Gender <span style="color:var(--muted); font-weight:400;">(optional)</span></label>
+                <label class="form-label" data-i18n="c.gender_optional">Gender <span style="color:var(--muted); font-weight:400;">(optional)</span></label>
                 <div class="gender-choice">
                     <label class="gender-btn">
                         <input type="radio" name="gender" value="M" {{ 'checked' if form.gender.data == 'M' }}>
                         <span class="gender-dot male-dot"></span>
-                        <span>Male</span>
+                        <span data-i18n="c.male">Male</span>
                     </label>
                     <label class="gender-btn">
                         <input type="radio" name="gender" value="F" {{ 'checked' if form.gender.data == 'F' }}>
                         <span class="gender-dot female-dot"></span>
-                        <span>Female</span>
+                        <span data-i18n="c.female">Female</span>
                     </label>
                 </div>
             </div>
@@ -93,8 +93,8 @@
         </form>
 
         <div style="text-align:center; margin-top:20px; font-size:13px; color:var(--muted);">
-            Already have an account?
-            <a href="{{ url_for('customer.login') }}" style="color:var(--marigold); text-decoration:none; font-weight:500;">
+            <span data-i18n="c.already_account">Already have an account?</span>
+            <a href="{{ url_for('customer.login') }}" style="color:var(--marigold); text-decoration:none; font-weight:500;" data-i18n="c.sign_in_link">
                 Sign in
             </a>
         </div>
