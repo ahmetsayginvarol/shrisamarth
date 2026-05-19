@@ -160,7 +160,8 @@ document.querySelector('form.admin-form').addEventListener('submit', function(e)
 function submitWithScope(scope) {
     document.getElementById('applyScope').value = scope;
     document.getElementById('recurringModal').style.display = 'none';
-    document.querySelector('form.admin-form').submit();
+    // form has an input[name=submit] which shadows the native .submit() method
+    HTMLFormElement.prototype.submit.call(document.querySelector('form.admin-form'));
 }
 </script>
 {% endif %}
