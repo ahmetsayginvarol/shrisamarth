@@ -338,6 +338,9 @@ def confirmation(code):
 @customer_bp.route('/booking/<int:booking_id>/ticket')
 def download_ticket(booking_id):
     booking = Booking.query.get_or_404(booking_id)
+    if current_user.is_authenticated and current_user.role == 'customer':
+        if booking.created_by_id != current_user.id:
+            abort(403)
     _ = booking.voyage.bus
     pdf = generate_ticket(booking)
     filename = f"ticket-{booking.booking_code}.pdf"
@@ -351,6 +354,9 @@ def download_group_ticket(group_code):
     ).order_by(Booking.seat_id).all()
     if not bookings:
         abort(404)
+    if current_user.is_authenticated and current_user.role == 'customer':
+        if bookings[0].created_by_id != current_user.id:
+            abort(403)
     _ = bookings[0].voyage.bus
     pdf = generate_group_ticket(bookings)
     filename = f"ticket-{group_code}.pdf"
@@ -403,7 +409,12 @@ def register():
         )
         user.set_password(form.password.data)
         db.session.add(user)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            flash('Registration failed. Please try again.', 'error')
+            return render_template('customer/register.html', form=form)
 
         log_activity('user_created', f'New customer account: {email}', 'user', user.id)
         login_user(user)
@@ -436,7 +447,12 @@ def profile():
 
         current_user.full_name = form.full_name.data.strip()
         current_user.email = form.email.data.lower().strip()
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            flash('Update failed. Please try again.', 'error')
+            return render_template('customer/profile.html', form=form)
         flash('Profile updated.', 'success')
         return redirect(url_for('customer.profile'))
 
@@ -459,7 +475,12 @@ def delete_account():
     if current_user.role != 'customer':
         abort(403)
     current_user.is_active_account = False
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        flash('Could not delete account. Please try again.', 'error')
+        return redirect(url_for('customer.profile'))
     logout_user()
     flash('Your account has been deactivated.', 'info')
     return redirect(url_for('customer.home'))
@@ -509,7 +530,10 @@ def my_bookings():
 def seat_status(voyage_id):
     # Cleanup expired locks
     SeatLock.query.filter(SeatLock.expires_at < datetime.utcnow()).delete()
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
     cust_sid = _get_or_create_sid()
 
@@ -541,7 +565,10 @@ def lock_seat():
 
     # Cleanup expired
     SeatLock.query.filter(SeatLock.expires_at < datetime.utcnow()).delete()
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
     # Check already booked
     existing_booking = Booking.query.filter_by(
@@ -568,7 +595,11 @@ def lock_seat():
         expires_at=expires,
     )
     db.session.add(lock)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'error': 'db_error'}), 500
 
     socketio.emit('seat_locked', {
         'voyage_id': voyage_id,
@@ -591,7 +622,10 @@ def unlock_seat():
         SeatLock.query.filter_by(
             voyage_id=voyage_id, seat_id=seat_id, session_id=cust_sid
         ).delete()
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
         socketio.emit('seat_unlocked', {'voyage_id': voyage_id, 'seat_id': seat_id})
 
     return jsonify({'status': 'unlocked'})

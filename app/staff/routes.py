@@ -492,7 +492,11 @@ def cancel_booking(booking_id):
 
     booking = Booking.query.get_or_404(booking_id)
     booking.status = 'cancelled'
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': 'Database error. Please try again.'}), 500
 
     log_activity('booking_cancelled',
                  f'Cancelled seat {booking.seat_id} ({booking.passenger_name}) on voyage {booking.voyage_id}',
@@ -525,7 +529,11 @@ def checkin_booking(booking_id):
         })
     booking.boarded_at = datetime.utcnow()
     booking.boarded_by_id = current_user.id
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': 'Database error. Please try again.'}), 500
     voyage = booking.voyage
     log_activity('passenger_checkin',
                  f'{current_user.full_name} checked in {booking.passenger_name} seat {booking.seat_id} on {voyage.origin}→{voyage.destination}',
@@ -561,7 +569,11 @@ def uncheckin_booking(booking_id):
     voyage = booking.voyage
     booking.boarded_at = None
     booking.boarded_by_id = None
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': 'Database error. Please try again.'}), 500
     log_activity('passenger_uncheckin',
                  f'{current_user.full_name} undid check-in for {booking.passenger_name} seat {booking.seat_id} on {voyage.origin}→{voyage.destination}',
                  'booking', booking.id)

@@ -203,7 +203,12 @@ def bus_new():
             is_active=form.is_active.data,
         )
         db.session.add(bus)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            flash('Failed to save bus. Please try again.', 'error')
+            return render_template('admin/bus_form.html', form=form, title='Add Bus')
         log_activity('bus_created', f'Added bus {bus.registration}', 'bus', bus.id)
         flash(f'Bus {bus.registration} added.', 'success')
         return redirect(url_for('admin.buses'))
@@ -220,7 +225,12 @@ def bus_edit(bus_id):
         bus.total_seats = form.total_seats.data
         bus.notes = form.notes.data
         bus.is_active = form.is_active.data
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            flash('Failed to save bus. Please try again.', 'error')
+            return render_template('admin/bus_form.html', form=form, title='Edit Bus', bus=bus)
         log_activity('bus_edited', f'Edited bus {bus.registration}', 'bus', bus.id)
         flash(f'Bus {bus.registration} updated.', 'success')
         return redirect(url_for('admin.buses'))
@@ -268,9 +278,14 @@ def voyage_new():
             created_by_id=current_user.id,
         )
         db.session.add(voyage)
-        db.session.flush()  # get voyage.id before commit
+        db.session.flush()
         _save_stops(voyage.id)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            flash('Failed to create voyage. Please try again.', 'error')
+            return redirect(url_for('admin.voyage_new'))
         log_activity('voyage_created',
                      f'Created voyage {voyage.origin}→{voyage.destination} on {voyage.departure_at.strftime("%d %b %Y")}',
                      'voyage', voyage.id)
@@ -358,7 +373,12 @@ def voyage_new():
                 else:
                     current_dt += timedelta(days=step)
 
-            db.session.commit()
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                flash('Failed to create recurring voyages. Please try again.', 'error')
+                return redirect(url_for('admin.voyages'))
             skip_msg = f" ({skipped} date{'s' if skipped != 1 else ''} skipped — bus conflict)" if skipped else ""
             flash(f"Created {created} recurring voyage{'s' if created != 1 else ''}{skip_msg}.", 'success')
             log_activity('voyage_created',
@@ -453,7 +473,12 @@ def voyage_edit(voyage_id):
                 apply_to_voyage(sib, sib_dep, sib_arr)
                 affected += 1
 
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            flash('Failed to save voyage. Please try again.', 'error')
+            return redirect(url_for('admin.voyage_edit', voyage_id=voyage.id))
         suffix = f' (and {affected - 1} following)' if affected > 1 else ''
         log_activity('voyage_edited',
                      f'Edited voyage {new_origin}→{new_destination}{suffix}',
@@ -492,7 +517,12 @@ def cancel_recurrence(group):
         v.cancelled_at = datetime.utcnow()
         v.cancelled_by_id = current_user.id
         count += 1
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        flash('Failed to cancel recurring voyages. Please try again.', 'error')
+        return redirect(url_for('admin.voyages'))
     log_activity('voyage_cancelled', f'Cancelled {count} future recurring voyages in group {group}', 'voyage', None)
     flash(f"Cancelled {count} future recurring voyages.", 'success')
     return redirect(url_for('admin.voyages'))
@@ -515,7 +545,12 @@ def voyage_cancel(voyage_id):
     voyage.status = 'cancelled'
     voyage.cancelled_at = datetime.utcnow()
     voyage.cancelled_by_id = current_user.id
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        flash('Failed to cancel voyage. Please try again.', 'error')
+        return redirect(url_for('admin.voyages'))
     log_activity('voyage_cancelled',
                  f'Cancelled voyage {voyage.origin}→{voyage.destination} ({len(confirmed_bookings)} bookings cancelled)',
                  'voyage', voyage.id)
@@ -552,7 +587,12 @@ def user_new():
         )
         user.set_password(form.password.data)
         db.session.add(user)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            flash('Failed to create user. Please try again.', 'error')
+            return render_template('admin/user_form.html', form=form, title='Add User')
         log_activity('user_created', f'Created user {user.username} ({user.role})', 'user', user.id)
         flash(f'User {user.username} created.', 'success')
         return redirect(url_for('admin.users'))
@@ -586,7 +626,12 @@ def user_edit(user_id):
         if form.new_password.data:
             user.set_password(form.new_password.data)
 
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            flash('Failed to save user. Please try again.', 'error')
+            return render_template('admin/user_form.html', form=form, title='Edit User', user=user)
         log_activity('user_edited', f'Edited user {user.username} ({user.role})', 'user', user.id)
         flash(f'User {user.username} updated.', 'success')
         return redirect(url_for('admin.users'))
@@ -660,7 +705,12 @@ def passenger_add_credit(customer_id):
 
     note = request.form.get('note', '').strip() or 'Manual credit by admin'
     customer.credit_balance = float(customer.credit_balance or 0) + amount
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        flash('Failed to add credit. Please try again.', 'error')
+        return redirect(url_for('admin.passenger_detail', customer_id=customer_id))
 
     log_activity('user_edited',
                  f'Added ₹{amount:.0f} credit to {customer.full_name} ({customer.email}) — {note}',
@@ -674,7 +724,12 @@ def passenger_add_credit(customer_id):
 def passenger_toggle_active(customer_id):
     customer = User.query.filter_by(id=customer_id, role='customer').first_or_404()
     customer.is_active_account = not customer.is_active_account
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        flash('Failed to update account status. Please try again.', 'error')
+        return redirect(url_for('admin.passenger_detail', customer_id=customer_id))
     state = 'activated' if customer.is_active_account else 'deactivated'
     log_activity('user_edited', f'Customer account {state}: {customer.email}', 'user', customer.id)
     flash(f'Account {state}.', 'success')

@@ -61,6 +61,20 @@
 
 {% block scripts %}
 <script>
+// Prevent double-submit on all standard HTML forms
+document.addEventListener('submit', function(e) {
+    const btn = e.target.querySelector('[type="submit"]:not([data-no-disable])');
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    if (btn.tagName === 'BUTTON') { btn._origHTML = btn.innerHTML; btn.textContent = 'Please wait…'; }
+    else { btn._origVal = btn.value; btn.value = 'Please wait…'; }
+    window.addEventListener('pageshow', function() {
+        btn.disabled = false;
+        if (btn._origHTML !== undefined) btn.innerHTML = btn._origHTML;
+        if (btn._origVal !== undefined) btn.value = btn._origVal;
+    }, { once: true });
+});
+
 function toggleSidebar() {
     document.querySelector('.sidebar').classList.toggle('open');
     document.getElementById('sidebarOverlay').classList.toggle('active');

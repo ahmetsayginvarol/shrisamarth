@@ -130,7 +130,8 @@ function manifestClick(seatId) {
             if (data.status === 'booked') {
                 showBookingDetails(data.booking, data.readonly);
             }
-        });
+        })
+        .catch(() => toast('Could not load seat information.'));
 }
 
 // ============================================================
@@ -540,7 +541,6 @@ const bookingForm = document.getElementById('bookingForm');
 if (bookingForm) {
     bookingForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        // Combine country code + phone into hidden field before capturing FormData
         const singleCc = document.getElementById('singleCc');
         const singlePhone = document.getElementById('singlePhone');
         const singlePhoneCombined = document.getElementById('singlePhoneCombined');
@@ -548,11 +548,16 @@ if (bookingForm) {
             singlePhoneCombined.value = getPhoneValue(singleCc, singlePhone);
         }
         const formData = new FormData(e.target);
-
-        if (window._isGroupBooking) {
-            await submitGroupBooking(formData);
-        } else {
-            await submitSingleBooking(formData);
+        const submitBtn = bookingForm.querySelector('[type="submit"]');
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Please wait…'; }
+        try {
+            if (window._isGroupBooking) {
+                await submitGroupBooking(formData);
+            } else {
+                await submitSingleBooking(formData);
+            }
+        } finally {
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Confirm Booking'; }
         }
     });
 }
@@ -1617,13 +1622,17 @@ function toggleNotifDropdown() {
 async function handleNotifClick(el) {
     const id = el.dataset.id;
     const link = el.dataset.link;
-    await fetch(`/staff/api/notifications/read/${id}`, { method: 'POST', headers: {'X-CSRFToken': CSRF_TOKEN} });
+    try {
+        await fetch(`/staff/api/notifications/read/${id}`, { method: 'POST', headers: {'X-CSRFToken': CSRF_TOKEN} });
+    } catch (_) {}
     if (link) window.location.href = link;
     else toggleNotifDropdown();
 }
 
 async function markAllRead() {
-    await fetch('/staff/api/notifications/read-all', { method: 'POST', headers: {'X-CSRFToken': CSRF_TOKEN} });
+    try {
+        await fetch('/staff/api/notifications/read-all', { method: 'POST', headers: {'X-CSRFToken': CSRF_TOKEN} });
+    } catch (_) {}
     loadNotifications();
 }
 
