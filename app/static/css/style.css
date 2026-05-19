@@ -1445,9 +1445,12 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
 /* Popular routes */
 .c-popular { padding: 60px 24px 80px; background: var(--cream-2); }
 .c-popular-inner { max-width: 1100px; margin: 0 auto; }
-.c-popular-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-.c-popular-card { background: var(--cream); border: 1px solid var(--line); border-radius: 12px; padding: 20px; text-decoration: none; transition: all 0.2s; display: block; }
-.c-popular-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.08); border-color: var(--marigold); }
+.c-popular-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: start; }
+.c-popular-card { background: var(--cream); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; cursor: pointer; transition: box-shadow 0.2s, border-color 0.2s; }
+.c-popular-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.08); border-color: var(--marigold); }
+.c-popular-card.expanded { border-color: var(--marigold); box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
+.c-popular-card.expanded .c-expand-chevron { transform: rotate(180deg); }
+.c-popular-card-summary { display: flex; align-items: flex-start; gap: 8px; padding: 20px; }
 .c-popular-route { font-family: 'Instrument Serif', serif; font-size: 18px; color: var(--ink); margin-bottom: 6px; }
 .c-arrow { color: var(--marigold); }
 .c-popular-time { font-size: 12px; color: var(--muted); margin-bottom: 12px; }

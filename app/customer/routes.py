@@ -45,11 +45,19 @@ def home():
         .filter(Voyage.departure_at > datetime.utcnow())
         .order_by(Voyage.departure_at)
         .limit(6).all())
+    voyage_stops = {}
+    for v in popular_voyages:
+        srt = sorted(v.stops, key=lambda s: s.stop_order)
+        voyage_stops[v.id] = {
+            'boarding': [s for s in srt if s.stop_type == 'boarding'],
+            'dropping': [s for s in srt if s.stop_type == 'dropping'],
+        }
     return render_template('customer/home.html',
                            origins=origins,
                            destinations=destinations,
                            today=date.today().strftime('%Y-%m-%d'),
-                           popular_voyages=popular_voyages)
+                           popular_voyages=popular_voyages,
+                           voyage_stops=voyage_stops)
 
 
 # ============================================================
