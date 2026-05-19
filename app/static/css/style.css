@@ -1164,7 +1164,8 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
     transition: grid-template-rows 0.28s ease;
 }
 .c-expand-inner { overflow: hidden; }
-.c-result-card.expanded .c-result-expandable { grid-template-rows: 1fr; }
+.c-result-card.expanded .c-result-expandable,
+.c-popular-card.expanded .c-result-expandable { grid-template-rows: 1fr; }
 .c-expand-stops {
     padding: 14px 24px 10px;
     border-top: 1px solid var(--cream-2);
