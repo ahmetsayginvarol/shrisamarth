@@ -23,7 +23,7 @@ details summary::-webkit-details-marker { display: none; }
     <form method="GET" action="{{ url_for('admin.logs') }}" class="filter-form" id="logFilterForm">
         <div class="filter-group">
             <label class="form-label">Action</label>
-            <select name="action" class="form-select" onchange="this.form.submit()">
+            <select name="action" class="form-select" id="actionSelect" onchange="this.form.submit()">
                 <option value="all" {% if action_filter == 'all' %}selected{% endif %}>All Actions</option>
                 {% for a in all_actions %}
                 <option value="{{ a }}" {% if action_filter == a %}selected{% endif %}>
@@ -34,7 +34,7 @@ details summary::-webkit-details-marker { display: none; }
         </div>
         <div class="filter-group">
             <label class="form-label">User</label>
-            <select name="user" class="form-select" onchange="this.form.submit()">
+            <select name="user" class="form-select" onchange="onUserChange(this)">
                 <option value="" {% if not user_filter %}selected{% endif %}>All Users</option>
                 <option value="customers" {% if user_filter == 'customers' %}selected{% endif %}>Registered Passengers</option>
                 {% for u in staff_users %}
@@ -137,4 +137,23 @@ details summary::-webkit-details-marker { display: none; }
 </div>
 {% endif %}
 
+<script>
+function onUserChange(sel) {
+    const actionSel = document.getElementById('actionSelect');
+    if (sel.value === 'customers') {
+        actionSel.value = 'all';
+        actionSel.disabled = true;
+    } else {
+        actionSel.disabled = false;
+    }
+    sel.form.submit();
+}
+document.addEventListener('DOMContentLoaded', function() {
+    const userSel = document.querySelector('select[name="user"]');
+    const actionSel = document.getElementById('actionSelect');
+    if (userSel.value === 'customers') {
+        actionSel.disabled = true;
+    }
+});
+</script>
 {% endblock %}
