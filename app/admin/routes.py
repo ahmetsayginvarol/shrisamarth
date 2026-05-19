@@ -5,7 +5,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, abort, r
 from flask_login import login_required, current_user
 
 from app.extensions import db
-from app.models import Bus, Voyage, Booking, User, ActivityLog, RouteStop
+from app.models import Bus, Voyage, Booking, User, ActivityLog, RouteStop, SiteContent
 from datetime import datetime, timedelta, date as date_type
 from sqlalchemy import func, and_
 from app.admin.forms import BusForm, VoyageForm, UserForm, UserEditForm
@@ -1070,3 +1070,50 @@ def _generate_day_report_pdf(report_date, voyages, bookings_by_voyage):
     doc.build(story)
     buf.seek(0)
     return buf
+
+
+# ============================================================
+# CMS — HOMEPAGE CONTENT EDITOR
+# ============================================================
+
+@admin_bp.route('/cms')
+def cms():
+    rows = SiteContent.query.all()
+    content = {r.section_key: r for r in rows}
+    return render_template('admin/cms.html', content=content)
+
+
+@admin_bp.route('/cms/save', methods=['POST'])
+def cms_save():
+    data = request.get_json() or {}
+    section_key = data.get('section_key', '').strip()
+    content_en  = data.get('content_en', '')
+    content_hi  = data.get('content_hi', '')
+
+    if not section_key:
+        return jsonify({'status': 'error', 'message': 'Missing section_key'}), 400
+
+    row = SiteContent.query.filter_by(section_key=section_key).first()
+    if row:
+        row.content_en     = content_en
+        row.content_hi     = content_hi
+        row.updated_at     = datetime.utcnow()
+        row.updated_by_id  = current_user.id
+    else:
+        row = SiteContent(
+            section_key=section_key,
+            content_en=content_en,
+            content_hi=content_hi,
+            updated_at=datetime.utcnow(),
+            updated_by_id=current_user.id,
+        )
+        db.session.add(row)
+
+    try:
+        db.session.commit()
+        log_activity('cms_edit', f'Updated homepage section: {section_key}',
+                     target_type='site_content')
+        return jsonify({'status': 'success'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': str(e)}), 500

@@ -1,0 +1,566 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}Homepage CMS · SHRISAMARTH Admin{% endblock %}
+
+{% block admin_content %}
+<div style="display:flex; gap:0; height:calc(100vh - 80px); margin:-40px; overflow:hidden;">
+
+  <!-- ── LEFT SIDEBAR ── -->
+  <div id="cmsSidebar" style="width:280px; min-width:280px; border-right:1px solid var(--line); overflow-y:auto; background:var(--cream);">
+    <div style="padding:20px 16px 12px; border-bottom:1px solid var(--line);">
+      <div class="serif" style="font-size:18px; font-weight:600;">Homepage Editor</div>
+      <div style="font-size:12px; color:var(--muted); margin-top:2px;">Click a section to edit</div>
+    </div>
+    <nav style="padding:8px 0;">
+      {% set sections = [
+        ('hero',         '🏠', 'Hero Section',         'hero_title'),
+        ('features',     '⭐', 'Feature Cards',         'feature_1_title'),
+        ('about',        'ℹ️', 'About Section',         'about_text'),
+        ('contact',      '📞', 'Contact Info',          'contact_phone'),
+        ('announcement', '📢', 'Announcement Banner',   'announcement_banner'),
+        ('footer',       '🦶', 'Footer',                'footer_tagline'),
+      ] %}
+      {% for sid, icon, label, key in sections %}
+      {% set row = content.get(key) %}
+      <div class="cms-nav-item" data-section="{{ sid }}" onclick="showSection('{{ sid }}')"
+           style="display:flex; align-items:center; gap:10px; padding:12px 16px; cursor:pointer; border-left:3px solid transparent; transition:all 0.15s;">
+        <span style="font-size:18px; min-width:24px;">{{ icon }}</span>
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:500; font-size:13px;">{{ label }}</div>
+          {% if row and row.updated_at %}
+          <div class="cms-edited-time" style="font-size:11px; color:var(--muted);" data-ts="{{ row.updated_at.isoformat() }}">
+            {{ row.updated_at.strftime('%d %b · %H:%M') }}
+          </div>
+          {% else %}
+          <div style="font-size:11px; color:var(--muted);">Not edited yet</div>
+          {% endif %}
+        </div>
+        <span class="cms-dirty-dot" style="display:none; width:6px; height:6px; background:var(--marigold); border-radius:50%;"></span>
+      </div>
+      {% endfor %}
+    </nav>
+    <div style="padding:12px 16px; border-top:1px solid var(--line); margin-top:8px;">
+      <a href="{{ url_for('customer.home') }}" target="_blank"
+         class="btn btn-ghost" style="width:100%; text-align:center; font-size:13px;">
+        ↗ Preview Homepage
+      </a>
+    </div>
+  </div>
+
+  <!-- ── RIGHT EDITOR ── -->
+  <div style="flex:1; overflow-y:auto; background:var(--cream-2);">
+
+    <!-- HERO -->
+    <div id="section-hero" class="cms-section" style="display:none; padding:32px 40px;">
+      <div class="cms-section-header">
+        <div class="serif" style="font-size:22px;">🏠 Hero Section</div>
+        <div style="font-size:13px; color:var(--muted); margin-top:4px;">Main headline and subtitle shown at the top of the homepage.</div>
+      </div>
+      <div class="cms-field-row">
+        <div class="cms-field">
+          <label class="form-label">Headline — English</label>
+          <input type="text" class="form-input" id="hero_title_en" value="{{ content.get('hero_title', {}).content_en or '' }}">
+        </div>
+        <div class="cms-field">
+          <label class="form-label">Headline — Hindi</label>
+          <input type="text" class="form-input" id="hero_title_hi" value="{{ content.get('hero_title', {}).content_hi or '' }}">
+        </div>
+      </div>
+      <div class="cms-field-row" style="margin-top:16px;">
+        <div class="cms-field">
+          <label class="form-label">Subtitle — English</label>
+          <input type="text" class="form-input" id="hero_subtitle_en" value="{{ content.get('hero_subtitle', {}).content_en or '' }}">
+        </div>
+        <div class="cms-field">
+          <label class="form-label">Subtitle — Hindi</label>
+          <input type="text" class="form-input" id="hero_subtitle_hi" value="{{ content.get('hero_subtitle', {}).content_hi or '' }}">
+        </div>
+      </div>
+      <!-- Preview -->
+      <div style="margin-top:24px; border:1px solid var(--line); border-radius:10px; overflow:hidden;">
+        <div style="background:var(--ink); color:var(--cream); padding:16px 20px; font-size:11px; letter-spacing:0.05em; opacity:0.6;">PREVIEW</div>
+        <div style="background:linear-gradient(135deg,#1a2340 0%,#2a3a5c 100%); padding:32px 28px; color:white;">
+          <h1 id="preview_hero_title" class="serif" style="font-size:28px; margin-bottom:8px;"></h1>
+          <p id="preview_hero_subtitle" style="font-size:14px; opacity:0.7;"></p>
+        </div>
+      </div>
+      <div class="cms-save-bar">
+        <button class="btn btn-primary cms-save-btn" onclick="saveHero()" style="width:auto; padding:10px 28px;">Save Changes</button>
+        <span class="cms-saved-msg" style="display:none; color:var(--sage); font-size:13px; font-weight:500;">Saved ✓</span>
+      </div>
+    </div>
+
+    <!-- FEATURES -->
+    <div id="section-features" class="cms-section" style="display:none; padding:32px 40px;">
+      <div class="cms-section-header">
+        <div class="serif" style="font-size:22px;">⭐ Feature Cards</div>
+        <div style="font-size:13px; color:var(--muted); margin-top:4px;">Three feature cards shown in the "Why SHRISAMARTH?" section.</div>
+      </div>
+      {% for n in [1,2,3] %}
+      <div style="border:1px solid var(--line); border-radius:10px; padding:20px; margin-bottom:20px; background:var(--cream);">
+        <div style="font-size:13px; font-weight:600; color:var(--muted); margin-bottom:14px; letter-spacing:0.05em;">CARD {{ n }}</div>
+        <!-- Icon picker -->
+        <div style="margin-bottom:16px;">
+          <label class="form-label">Icon</label>
+          <div class="emoji-grid" data-card="{{ n }}">
+            {% set icons = ['🚌','🛡️','⚡','💰','🎫','📍','✅','⭐','🏆','🤝','🌙','🛣️','🎯','🔒','💺','🕐','📱','🌟','🚀','♿','🌿','👨‍👩‍👧','💳','📞','🛎️','🏅'] %}
+            {% for emoji in icons %}
+            <button type="button" class="emoji-btn {% if content.get('feature_'~n~'_icon') and content.get('feature_'~n~'_icon').content_en == emoji %}selected{% endif %}"
+                    data-card="{{ n }}" data-emoji="{{ emoji }}"
+                    onclick="selectEmoji(this, {{ n }})">{{ emoji }}</button>
+            {% endfor %}
+          </div>
+          <input type="hidden" id="feature_{{ n }}_icon" value="{{ content.get('feature_'~n~'_icon', {}).content_en or '' }}">
+        </div>
+        <div class="cms-field-row">
+          <div class="cms-field">
+            <label class="form-label">Title — English</label>
+            <input type="text" class="form-input" id="feature_{{ n }}_title_en" value="{{ content.get('feature_'~n~'_title', {}).content_en or '' }}">
+          </div>
+          <div class="cms-field">
+            <label class="form-label">Title — Hindi</label>
+            <input type="text" class="form-input" id="feature_{{ n }}_title_hi" value="{{ content.get('feature_'~n~'_title', {}).content_hi or '' }}">
+          </div>
+        </div>
+        <div class="cms-field-row" style="margin-top:12px;">
+          <div class="cms-field">
+            <label class="form-label">Description — English</label>
+            <input type="text" class="form-input" id="feature_{{ n }}_desc_en" value="{{ content.get('feature_'~n~'_desc', {}).content_en or '' }}">
+          </div>
+          <div class="cms-field">
+            <label class="form-label">Description — Hindi</label>
+            <input type="text" class="form-input" id="feature_{{ n }}_desc_hi" value="{{ content.get('feature_'~n~'_desc', {}).content_hi or '' }}">
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+      <div class="cms-save-bar">
+        <button class="btn btn-primary cms-save-btn" onclick="saveFeatures()" style="width:auto; padding:10px 28px;">Save All Cards</button>
+        <span class="cms-saved-msg" style="display:none; color:var(--sage); font-size:13px; font-weight:500;">Saved ✓</span>
+      </div>
+    </div>
+
+    <!-- ABOUT -->
+    <div id="section-about" class="cms-section" style="display:none; padding:32px 40px;">
+      <div class="cms-section-header">
+        <div class="serif" style="font-size:22px;">ℹ️ About Section</div>
+        <div style="font-size:13px; color:var(--muted); margin-top:4px;">Rich text content shown in the About section of the homepage.</div>
+      </div>
+      <div class="cms-field-row" style="gap:24px; align-items:flex-start;">
+        <div class="cms-field">
+          <label class="form-label">English Content</label>
+          <div id="editor-about-en" style="min-height:200px; background:white;"></div>
+          <div id="charcount-en" style="font-size:11px; color:var(--muted); text-align:right; margin-top:4px;">0 chars</div>
+        </div>
+        <div class="cms-field">
+          <label class="form-label">Hindi Content</label>
+          <div id="editor-about-hi" style="min-height:200px; background:white;"></div>
+          <div id="charcount-hi" style="font-size:11px; color:var(--muted); text-align:right; margin-top:4px;">0 chars</div>
+        </div>
+      </div>
+      <div class="cms-save-bar">
+        <button class="btn btn-primary cms-save-btn" onclick="saveAbout()" style="width:auto; padding:10px 28px;">Save</button>
+        <span class="cms-saved-msg" style="display:none; color:var(--sage); font-size:13px; font-weight:500;">Saved ✓</span>
+      </div>
+    </div>
+
+    <!-- CONTACT -->
+    <div id="section-contact" class="cms-section" style="display:none; padding:32px 40px;">
+      <div class="cms-section-header">
+        <div class="serif" style="font-size:22px;">📞 Contact Info</div>
+        <div style="font-size:13px; color:var(--muted); margin-top:4px;">Contact details shown in the footer and contact section.</div>
+      </div>
+      <div class="cms-field-row">
+        <div class="cms-field">
+          <label class="form-label">Phone</label>
+          <input type="text" class="form-input" id="contact_phone_en" value="{{ content.get('contact_phone', {}).content_en or '' }}">
+        </div>
+        <div class="cms-field">
+          <label class="form-label">WhatsApp Number (digits only, with country code)</label>
+          <input type="text" class="form-input" id="contact_whatsapp_en" value="{{ content.get('contact_whatsapp', {}).content_en or '' }}">
+        </div>
+      </div>
+      <div class="cms-field-row" style="margin-top:14px;">
+        <div class="cms-field">
+          <label class="form-label">Email</label>
+          <input type="email" class="form-input" id="contact_email_en" value="{{ content.get('contact_email', {}).content_en or '' }}">
+        </div>
+      </div>
+      <div class="cms-field-row" style="margin-top:14px;">
+        <div class="cms-field">
+          <label class="form-label">Address — English</label>
+          <input type="text" class="form-input" id="contact_address_en" value="{{ content.get('contact_address', {}).content_en or '' }}">
+        </div>
+        <div class="cms-field">
+          <label class="form-label">Address — Hindi</label>
+          <input type="text" class="form-input" id="contact_address_hi" value="{{ content.get('contact_address', {}).content_hi or '' }}">
+        </div>
+      </div>
+      <div class="cms-field-row" style="margin-top:14px;">
+        <div class="cms-field">
+          <label class="form-label">Facebook URL (optional)</label>
+          <input type="url" class="form-input" id="contact_facebook_en" placeholder="https://facebook.com/…" value="{{ content.get('contact_facebook', {}).content_en or '' }}">
+        </div>
+        <div class="cms-field">
+          <label class="form-label">Instagram URL (optional)</label>
+          <input type="url" class="form-input" id="contact_instagram_en" placeholder="https://instagram.com/…" value="{{ content.get('contact_instagram', {}).content_en or '' }}">
+        </div>
+      </div>
+      <div class="cms-save-bar">
+        <button class="btn btn-primary cms-save-btn" onclick="saveContact()" style="width:auto; padding:10px 28px;">Save</button>
+        <span class="cms-saved-msg" style="display:none; color:var(--sage); font-size:13px; font-weight:500;">Saved ✓</span>
+      </div>
+    </div>
+
+    <!-- ANNOUNCEMENT -->
+    <div id="section-announcement" class="cms-section" style="display:none; padding:32px 40px;">
+      <div class="cms-section-header">
+        <div class="serif" style="font-size:22px;">📢 Announcement Banner</div>
+        <div style="font-size:13px; color:var(--muted); margin-top:4px;">Optional banner shown at the top of every customer page.</div>
+      </div>
+      <!-- Toggle -->
+      <div style="display:flex; align-items:center; gap:14px; margin-bottom:24px; padding:16px 20px; background:var(--cream); border:1px solid var(--line); border-radius:10px;">
+        <label class="form-label" style="margin:0;">Banner Active</label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="banner_active" {{ 'checked' if content.get('announcement_banner_active', {}).content_en == '1' }}>
+          <span class="toggle-slider"></span>
+        </label>
+        <span id="banner_status_label" style="font-size:13px; color:var(--muted);">
+          {{ 'ON — banner is visible' if content.get('announcement_banner_active', {}).content_en == '1' else 'OFF — banner is hidden' }}
+        </span>
+      </div>
+      <!-- Color picker -->
+      <div style="margin-bottom:20px;">
+        <label class="form-label">Banner Color</label>
+        <div style="display:flex; gap:12px; margin-top:8px;">
+          {% set cur_color = content.get('announcement_banner_color', {}).content_en or 'marigold' %}
+          <label class="color-option">
+            <input type="radio" name="banner_color" value="marigold" {{ 'checked' if cur_color == 'marigold' }}>
+            <span style="background:#c8761a; color:white; padding:6px 16px; border-radius:6px; font-size:13px; font-weight:500; cursor:pointer;">Marigold</span>
+          </label>
+          <label class="color-option">
+            <input type="radio" name="banner_color" value="sage" {{ 'checked' if cur_color == 'sage' }}>
+            <span style="background:#5c7a3e; color:white; padding:6px 16px; border-radius:6px; font-size:13px; font-weight:500; cursor:pointer;">Green</span>
+          </label>
+          <label class="color-option">
+            <input type="radio" name="banner_color" value="ruby" {{ 'checked' if cur_color == 'ruby' }}>
+            <span style="background:#a83232; color:white; padding:6px 16px; border-radius:6px; font-size:13px; font-weight:500; cursor:pointer;">Red</span>
+          </label>
+        </div>
+      </div>
+      <!-- Text -->
+      <div class="cms-field-row">
+        <div class="cms-field">
+          <label class="form-label">Banner Text — English</label>
+          <input type="text" class="form-input" id="announcement_banner_en"
+                 value="{{ content.get('announcement_banner', {}).content_en or '' }}"
+                 placeholder="e.g. 🎉 Special offer this weekend!">
+        </div>
+        <div class="cms-field">
+          <label class="form-label">Banner Text — Hindi</label>
+          <input type="text" class="form-input" id="announcement_banner_hi"
+                 value="{{ content.get('announcement_banner', {}).content_hi or '' }}"
+                 placeholder="जैसे 🎉 इस सप्ताहांत विशेष ऑफर!">
+        </div>
+      </div>
+      <!-- Preview -->
+      <div style="margin-top:20px;">
+        <label class="form-label">Preview</label>
+        <div id="banner_preview" style="margin-top:8px; padding:10px 16px; border-radius:6px; font-size:13px; font-weight:500; color:white; background:#c8761a; display:flex; align-items:center; justify-content:center;">
+          {{ content.get('announcement_banner', {}).content_en or 'Banner text will appear here' }}
+        </div>
+      </div>
+      <div class="cms-save-bar">
+        <button class="btn btn-primary cms-save-btn" onclick="saveBanner()" style="width:auto; padding:10px 28px;">Save</button>
+        <span class="cms-saved-msg" style="display:none; color:var(--sage); font-size:13px; font-weight:500;">Saved ✓</span>
+      </div>
+    </div>
+
+    <!-- FOOTER -->
+    <div id="section-footer" class="cms-section" style="display:none; padding:32px 40px;">
+      <div class="cms-section-header">
+        <div class="serif" style="font-size:22px;">🦶 Footer</div>
+        <div style="font-size:13px; color:var(--muted); margin-top:4px;">Footer tagline and copyright text.</div>
+      </div>
+      <div class="cms-field-row">
+        <div class="cms-field">
+          <label class="form-label">Tagline — English</label>
+          <input type="text" class="form-input" id="footer_tagline_en" value="{{ content.get('footer_tagline', {}).content_en or '' }}">
+        </div>
+        <div class="cms-field">
+          <label class="form-label">Tagline — Hindi</label>
+          <input type="text" class="form-input" id="footer_tagline_hi" value="{{ content.get('footer_tagline', {}).content_hi or '' }}">
+        </div>
+      </div>
+      <div class="cms-field-row" style="margin-top:14px;">
+        <div class="cms-field">
+          <label class="form-label">Copyright Text — English</label>
+          <input type="text" class="form-input" id="footer_copyright_en" value="{{ content.get('footer_copyright', {}).content_en or '' }}">
+        </div>
+        <div class="cms-field">
+          <label class="form-label">Copyright Text — Hindi</label>
+          <input type="text" class="form-input" id="footer_copyright_hi" value="{{ content.get('footer_copyright', {}).content_hi or '' }}">
+        </div>
+      </div>
+      <div class="cms-save-bar">
+        <button class="btn btn-primary cms-save-btn" onclick="saveFooter()" style="width:auto; padding:10px 28px;">Save</button>
+        <span class="cms-saved-msg" style="display:none; color:var(--sage); font-size:13px; font-weight:500;">Saved ✓</span>
+      </div>
+    </div>
+
+    <!-- Empty state -->
+    <div id="section-empty" style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:var(--muted); padding:40px;">
+      <div style="font-size:48px; margin-bottom:16px;">✏️</div>
+      <div class="serif" style="font-size:22px; color:var(--ink); margin-bottom:8px;">Select a section to edit</div>
+      <p style="font-size:13px; text-align:center;">Choose a section from the left panel to start editing homepage content.</p>
+    </div>
+
+  </div>
+</div>
+
+<style>
+/* Quill font override */
+.ql-editor { font-family: 'Geist', sans-serif; font-size: 14px; min-height: 160px; }
+.ql-toolbar { border-color: var(--line) !important; background: var(--cream); }
+.ql-container { border-color: var(--line) !important; }
+
+.cms-nav-item:hover { background: var(--cream-2); }
+.cms-nav-item.active { border-left-color: var(--marigold) !important; background: var(--cream-2); }
+
+.cms-section-header { margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+
+.cms-field-row { display: flex; gap: 20px; }
+.cms-field { flex: 1; }
+
+.cms-save-bar {
+  position: sticky; bottom: 0; background: var(--cream-2); padding: 16px 0 0;
+  border-top: 1px solid var(--line); margin-top: 32px;
+  display: flex; align-items: center; gap: 14px;
+}
+
+/* Emoji grid */
+.emoji-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; margin-bottom: 8px; }
+.emoji-btn {
+  width: 38px; height: 38px; font-size: 20px; border: 2px solid transparent;
+  border-radius: 8px; background: var(--cream); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: border-color 0.12s;
+}
+.emoji-btn:hover { border-color: var(--line); }
+.emoji-btn.selected { border-color: var(--marigold); background: rgba(200,118,26,0.08); }
+
+/* Toggle switch */
+.toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--line); border-radius: 24px; transition: 0.2s;
+}
+.toggle-slider:before {
+  content: ''; position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px;
+  background: white; border-radius: 50%; transition: 0.2s;
+}
+.toggle-switch input:checked + .toggle-slider { background: var(--sage); }
+.toggle-switch input:checked + .toggle-slider:before { transform: translateX(20px); }
+
+.color-option input[type=radio] { display: none; }
+.color-option input[type=radio]:checked + span { outline: 3px solid var(--ink); outline-offset: 2px; }
+</style>
+
+<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+<script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+const CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+// ── Section switching ──
+function showSection(id) {
+  document.querySelectorAll('.cms-section').forEach(s => s.style.display = 'none');
+  document.getElementById('section-empty').style.display = 'none';
+  const sec = document.getElementById('section-' + id);
+  if (sec) sec.style.display = 'block';
+
+  document.querySelectorAll('.cms-nav-item').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.cms-nav-item[data-section="' + id + '"]').forEach(el => el.classList.add('active'));
+
+  // Init Quill editors on demand
+  if (id === 'about' && !window._quillAboutEn) initQuillEditors();
+}
+
+// ── Quill ──
+let _quillAboutEn, _quillAboutHi;
+function initQuillEditors() {
+  const toolbarOptions = [
+    ['bold', 'italic'],
+    [{ header: [2, 3, false] }],
+    [{ list: 'ordered' }, { list: 'bullet' }],
+    ['link', 'clean']
+  ];
+
+  _quillAboutEn = new Quill('#editor-about-en', {
+    theme: 'snow',
+    modules: { toolbar: toolbarOptions }
+  });
+  _quillAboutEn.root.innerHTML = {{ (content.get('about_text', {}).content_en or '')|tojson }};
+
+  _quillAboutHi = new Quill('#editor-about-hi', {
+    theme: 'snow',
+    modules: { toolbar: toolbarOptions }
+  });
+  _quillAboutHi.root.innerHTML = {{ (content.get('about_text', {}).content_hi or '')|tojson }};
+
+  function updateCount(quill, elId) {
+    const len = quill.getText().trim().length;
+    document.getElementById(elId).textContent = len + ' chars';
+  }
+  _quillAboutEn.on('text-change', () => updateCount(_quillAboutEn, 'charcount-en'));
+  _quillAboutHi.on('text-change', () => updateCount(_quillAboutHi, 'charcount-hi'));
+  updateCount(_quillAboutEn, 'charcount-en');
+  updateCount(_quillAboutHi, 'charcount-hi');
+
+  window._quillAboutEn = _quillAboutEn;
+}
+
+// ── Live preview (Hero) ──
+function updateHeroPreview() {
+  const lang = localStorage.getItem('lang') || 'en';
+  document.getElementById('preview_hero_title').textContent =
+    lang === 'hi'
+      ? document.getElementById('hero_title_hi').value
+      : document.getElementById('hero_title_en').value;
+  document.getElementById('preview_hero_subtitle').textContent =
+    lang === 'hi'
+      ? document.getElementById('hero_subtitle_hi').value
+      : document.getElementById('hero_subtitle_en').value;
+}
+['hero_title_en','hero_title_hi','hero_subtitle_en','hero_subtitle_hi'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', updateHeroPreview);
+});
+
+// ── Banner live preview ──
+function updateBannerPreview() {
+  const text = document.getElementById('announcement_banner_en').value || 'Banner text will appear here';
+  const color = document.querySelector('input[name="banner_color"]:checked')?.value || 'marigold';
+  const colors = { marigold: '#c8761a', sage: '#5c7a3e', ruby: '#a83232' };
+  const preview = document.getElementById('banner_preview');
+  preview.textContent = text;
+  preview.style.background = colors[color] || '#c8761a';
+}
+document.getElementById('announcement_banner_en')?.addEventListener('input', updateBannerPreview);
+document.querySelectorAll('input[name="banner_color"]').forEach(r => r.addEventListener('change', updateBannerPreview));
+document.getElementById('banner_active')?.addEventListener('change', function() {
+  document.getElementById('banner_status_label').textContent =
+    this.checked ? 'ON — banner is visible' : 'OFF — banner is hidden';
+});
+
+// ── Emoji picker ──
+function selectEmoji(btn, n) {
+  document.querySelectorAll('.emoji-btn[data-card="' + n + '"]').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('feature_' + n + '_icon').value = btn.dataset.emoji;
+  markDirty('features');
+}
+
+// ── Dirty tracking ──
+function markDirty(sectionId) {
+  const navItem = document.querySelector('.cms-nav-item[data-section="' + sectionId + '"]');
+  if (navItem) navItem.querySelector('.cms-dirty-dot').style.display = 'block';
+}
+document.querySelectorAll('.form-input').forEach(inp => {
+  inp.addEventListener('input', () => {
+    const section = inp.closest('.cms-section');
+    if (section) {
+      const id = section.id.replace('section-', '');
+      markDirty(id);
+    }
+  });
+});
+
+// ── Save helper ──
+async function saveKeys(pairs, sectionId) {
+  const saveBar = document.querySelector('#section-' + sectionId + ' .cms-save-bar');
+  const btn = saveBar?.querySelector('.cms-save-btn');
+  const msg = saveBar?.querySelector('.cms-saved-msg');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+  try {
+    for (const [key, en, hi] of pairs) {
+      await fetch('/admin/cms/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ section_key: key, content_en: en, content_hi: hi }),
+      });
+    }
+    // Clear dirty dot
+    const dot = document.querySelector('.cms-nav-item[data-section="' + sectionId + '"] .cms-dirty-dot');
+    if (dot) dot.style.display = 'none';
+    if (msg) { msg.style.display = 'inline'; setTimeout(() => msg.style.display = 'none', 2500); }
+  } catch(e) { alert('Save failed. Please try again.'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = btn.textContent.includes('All') ? 'Save All Cards' : 'Save'; } }
+}
+
+function saveHero() {
+  saveKeys([
+    ['hero_title',    v('hero_title_en'),    v('hero_title_hi')],
+    ['hero_subtitle', v('hero_subtitle_en'), v('hero_subtitle_hi')],
+  ], 'hero');
+}
+
+function saveFeatures() {
+  const pairs = [];
+  for (let n = 1; n <= 3; n++) {
+    const icon = document.getElementById('feature_' + n + '_icon').value;
+    pairs.push(['feature_' + n + '_icon',  icon, icon]);
+    pairs.push(['feature_' + n + '_title', v('feature_' + n + '_title_en'), v('feature_' + n + '_title_hi')]);
+    pairs.push(['feature_' + n + '_desc',  v('feature_' + n + '_desc_en'),  v('feature_' + n + '_desc_hi')]);
+  }
+  saveKeys(pairs, 'features');
+}
+
+function saveAbout() {
+  const en = _quillAboutEn ? _quillAboutEn.root.innerHTML : '';
+  const hi = _quillAboutHi ? _quillAboutHi.root.innerHTML : '';
+  saveKeys([['about_text', en, hi]], 'about');
+}
+
+function saveContact() {
+  saveKeys([
+    ['contact_phone',     v('contact_phone_en'),     v('contact_phone_en')],
+    ['contact_whatsapp',  v('contact_whatsapp_en'),  v('contact_whatsapp_en')],
+    ['contact_email',     v('contact_email_en'),      v('contact_email_en')],
+    ['contact_address',   v('contact_address_en'),   v('contact_address_hi')],
+    ['contact_facebook',  v('contact_facebook_en'),  v('contact_facebook_en')],
+    ['contact_instagram', v('contact_instagram_en'), v('contact_instagram_en')],
+  ], 'contact');
+}
+
+function saveBanner() {
+  const active = document.getElementById('banner_active').checked ? '1' : '0';
+  const color  = document.querySelector('input[name="banner_color"]:checked')?.value || 'marigold';
+  saveKeys([
+    ['announcement_banner',        v('announcement_banner_en'), v('announcement_banner_hi')],
+    ['announcement_banner_active', active, active],
+    ['announcement_banner_color',  color,  color],
+  ], 'announcement');
+}
+
+function saveFooter() {
+  saveKeys([
+    ['footer_tagline',   v('footer_tagline_en'),   v('footer_tagline_hi')],
+    ['footer_copyright', v('footer_copyright_en'), v('footer_copyright_hi')],
+  ], 'footer');
+}
+
+function v(id) { return document.getElementById(id)?.value || ''; }
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded', () => {
+  updateHeroPreview();
+  // Default: show hero section
+  showSection('hero');
+});
+</script>
+{% endblock %}

@@ -8,12 +8,30 @@ from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db, socketio, csrf
-from app.models import Voyage, Booking, RouteStop, SeatLock, User, WINDOW_SEATS, SEAT_ADJACENCY
+from app.models import Voyage, Booking, RouteStop, SeatLock, User, WINDOW_SEATS, SEAT_ADJACENCY, SiteContent
 from app.customer.forms import CustomerLoginForm, CustomerRegisterForm, CustomerProfileForm
 from app.logging import log_activity, notify_staff
 from app.staff.ticket import generate_ticket, generate_group_ticket, generate_qr
 
 customer_bp = Blueprint('customer', __name__, template_folder='../templates/customer')
+
+
+def _get_cms() -> dict:
+    """Return all site_content rows keyed by section_key."""
+    rows = SiteContent.query.all()
+    return {r.section_key: r for r in rows}
+
+
+@customer_bp.context_processor
+def inject_cms():
+    """Make CMS content and announcement banner available in all customer templates."""
+    cms = _get_cms()
+    banner_active = cms.get('announcement_banner_active')
+    show_banner = banner_active and banner_active.content_en == '1'
+    return dict(
+        cms=cms,
+        show_banner=show_banner,
+    )
 
 
 def _get_cities():

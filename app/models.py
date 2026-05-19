@@ -233,6 +233,27 @@ class SeatLock(db.Model):
 
 
 # ============================================================
+# CMS SITE CONTENT
+# ============================================================
+
+class SiteContent(db.Model):
+    __tablename__ = 'site_content'
+
+    id = db.Column(db.Integer, primary_key=True)
+    section_key = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    content_en = db.Column(db.Text, nullable=True)
+    content_hi = db.Column(db.Text, nullable=True)
+    content_type = db.Column(db.String(20), nullable=False, default='text')
+    updated_at = db.Column(db.DateTime, nullable=True)
+    updated_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+
+    updated_by = db.relationship('User', foreign_keys=[updated_by_id])
+
+    def __repr__(self):
+        return f'<SiteContent {self.section_key}>'
+
+
+# ============================================================
     # SEAT LAYOUT HELPERS
     # ============================================================
 

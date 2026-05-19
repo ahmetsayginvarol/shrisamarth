@@ -2,6 +2,17 @@
 
 {% block content %}
 <meta name="csrf-token" content="{{ csrf_token() }}">
+
+{% if show_banner %}
+{% set b_en = cms.get('announcement_banner', {}).content_en or '' %}
+{% set b_hi = cms.get('announcement_banner', {}).content_hi or '' %}
+{% set b_col = cms.get('announcement_banner_color', {}).content_en or 'marigold' %}
+{% set bg = '#c8761a' if b_col == 'marigold' else ('#5c7a3e' if b_col == 'sage' else '#a83232') %}
+<div style="background:{{ bg }};color:white;text-align:center;padding:10px 20px;font-size:13px;font-weight:500;z-index:100;position:relative;">
+  <span data-cms-lang="en">{{ b_en }}</span><span data-cms-lang="hi" style="display:none">{{ b_hi }}</span>
+</div>
+{% endif %}
+
 <nav class="c-nav">
     <a href="{{ url_for('customer.home') }}" class="c-nav-brand">
         <span class="c-nav-mark">श्री</span>
@@ -57,13 +68,21 @@
                 <span class="c-footer-mark serif">श्री</span>
                 <span class="c-footer-name">SHRISAMARTH TRAVELS</span>
             </div>
-            <div class="c-footer-sub" data-i18n="c.footer_tagline">Reliable overnight bus travel across Maharashtra.</div>
+            <div class="c-footer-sub">
+              <span data-cms-lang="en">{{ cms.get('footer_tagline', {}).content_en or 'Reliable overnight bus travel across Maharashtra.' }}</span>
+              <span data-cms-lang="hi" style="display:none">{{ cms.get('footer_tagline', {}).content_hi or 'महाराष्ट्र में विश्वसनीय रात्रि बस यात्रा।' }}</span>
+            </div>
         </div>
         <div class="c-footer-contact">
-            <div>📞 +91 98200 00000</div>
-            <div>✉ info@shrisamarth.com</div>
+            {% set ph = cms.get('contact_phone', {}).content_en or '+91 98200 00000' %}
+            {% set em = cms.get('contact_email', {}).content_en or 'info@shrisamarth.com' %}
+            <div>📞 {{ ph }}</div>
+            <div>✉ {{ em }}</div>
         </div>
     </div>
-    <div class="c-footer-copy">© 2026 Shrisamarth Travels. All rights reserved.</div>
+    <div class="c-footer-copy">
+      <span data-cms-lang="en">{{ cms.get('footer_copyright', {}).content_en or '© 2026 Shrisamarth Travels. All rights reserved.' }}</span>
+      <span data-cms-lang="hi" style="display:none">{{ cms.get('footer_copyright', {}).content_hi or '© 2026 श्रीसमर्थ ट्रैवल्स। सर्वाधिकार सुरक्षित।' }}</span>
+    </div>
 </footer>
 {% endblock %}

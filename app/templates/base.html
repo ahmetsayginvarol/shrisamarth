@@ -504,6 +504,11 @@ function applyLanguage(lang) {
         if (val) el.placeholder = val;
     });
 
+    // CMS bilingual content spans
+    document.querySelectorAll('[data-cms-lang]').forEach(el => {
+        el.style.display = el.dataset.cmsLang === lang ? '' : 'none';
+    });
+
     // Update toggle button
     document.querySelectorAll('.lang-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.lang === lang);

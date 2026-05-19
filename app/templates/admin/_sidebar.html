@@ -18,6 +18,11 @@
             <span class="nav-icon">▦</span>
             <span data-i18n="nav.seatmap">Seat Map</span>
         </a>
+        <a href="{{ url_for('admin.cms') }}"
+           class="nav-item {% if request.endpoint == 'admin.cms' %}active{% endif %}">
+            <span class="nav-icon">✏️</span>
+            <span>Homepage</span>
+        </a>
         <a href="{{ url_for('admin.voyages') }}"
            class="nav-item {% if 'voyage' in request.endpoint %}active{% endif %}">
             <span class="nav-icon">⊛</span>

@@ -1,14 +1,150 @@
 {% extends 'customer/base_customer.html' %}
 {% block title %}SHRISAMARTH — Book Bus Tickets{% endblock %}
 
+{# Helper macro for bilingual CMS text #}
+{% macro cms_text(key, fallback_en='', fallback_hi='') %}
+<span data-cms-lang="en">{{ cms.get(key, {}).content_en or fallback_en }}</span><span data-cms-lang="hi" style="display:none">{{ cms.get(key, {}).content_hi or fallback_hi }}</span>
+{% endmacro %}
+
 {% block customer_content %}
 <!-- Hero with gradient -->
 <div class="c-hero">
   <div class="c-hero-inner">
     <div class="c-hero-text">
-      <h1 class="c-hero-title serif" data-i18n="c.hero_title">Travel with Comfort</h1>
-      <p class="c-hero-sub" data-i18n="c.hero_sub">Overnight sleeper buses across Maharashtra — reliable and on time.</p>
+      <h1 class="c-hero-title serif">{{ cms_text('hero_title', 'Travel with Comfort', 'आराम से यात्रा करें') }}</h1>
+      <p class="c-hero-sub">{{ cms_text('hero_subtitle', 'Book your bus tickets online — fast, easy, secure', 'ऑनलाइन बस टिकट बुक करें — तेज़, आसान, सुरक्षित') }}</p>
     </div>
+    <!-- Search card -->
+    <div class="c-search-card">
+      <div class="c-search-card-label" data-i18n="c.find_bus">Find your bus</div>
+      <form method="GET" action="{{ url_for('customer.search') }}">
+        <div class="c-search-fields">
+          <div class="c-field-group">
+            <label class="c-field-label" data-i18n="c.from">From</label>
+            <select name="origin" class="c-field-input" required>
+              <option value="" data-i18n="c.select_city">Select city…</option>
+              {% for city in origins %}<option value="{{ city }}">{{ city }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="c-swap-btn" onclick="swapCities()" title="Swap">⇄</div>
+          <div class="c-field-group">
+            <label class="c-field-label" data-i18n="c.to">To</label>
+            <select name="destination" class="c-field-input" required>
+              <option value="" data-i18n="c.select_city">Select city…</option>
+              {% for city in destinations %}<option value="{{ city }}">{{ city }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="c-field-group">
+            <label class="c-field-label" data-i18n="c.date">Date</label>
+            <input type="date" name="date" class="c-field-input" value="{{ today }}" min="{{ today }}" required>
+          </div>
+          <button type="submit" class="c-search-btn" data-i18n="c.search_btn">Search Buses</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Why SHRISAMARTH -->
+<section class="c-why">
+  <div class="c-why-inner">
+    <h2 class="serif c-section-title" data-i18n="c.why_title">Why SHRISAMARTH?</h2>
+    <div class="c-why-grid">
+      {% for n in [1,2,3] %}
+      <div class="c-why-card">
+        <div class="c-why-icon">{{ cms.get('feature_'~n~'_icon', {}).content_en or ('🛡️' if n==1 else ('⚡' if n==2 else '💰')) }}</div>
+        <h3>{{ cms_text('feature_'~n~'_title',
+              ('Safe Travel' if n==1 else ('Easy Booking' if n==2 else 'Best Prices')),
+              ('सुरक्षित यात्रा' if n==1 else ('आसान बुकिंग' if n==2 else 'सर्वोत्तम कीमतें'))) }}</h3>
+        <p>{{ cms_text('feature_'~n~'_desc',
+              ('Professional drivers, well-maintained AC sleeper coaches.' if n==1 else
+               ('Choose your seat, fill one form, get an instant e-ticket.' if n==2 else
+                'Pay on board — no hidden fees, no advance payment required.')),
+              ('प्रशिक्षित चालक, अच्छी तरह रखरखाव की AC स्लीपर बसें.' if n==1 else
+               ('सीट चुनें, फॉर्म भरें, तुरंत ई-टिकट पाएँ.' if n==2 else
+                'बोर्डिंग पर भुगतान — कोई छिपी फ़ीस नहीं.'))) }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<!-- Popular routes -->
+{% if popular_voyages %}
+<section class="c-popular">
+  <div class="c-popular-inner">
+    <h2 class="serif c-section-title" data-i18n="c.popular_title">Upcoming Buses</h2>
+    <div class="c-popular-grid">
+      {% for v in popular_voyages %}
+      {% set stops = voyage_stops.get(v.id, {}) %}
+      {% set avail = v.bus.total_seats - v.seats_booked %}
+      <div class="c-popular-card" onclick="togglePopularCard(this)">
+        <div class="c-popular-card-summary">
+          <div>
+            <div class="c-popular-route">{{ v.origin }} <span class="c-arrow">→</span> {{ v.destination }}</div>
+            <div class="c-popular-time">{{ v.departure_at.strftime('%d %b · %H:%M') }}</div>
+            <div class="c-popular-fare">₹ {{ v.base_fare | int }} <span data-i18n="c.per_seat">per seat</span></div>
+            <div class="c-popular-avail {% if avail == 0 %}c-seats-sold{% elif avail <= 5 %}c-seats-low{% endif %}">
+              {% if avail == 0 %}<span data-i18n="c.sold_out">Sold out</span>{% elif avail <= 5 %}⚠ {{ avail }} <span data-i18n="{{ 'c.seat_left' if avail == 1 else 'c.seats_left' }}">seat{{ 's' if avail != 1 }} left</span>{% else %}{{ avail }} <span data-i18n="c.seats_left">seats left</span>{% endif %}
+            </div>
+          </div>
+          <div class="c-expand-chevron" style="margin-left:auto; align-self:flex-start;">&#8964;</div>
+        </div>
+
+        <div class="c-result-expandable">
+          <div class="c-expand-inner">
+            {% if stops.boarding or stops.dropping %}
+            <div class="c-expand-stops">
+              {% if stops.boarding %}
+              <div class="c-stops-row">
+                <span class="c-stops-label boarding" data-i18n="c.boarding">Boarding</span>
+                <div class="c-stops-chips">
+                  {% for s in stops.boarding %}<span class="c-stop-chip">{{ s.stop_name }}</span>{% endfor %}
+                </div>
+              </div>
+              {% endif %}
+              {% if stops.dropping %}
+              <div class="c-stops-row" style="margin-top:8px;">
+                <span class="c-stops-label dropping" data-i18n="c.dropping">Dropping</span>
+                <div class="c-stops-chips">
+                  {% for s in stops.dropping %}<span class="c-stop-chip">{{ s.stop_name }}</span>{% endfor %}
+                </div>
+              </div>
+              {% endif %}
+            </div>
+            {% else %}
+            <div class="c-expand-stops" style="color:var(--muted); font-size:13px;" data-i18n="c.no_stops">No stop information available.</div>
+            {% endif %}
+            <div class="c-expand-actions" style="background:var(--cream-2);">
+              {% if avail > 0 %}
+              <a href="{{ url_for('customer.book', voyage_id=v.id) }}"
+                 class="c-expand-book-btn" onclick="event.stopPropagation()" data-i18n="c.book_seats_btn">Book Seat(s) →</a>
+              {% else %}
+              <span class="c-expand-book-btn c-expand-book-btn-disabled" data-i18n="c.sold_out">Sold Out</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<script>
+function swapCities() {
+  const o = document.querySelector('select[name="origin"]');
+  const d = document.querySelector('select[name="destination"]');
+  const tmp = o.value; o.value = d.value; d.value = tmp;
+}
+function togglePopularCard(card) {
+  const isOpen = card.classList.contains('expanded');
+  document.querySelectorAll('.c-popular-card.expanded').forEach(c => c.classList.remove('expanded'));
+  if (!isOpen) card.classList.add('expanded');
+}
+</script>
+{% endblock %}
     <!-- Search card -->
     <div class="c-search-card">
       <div class="c-search-card-label" data-i18n="c.find_bus">Find your bus</div>
