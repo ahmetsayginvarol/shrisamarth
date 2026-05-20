@@ -539,6 +539,76 @@ body {
 @keyframes toast-out { to   { opacity:0; transform:translateX(20px); } }
 .toast-tbl { color: var(--gold); font-weight: 600; }
 
+/* ─── COVER COUNT ON MARKER ─── */
+.tm.tm-has-cv { flex-direction: column; gap: 0; line-height: 1; }
+.tm-id { font-size: 7.5px; opacity: 0.72; letter-spacing: -0.3px; font-weight: 700; }
+.tm-cv { font-size: 11.5px; font-weight: 900; line-height: 1.1; }
+
+/* ─── MARKER STATE-CHANGE FLASH ─── */
+@keyframes tm-pop-seat {
+  0%   { transform: translate(-50%,-50%) scale(1);    filter: brightness(1); }
+  35%  { transform: translate(-50%,-50%) scale(1.55); filter: brightness(1.55); }
+  65%  { transform: translate(-50%,-50%) scale(0.92); filter: brightness(1.1); }
+  100% { transform: translate(-50%,-50%) scale(1);    filter: brightness(1); }
+}
+@keyframes tm-pop-reset {
+  0%   { transform: translate(-50%,-50%) scale(1);    filter: brightness(1); }
+  30%  { transform: translate(-50%,-50%) scale(1.4);  filter: brightness(1.4); }
+  65%  { transform: translate(-50%,-50%) scale(0.93); filter: brightness(1); }
+  100% { transform: translate(-50%,-50%) scale(1);    filter: brightness(1); }
+}
+.tm.tm-flash-seat  { animation: tm-pop-seat  0.44s cubic-bezier(.2,.8,.3,1) forwards !important; }
+.tm.tm-flash-reset { animation: tm-pop-reset 0.38s cubic-bezier(.2,.8,.3,1) forwards !important; }
+
+/* ─── UNDO TOAST ─── */
+#undo-toast {
+  position: fixed;
+  bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  transform: translateX(-50%) translateY(calc(100% + 36px));
+  background: var(--panel);
+  border: 1.5px solid var(--border2);
+  border-top: 2.5px solid var(--teal);
+  border-radius: 12px;
+  padding: 11px 14px 14px;
+  display: flex; align-items: center; gap: 11px;
+  z-index: 650;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.7), 0 0 0 1px rgba(45,212,191,0.12);
+  transition: transform 0.3s cubic-bezier(.2,.8,.3,1);
+  min-width: 270px; max-width: min(420px, 92vw);
+  overflow: hidden;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+#undo-toast.show { transform: translateX(-50%) translateY(0); }
+#undo-toast .ut-icon { font-size: 18px; flex-shrink: 0; opacity: 0.75; }
+#undo-toast .ut-body { flex: 1; min-width: 0; }
+#undo-toast .ut-label {
+  font-size: 11px; color: var(--text); font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#undo-toast .ut-sub { font-size: 9px; color: var(--text-dim); margin-top: 2px; }
+#undo-btn {
+  padding: 7px 13px;
+  border: 1.5px solid var(--teal); border-radius: 6px;
+  background: rgba(45,212,191,0.1); color: var(--teal);
+  font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 700;
+  cursor: pointer; flex-shrink: 0;
+  touch-action: manipulation; letter-spacing: 0.5px;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.1s;
+}
+#undo-btn:active { background: rgba(45,212,191,0.26); }
+#undo-progress {
+  position: absolute; bottom: 0; left: 0;
+  height: 2.5px; width: 100%;
+  background: rgba(45,212,191,0.15);
+}
+#undo-bar {
+  height: 100%; background: var(--teal);
+  width: 100%; transform-origin: left;
+}
+
 /* ─── SPLIT A-D badge ─── */
 .split-count-badge {
   position: absolute; top: -5px; left: -5px;
@@ -1389,6 +1459,17 @@ body {
 <div id="mention-toast-container"></div>
 <div id="mention-autocomplete"></div>
 
+<!-- UNDO TOAST -->
+<div id="undo-toast" role="alert" aria-live="polite">
+  <div class="ut-icon">↩</div>
+  <div class="ut-body">
+    <div class="ut-label" id="undo-label">—</div>
+    <div class="ut-sub">Tap UNDO before it disappears</div>
+  </div>
+  <button id="undo-btn" onclick="doUndo()">UNDO</button>
+  <div id="undo-progress"><div id="undo-bar"></div></div>
+</div>
+
 <!-- ACTION SHEET (long-press context menu) -->
 <div id="action-sheet-overlay" onclick="closeActionSheet()">
   <div id="action-sheet" onclick="event.stopPropagation()">
@@ -1966,7 +2047,12 @@ function renderAll() {
     marker.dataset.id = td.id;
     marker.style.left = pos.x + '%';
     marker.style.top  = pos.y + '%';
-    marker.textContent = td.id;
+    if (tState.occupied && tState.covers) {
+      marker.classList.add('tm-has-cv');
+      marker.innerHTML = `<span class="tm-id">${td.id}</span><span class="tm-cv">${tState.covers}</span>`;
+    } else {
+      marker.textContent = td.id;
+    }
 
     if (tState.occupied) marker.classList.add('occ' + tState.seating);
     if (tState.blocked && !tState.occupied) marker.classList.add('blocked');
@@ -2015,7 +2101,12 @@ function renderAll() {
       marker.dataset.splitParent = parentId;
       marker.style.left = halfPos.x + '%';
       marker.style.top  = halfPos.y + '%';
-      marker.textContent = halfId;
+      if (hState.occupied && hState.covers) {
+        marker.classList.add('tm-has-cv');
+        marker.innerHTML = `<span class="tm-id">${halfId}</span><span class="tm-cv">${hState.covers}</span>`;
+      } else {
+        marker.textContent = halfId;
+      }
 
       if (hState.occupied) marker.classList.add('occ' + hState.seating);
       // Fairness badge on split halves
@@ -2593,6 +2684,7 @@ function confirmResetStation(st) {
 }
 
 function doResetStation(st) {
+  _captureUndo('Station ' + st + ' reset');
   const tables = SECTIONS[st] || [];
   const ops = {};
   tables.forEach(id => {
@@ -2605,6 +2697,7 @@ function doResetStation(st) {
 }
 
 function blockAllInStation(st) {
+  _captureUndo('Station ' + st + ' blocked');
   const tables = SECTIONS[st] || [];
   const ops = {};
   tables.forEach(id => {
@@ -2621,6 +2714,7 @@ function blockAllInStation(st) {
 }
 
 function unblockAllInStation(st) {
+  _captureUndo('Station ' + st + ' unblocked');
   const tables = SECTIONS[st] || [];
   const ops = {};
   tables.forEach(id => {
@@ -4091,6 +4185,7 @@ function exitCombineMode() {
 // COMBINE / UNCOMBINE
 // ============================================================
 function combineTables(id1, id2) {
+  _captureUndo('Tables ' + id1 + '+' + id2 + ' combined');
   const g1 = getCombinedGroup(id1);
   const g2 = getCombinedGroup(id2);
   state.combinations = state.combinations.filter(g => !g.includes(id1) && !g.includes(id2));
@@ -4112,7 +4207,7 @@ function combineTables(id1, id2) {
 }
 
 function uncombineKeepSeating(id) {
-  // Splits the group but each table keeps its own seating state as-is
+  _captureUndo('Tables uncombined');
   const group = getCombinedGroup(id);
   if (!group) return;
   state.combinations = state.combinations.filter(g => !g.includes(id));
@@ -4123,6 +4218,7 @@ function uncombineKeepSeating(id) {
 }
 
 function resetAndUncombine(id) {
+  _captureUndo('Tables reset + uncombined');
   const group = getCombinedGroup(id);
   if (!group) return;
   state.combinations = state.combinations.filter(g => !g.includes(id));
@@ -4288,6 +4384,7 @@ function renderStatroomTags() {
 }
 
 function confirmSeat(id) {
+  _captureUndo('Table ' + id + ' seated');
   const seating = Math.min((state.turnCounts[id] || 0) + 1, 3);
   const entry = {
     occupied: true,
@@ -4318,6 +4415,7 @@ function confirmSeat(id) {
   _tableOp(ops);
   renderAll();
   closeModal();
+  _flashMarker(id, 'seat');
 
   // Notify all OTHER devices of this seating via .set() + nonce
   db.ref('eclipse/deck7/seatings').set({
@@ -4407,6 +4505,7 @@ function blockTableConfirm(id) {
 }
 
 function doBlockTable(id) {
+  _captureUndo('Table ' + id + ' blocked');
   state.tables[id] = {
     occupied: false, blocked: true,
     blockedBy: DEVICE_ID || 'unknown', blockedAt: Date.now(),
@@ -4676,6 +4775,7 @@ function cancelSeatingConfirm(id) {
 }
 
 function doCancelSeating(id) {
+  _captureUndo('Table ' + id + ' — cancel seating');
   const group = getCombinedGroup(id);
   const ids   = group || [id];
   const tState = state.tables[id];
@@ -4695,6 +4795,7 @@ function doCancelSeating(id) {
   });
   _tableOp(ops);
   renderAll(); closeModal();
+  _flashMarker(id, 'reset');
   setStatus(`Table ${id} — seating cancelled ↩`);
 }
 
@@ -4712,6 +4813,7 @@ function resetTableConfirm(id) {
 }
 
 function doResetTable(id) {
+  _captureUndo('Table ' + id + ' reset');
   const group = getCombinedGroup(id);
   // Snapshot BEFORE deletion so we can record session duration
   const preReset = state.tables[id] ? { ...state.tables[id] } : null;
@@ -4741,6 +4843,7 @@ function doResetTable(id) {
   _tableOp(ops);
   renderAll();
   closeModal();
+  _flashMarker(id, 'reset');
   const turns = state.turnCounts[id] || 0;
   const turnNames = ['', '1st', '2nd', '3rd'];
   const next = Math.min(turns + 1, 3);
@@ -4769,6 +4872,114 @@ function closeModal() {
   window._seatCovers = undefined;
   window._staterooms = undefined;
   window._sharing = undefined;
+}
+
+// ============================================================
+// UNDO SYSTEM (single-level — captures state before each action)
+// ============================================================
+let _undoSnapshot = null;
+let _undoTimer    = null;
+const UNDO_MS = 8000;
+
+function _captureUndo(label) {
+  clearTimeout(_undoTimer);
+  // Dismiss any previous undo toast before recording new snapshot
+  const toast = document.getElementById('undo-toast');
+  if (toast) toast.classList.remove('show');
+
+  _undoSnapshot = {
+    label,
+    tables:       JSON.parse(JSON.stringify(state.tables)),
+    turnCounts:   JSON.parse(JSON.stringify(state.turnCounts)),
+    combinations: JSON.parse(JSON.stringify(state.combinations)),
+    splits:       JSON.parse(JSON.stringify(state.splits)),
+  };
+
+  const labelEl = document.getElementById('undo-label');
+  const bar     = document.getElementById('undo-bar');
+  if (!toast || !labelEl || !bar) return;
+  if (labelEl) labelEl.textContent = label;
+
+  // Reset bar without transition, then animate depletion
+  bar.style.transition = 'none';
+  bar.style.transform  = 'scaleX(1)';
+  toast.classList.add('show');
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    bar.style.transition = `transform ${UNDO_MS}ms linear`;
+    bar.style.transform  = 'scaleX(0)';
+  }));
+
+  _undoTimer = setTimeout(_dismissUndoToast, UNDO_MS);
+}
+
+function _dismissUndoToast() {
+  clearTimeout(_undoTimer);
+  _undoTimer    = null;
+  _undoSnapshot = null;
+  const toast = document.getElementById('undo-toast');
+  if (toast) toast.classList.remove('show');
+}
+
+function doUndo() {
+  if (!_undoSnapshot) return;
+  const snap = _undoSnapshot;
+  _dismissUndoToast();
+
+  // Compute diff, restore local state, and write only changed paths to Firebase
+  const ops = {};
+
+  const allTids = new Set([...Object.keys(state.tables), ...Object.keys(snap.tables)]);
+  allTids.forEach(id => {
+    if (JSON.stringify(state.tables[id]) !== JSON.stringify(snap.tables[id])) {
+      const prev = snap.tables[id] ? JSON.parse(JSON.stringify(snap.tables[id])) : undefined;
+      state.tables[id] = prev;
+      if (!prev) delete state.tables[id];
+      ops[`tables/${id}`] = prev || null;
+    }
+  });
+
+  const allCids = new Set([...Object.keys(state.turnCounts), ...Object.keys(snap.turnCounts)]);
+  allCids.forEach(id => {
+    if (state.turnCounts[id] !== snap.turnCounts[id]) {
+      const prev = snap.turnCounts[id];
+      if (prev !== undefined) state.turnCounts[id] = prev;
+      else delete state.turnCounts[id];
+      ops[`turnCounts/${id}`] = prev ?? null;
+    }
+  });
+
+  if (JSON.stringify(state.combinations) !== JSON.stringify(snap.combinations)) {
+    state.combinations = JSON.parse(JSON.stringify(snap.combinations));
+    ops.combinations   = state.combinations;
+  }
+
+  const allSplitIds = new Set([...Object.keys(state.splits), ...Object.keys(snap.splits)]);
+  allSplitIds.forEach(id => {
+    if (JSON.stringify(state.splits[id]) !== JSON.stringify(snap.splits[id])) {
+      const prev = snap.splits[id] ? JSON.parse(JSON.stringify(snap.splits[id])) : undefined;
+      state.splits[id] = prev;
+      if (!prev) delete state.splits[id];
+      ops[`splits/${id}`] = prev || null;
+    }
+  });
+
+  if (Object.keys(ops).length) _tableOp(ops);
+  renderAll();
+  setStatus('↩ Undone: ' + snap.label);
+}
+
+// ── Marker state-change flash ─────────────────────────────────────────────
+function _flashMarker(id, type) {
+  const ids = getCombinedGroup(id) || [id];
+  ids.forEach(tid => {
+    const el  = document.getElementById('tm-' + tid);
+    if (!el) return;
+    const cls = 'tm-flash-' + type;
+    el.classList.remove(cls);
+    void el.offsetWidth; // force reflow so re-adding the class restarts animation
+    el.classList.add(cls);
+    el.addEventListener('animationend', () => el.classList.remove(cls), { once: true });
+  });
 }
 
 // ============================================================
@@ -5915,6 +6126,7 @@ function showEditModal(id) {
 }
 
 function confirmEdit(id) {
+  _captureUndo('Table ' + id + ' edited');
   const tState = state.tables[id];
   if (!tState) return;
   const group = getCombinedGroup(id);
@@ -5987,6 +6199,7 @@ function showAddGuestsModal(id) {
 }
 
 function confirmAddGuests(id) {
+  _captureUndo('Table ' + id + ' — add guests');
   const tState = state.tables[id];
   if (!tState) return;
   const group = getCombinedGroup(id);
@@ -6070,6 +6283,7 @@ function showMoveModal(fromId) {
 }
 
 function confirmMove(fromId) {
+  _captureUndo('Table ' + fromId + ' moved');
   const toId = document.getElementById('move-target')?.value;
   if (!toId) return;
 
