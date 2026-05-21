@@ -170,7 +170,7 @@
                         <label class="form-label">Phone Number</label>
                         <div class="phone-input-row">
                             <select class="country-code-select" id="custSingleCc" aria-label="Country code"></select>
-                            <input type="text" id="custSinglePhone" class="form-input phone-number-input" placeholder="98765 43210" required>
+                            <input type="text" id="custSinglePhone" class="form-input phone-number-input" placeholder="XXXXX XXXXX" required>
                             <input type="hidden" name="passenger_phone" id="custSinglePhoneCombined">
                         </div>
                     </div>
@@ -209,7 +209,7 @@
                                 {% endfor %}
                             </select>
                             {% else %}
-                            <input type="text" name="boarding_point" class="form-input" placeholder="e.g. Dadar" required>
+                            <input type="text" name="boarding_point" class="form-input" placeholder="Boarding stop" data-i18n-placeholder="c.boarding_stop_ph" required>
                             {% endif %}
                         </div>
                         <div class="form-group">
@@ -221,7 +221,7 @@
                                 {% endfor %}
                             </select>
                             {% else %}
-                            <input type="text" name="dropping_point" class="form-input" placeholder="e.g. Shivajinagar" required>
+                            <input type="text" name="dropping_point" class="form-input" placeholder="Dropping stop" data-i18n-placeholder="c.dropping_stop_ph" required>
                             {% endif %}
                         </div>
                     </div>

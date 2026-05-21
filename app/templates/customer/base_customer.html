@@ -74,10 +74,10 @@
             </div>
         </div>
         <div class="c-footer-contact">
-            {% set ph = cms.get('contact_phone', {}).content_en or '+91 98200 00000' %}
-            {% set em = cms.get('contact_email', {}).content_en or 'info@shrisamarth.com' %}
-            <div>📞 {{ ph }}</div>
-            <div>✉ {{ em }}</div>
+            {% set ph = cms.get('contact_phone', {}).content_en or '' %}
+            {% set em = cms.get('contact_email', {}).content_en or '' %}
+            {% if ph %}<div>📞 {{ ph }}</div>{% endif %}
+            {% if em %}<div>✉ {{ em }}</div>{% endif %}
         </div>
     </div>
     <div class="c-footer-copy">

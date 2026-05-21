@@ -251,7 +251,7 @@ function renderGroupForm(seats) {
                 _boardingStops.map(s => `<option value="${s}">${s}</option>`).join('') +
                 `</select>`;
         }
-        return `<input type="text" class="form-input" id="cgrp_boarding" placeholder="e.g. Dadar">`;
+        return `<input type="text" class="form-input" id="cgrp_boarding" placeholder="${t('c.boarding_stop_ph')}">`;
     }
     function makeDroppingField() {
         if (_droppingStops.length) {
@@ -259,7 +259,7 @@ function renderGroupForm(seats) {
                 _droppingStops.map(s => `<option value="${s}">${s}</option>`).join('') +
                 `</select>`;
         }
-        return `<input type="text" class="form-input" id="cgrp_dropping" placeholder="e.g. Shivajinagar">`;
+        return `<input type="text" class="form-input" id="cgrp_dropping" placeholder="${t('c.dropping_stop_ph')}">`;
     }
 
     const html = `<div class="group-seat-section">
@@ -271,7 +271,7 @@ function renderGroupForm(seats) {
             <label class="form-label">${t('c.contact')}</label>
             <div class="phone-input-row">
                 <select class="country-code-select" id="cgrp_cc"></select>
-                <input type="text" class="form-input phone-number-input" id="cgrp_phone" placeholder="98765 43210" value="${_prefill.phone || ''}">
+                <input type="text" class="form-input phone-number-input" id="cgrp_phone" placeholder="XXXXX XXXXX" value="${_prefill.phone || ''}">
             </div>
         </div>
         <div class="form-row">

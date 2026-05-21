@@ -42,7 +42,7 @@
 
             <div class="form-group">
                 {{ form.phone.label(class='form-label') }}
-                {{ form.phone(class='form-input', placeholder='+91 98XXX XXXXX', autocomplete='tel') }}
+                {{ form.phone(class='form-input', placeholder='+91 XXXXX XXXXX', autocomplete='tel') }}
                 {% if form.phone.errors %}
                     {% for e in form.phone.errors %}
                     <div style="color:var(--ruby); font-size:12px; margin-top:4px;">{{ e }}</div>

@@ -97,11 +97,11 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div>
                 <label class="form-label">Amount (₹)</label>
-                <input type="number" name="amount" class="form-input" placeholder="500" min="1" step="1" required>
+                <input type="number" name="amount" class="form-input" placeholder="0" min="1" step="1" required>
             </div>
             <div>
                 <label class="form-label">Note</label>
-                <input type="text" name="note" class="form-input" placeholder="e.g. Advance payment collected at counter">
+                <input type="text" name="note" class="form-input" placeholder="Additional notes (optional)">
             </div>
             <button type="submit" class="btn btn-primary" style="width:auto;">Add</button>
         </form>
