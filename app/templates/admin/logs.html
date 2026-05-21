@@ -4,6 +4,19 @@
 details[open] summary span { transform: rotate(90deg); }
 details summary span { display: inline-block; transition: transform 0.15s; }
 details summary::-webkit-details-marker { display: none; }
+
+/* Clear log modal */
+#clearLogBackdrop {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  z-index: 1000; align-items: center; justify-content: center;
+}
+#clearLogBackdrop.open { display: flex; }
+#clearLogModal {
+  background: var(--cream); border-radius: 12px; padding: 32px;
+  width: 100%; max-width: 440px; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+.clear-step { display: none; }
+.clear-step.active { display: block; }
 </style>
 
 <div class="page-header">
@@ -11,11 +24,18 @@ details summary::-webkit-details-marker { display: none; }
         <div class="page-title serif">Activity Log</div>
         <div class="page-subtitle">{{ logs.total }} event(s) recorded</div>
     </div>
-    <a href="{{ url_for('admin.logs', action=action_filter, user=user_filter, date_from=date_from, date_to=date_to, format='print') }}"
-       target="_blank" class="btn btn-ghost" style="display:flex; align-items:center; gap:6px;">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-        Print
-    </a>
+    <div style="display:flex; gap:10px; align-items:center;">
+        <a href="{{ url_for('admin.logs', action=action_filter, user=user_filter, date_from=date_from, date_to=date_to, format='print') }}"
+           target="_blank" class="btn btn-ghost" style="display:flex; align-items:center; gap:6px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            Print
+        </a>
+        <button type="button" class="btn btn-ghost"
+                style="color:var(--ruby); border-color:var(--ruby);"
+                onclick="openClearLog()">
+            🗑 Clear Log History
+        </button>
+    </div>
 </div>
 
 <!-- Filters -->
@@ -137,7 +157,135 @@ details summary::-webkit-details-marker { display: none; }
 </div>
 {% endif %}
 
+<!-- Clear Log Modal -->
+<div id="clearLogBackdrop" onclick="e => { if(e.target===this) closeClearLog(); }">
+  <div id="clearLogModal">
+
+    <!-- Step 1: Password -->
+    <div id="clearStep1" class="clear-step active">
+      <div style="font-size:22px; margin-bottom:6px;">🔒 Confirm Identity</div>
+      <p style="font-size:13px; color:var(--muted); margin-bottom:20px;">
+        Enter your admin password to proceed.
+      </p>
+      <div class="form-group">
+        <label class="form-label">Admin Password</label>
+        <input type="password" id="clearPwInput" class="form-input"
+               placeholder="••••••••" autocomplete="current-password"
+               onkeydown="if(event.key==='Enter') verifyPassword()">
+      </div>
+      <div id="clearPwError" style="color:var(--ruby); font-size:13px; margin-top:8px; display:none;"></div>
+      <div style="display:flex; gap:10px; margin-top:20px;">
+        <button type="button" class="btn btn-ghost" style="flex:1;" onclick="closeClearLog()">Cancel</button>
+        <button type="button" class="btn btn-primary" id="clearVerifyBtn"
+                style="flex:1; background:var(--ruby); border-color:var(--ruby);"
+                onclick="verifyPassword()">Verify →</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Final Confirmation -->
+    <div id="clearStep2" class="clear-step">
+      <div style="font-size:22px; margin-bottom:6px;">⚠️ This Cannot Be Undone</div>
+      <div style="background:rgba(168,50,50,0.08); border:1px solid rgba(168,50,50,0.3);
+                  border-radius:8px; padding:16px; margin-bottom:20px;">
+        <p style="font-size:14px; color:var(--ruby); font-weight:600; margin-bottom:6px;">
+          You are about to permanently delete <span id="clearCountDisplay">all</span> activity log records.
+        </p>
+        <p style="font-size:13px; color:var(--ink-2);">
+          This includes all booking events, logins, edits, and system actions. There is no way to recover this data.
+        </p>
+      </div>
+      <p style="font-size:13px; color:var(--muted); margin-bottom:16px;">
+        Are you absolutely sure you want to clear the entire log history?
+      </p>
+      <div style="display:flex; gap:10px; margin-top:4px;">
+        <button type="button" class="btn btn-ghost" style="flex:1;" onclick="closeClearLog()">No, Keep Logs</button>
+        <button type="button" id="clearConfirmBtn"
+                style="flex:1; background:var(--ruby); color:white; border:none; border-radius:8px;
+                       padding:12px; font-size:14px; font-weight:600; cursor:pointer;"
+                onclick="executeClear()">
+          Yes, Delete All Logs
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <script>
+const _CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
+const _TOTAL_LOGS = {{ logs.total }};
+
+function openClearLog() {
+  document.getElementById('clearStep1').classList.add('active');
+  document.getElementById('clearStep2').classList.remove('active');
+  document.getElementById('clearPwInput').value = '';
+  document.getElementById('clearPwError').style.display = 'none';
+  document.getElementById('clearLogBackdrop').classList.add('open');
+  setTimeout(() => document.getElementById('clearPwInput').focus(), 80);
+}
+
+function closeClearLog() {
+  document.getElementById('clearLogBackdrop').classList.remove('open');
+}
+
+async function verifyPassword() {
+  const pw = document.getElementById('clearPwInput').value;
+  const btn = document.getElementById('clearVerifyBtn');
+  const err = document.getElementById('clearPwError');
+  if (!pw) { err.textContent = 'Please enter your password.'; err.style.display = 'block'; return; }
+
+  btn.disabled = true; btn.textContent = 'Verifying…';
+  try {
+    const r = await fetch('{{ url_for("admin.logs_clear") }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': _CSRF},
+      body: JSON.stringify({password: pw, verify_only: true}),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      document.getElementById('clearCountDisplay').textContent = _TOTAL_LOGS.toLocaleString();
+      document.getElementById('clearStep1').classList.remove('active');
+      document.getElementById('clearStep2').classList.add('active');
+    } else {
+      err.textContent = data.message || 'Incorrect password.';
+      err.style.display = 'block';
+    }
+  } catch(e) {
+    err.textContent = 'Network error. Please try again.';
+    err.style.display = 'block';
+  }
+  btn.disabled = false; btn.textContent = 'Verify →';
+}
+
+async function executeClear() {
+  const pw = document.getElementById('clearPwInput').value;
+  const btn = document.getElementById('clearConfirmBtn');
+  btn.disabled = true; btn.textContent = 'Deleting…';
+  try {
+    const r = await fetch('{{ url_for("admin.logs_clear") }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': _CSRF},
+      body: JSON.stringify({password: pw}),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      closeClearLog();
+      window.location.reload();
+    } else {
+      btn.disabled = false; btn.textContent = 'Yes, Delete All Logs';
+      alert(data.message || 'Failed to clear logs.');
+    }
+  } catch(e) {
+    btn.disabled = false; btn.textContent = 'Yes, Delete All Logs';
+    alert('Network error. Please try again.');
+  }
+}
+
+// Close on backdrop click
+document.getElementById('clearLogBackdrop').addEventListener('click', function(e) {
+  if (e.target === this) closeClearLog();
+});
+
 function onUserChange(sel) {
     const actionSel = document.getElementById('actionSelect');
     if (sel.value === 'customers') {

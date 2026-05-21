@@ -124,6 +124,22 @@ def dashboard():
 # ACTIVITY LOG
 # ============================================================
 
+@admin_bp.route('/logs/clear', methods=['POST'])
+def logs_clear():
+    data = request.get_json() or {}
+    password = data.get('password', '')
+    verify_only = data.get('verify_only', False)
+    if not current_user.check_password(password):
+        return jsonify({'status': 'error', 'message': 'Incorrect password.'}), 403
+    if verify_only:
+        return jsonify({'status': 'ok'})
+    count = ActivityLog.query.count()
+    ActivityLog.query.delete()
+    db.session.commit()
+    log_activity('log_cleared', f'Activity log cleared — {count} records permanently deleted')
+    return jsonify({'status': 'success', 'count': count})
+
+
 @admin_bp.route('/logs')
 def logs():
     page = request.args.get('page', 1, type=int)
