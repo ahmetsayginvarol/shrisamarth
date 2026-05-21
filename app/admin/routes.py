@@ -1078,9 +1078,17 @@ def _generate_day_report_pdf(report_date, voyages, bookings_by_voyage):
 
 @admin_bp.route('/cms')
 def cms():
+    import json as _json
     rows = SiteContent.query.all()
     content = {r.section_key: r for r in rows}
-    return render_template('admin/cms.html', content=content)
+    faq_en, faq_hi = [], []
+    faq_row = content.get('faq_items')
+    if faq_row:
+        try: faq_en = _json.loads(faq_row.content_en or '[]')
+        except Exception: pass
+        try: faq_hi = _json.loads(faq_row.content_hi or '[]')
+        except Exception: pass
+    return render_template('admin/cms.html', content=content, faq_en=faq_en, faq_hi=faq_hi)
 
 
 @admin_bp.route('/cms/save', methods=['POST'])

@@ -1765,3 +1765,27 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
 .c-tl-sep { color: var(--marigold); margin: 0 4px; font-size: 12px; }
 .c-tl-stop { color: var(--ink-2); font-size: 13px; }
 .c-tl-time { font-size: 11px; color: var(--muted); margin-left: 2px; }
+
+/* FAQ Section */
+.c-faq { padding: 60px 20px; background: var(--cream-2); }
+.c-faq-inner { max-width: 800px; margin: 0 auto; }
+.c-faq-list { margin-top: 32px; border-top: 1px solid var(--line); }
+.c-faq-item { border-bottom: 1px solid var(--line); }
+.c-faq-question {
+  width: 100%; background: none; border: none; padding: 18px 4px;
+  display: flex; justify-content: space-between; align-items: center;
+  cursor: pointer; font-size: 15px; font-weight: 500; color: var(--ink);
+  text-align: left; gap: 16px; transition: color 0.15s;
+}
+.c-faq-question:hover { color: var(--marigold); }
+.c-faq-q-text { flex: 1; }
+.c-faq-chevron {
+  font-size: 11px; color: var(--muted); flex-shrink: 0;
+  transition: transform 0.25s ease; display: inline-block; user-select: none;
+}
+.c-faq-item.open .c-faq-chevron { transform: rotate(180deg); color: var(--marigold); }
+.c-faq-answer { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
+.c-faq-item.open .c-faq-answer { max-height: 500px; }
+.c-faq-answer-inner {
+  padding: 0 4px 20px; font-size: 14px; color: var(--ink-2); line-height: 1.75;
+}

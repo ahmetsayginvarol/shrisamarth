@@ -1,4 +1,5 @@
 import base64
+import json
 import secrets
 from datetime import date, datetime, timedelta
 
@@ -23,6 +24,49 @@ def _get_cms() -> dict:
         return {r.section_key: r for r in rows}
     except Exception:
         return {}
+
+
+_DEFAULT_FAQ_EN = [
+    {"q": "How do I book a bus ticket on SHRISAMARTH?", "a": "Select your origin, destination and date on the homepage. Choose your preferred bus, pick your seat on the visual seat map, fill in your details and confirm. You'll receive an e-ticket instantly."},
+    {"q": "Can I cancel my booking?", "a": "Yes. Go to My Bookings, find your booking and click Cancel. Cancellations are subject to the operator's refund policy."},
+    {"q": "How do I receive my ticket?", "a": "Your e-ticket is available to download immediately after booking. You can also share it via WhatsApp directly from the booking confirmation page."},
+    {"q": "Do I need to create an account to book?", "a": "No. You can book as a guest. Creating an account lets you view your booking history and manage your tickets easily."},
+    {"q": "What should I carry at boarding?", "a": "Show your e-ticket QR code to the driver — either on your phone screen or as a printed copy."},
+    {"q": "How are seats allocated?", "a": "You choose your own seat from the live seat map. What you select is what you get."},
+]
+_DEFAULT_FAQ_HI = [
+    {"q": "SHRISAMARTH पर बस टिकट कैसे बुक करें?", "a": "होमपेज पर अपना मूल स्थान, गंतव्य और तारीख चुनें। अपनी पसंदीदा बस चुनें, विजुअल सीट मैप से सीट चुनें, अपनी जानकारी भरें और पुष्टि करें। आपको तुरंत ई-टिकट मिलेगा।"},
+    {"q": "क्या मैं अपनी बुकिंग रद्द कर सकता/सकती हूँ?", "a": "हाँ। मेरी बुकिंग पर जाएं, अपनी बुकिंग खोजें और रद्द करें पर क्लिक करें। रद्दीकरण ऑपरेटर की धनवापसी नीति के अधीन है।"},
+    {"q": "मुझे मेरा टिकट कैसे मिलेगा?", "a": "बुकिंग के तुरंत बाद आपका ई-टिकट डाउनलोड के लिए उपलब्ध है। आप बुकिंग पुष्टि पृष्ठ से सीधे WhatsApp पर भी शेयर कर सकते हैं।"},
+    {"q": "क्या बुकिंग के लिए खाता बनाना जरूरी है?", "a": "नहीं। आप बिना खाते के भी बुकिंग कर सकते हैं। खाता बनाने से आप अपनी बुकिंग इतिहास देख सकते हैं और टिकट आसानी से प्रबंधित कर सकते हैं।"},
+    {"q": "बोर्डिंग पर क्या लाना है?", "a": "ड्राइवर को अपना ई-टिकट QR कोड दिखाएं — फोन स्क्रीन पर या प्रिंट कॉपी के रूप में।"},
+    {"q": "सीटें कैसे आवंटित होती हैं?", "a": "आप लाइव सीट मैप से अपनी सीट स्वयं चुनते हैं। जो आप चुनते हैं, वही आपको मिलती है।"},
+]
+
+
+def _get_faq_items():
+    """Return list of {q_en, a_en, q_hi, a_hi} for the FAQ accordion."""
+    try:
+        row = SiteContent.query.filter_by(section_key='faq_items').first()
+        if row:
+            en_list = json.loads(row.content_en or '[]')
+            hi_list = json.loads(row.content_hi or '[]')
+            if en_list:
+                return [
+                    {
+                        'q_en': e.get('q', ''),
+                        'a_en': e.get('a', ''),
+                        'q_hi': (hi_list[i].get('q', '') if i < len(hi_list) else ''),
+                        'a_hi': (hi_list[i].get('a', '') if i < len(hi_list) else ''),
+                    }
+                    for i, e in enumerate(en_list)
+                ]
+    except Exception:
+        pass
+    return [
+        {'q_en': e['q'], 'a_en': e['a'], 'q_hi': h['q'], 'a_hi': h['a']}
+        for e, h in zip(_DEFAULT_FAQ_EN, _DEFAULT_FAQ_HI)
+    ]
 
 
 @customer_bp.context_processor
@@ -78,7 +122,8 @@ def home():
                            destinations=destinations,
                            today=date.today().strftime('%Y-%m-%d'),
                            popular_voyages=popular_voyages,
-                           voyage_stops=voyage_stops)
+                           voyage_stops=voyage_stops,
+                           faq_items=_get_faq_items())
 
 
 # ============================================================

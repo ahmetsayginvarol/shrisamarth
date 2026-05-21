@@ -128,6 +128,37 @@
 </section>
 {% endif %}
 
+<!-- FAQ Section -->
+{% if faq_items %}
+<section class="c-faq">
+  <div class="c-faq-inner">
+    <h2 class="serif c-section-title">
+      <span data-cms-lang="en" data-i18n="c.faq_title">Frequently Asked Questions</span>
+      <span data-cms-lang="hi" style="display:none">अक्सर पूछे जाने वाले सवाल</span>
+    </h2>
+    <div class="c-faq-list">
+      {% for item in faq_items %}
+      <div class="c-faq-item">
+        <button class="c-faq-question" onclick="toggleFaq(this)" type="button">
+          <span class="c-faq-q-text">
+            <span data-cms-lang="en">{{ item.q_en }}</span>
+            <span data-cms-lang="hi" style="display:none">{{ item.q_hi or item.q_en }}</span>
+          </span>
+          <span class="c-faq-chevron">▼</span>
+        </button>
+        <div class="c-faq-answer">
+          <div class="c-faq-answer-inner">
+            <span data-cms-lang="en">{{ item.a_en }}</span>
+            <span data-cms-lang="hi" style="display:none">{{ item.a_hi or item.a_en }}</span>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
 <script>
 function swapCities() {
   const o = document.querySelector('select[name="origin"]');
@@ -138,6 +169,12 @@ function togglePopularCard(card) {
   const isOpen = card.classList.contains('expanded');
   document.querySelectorAll('.c-popular-card.expanded').forEach(c => c.classList.remove('expanded'));
   if (!isOpen) card.classList.add('expanded');
+}
+function toggleFaq(btn) {
+  const item = btn.closest('.c-faq-item');
+  const isOpen = item.classList.contains('open');
+  document.querySelectorAll('.c-faq-item.open').forEach(i => i.classList.remove('open'));
+  if (!isOpen) item.classList.add('open');
 }
 </script>
 {% endblock %}

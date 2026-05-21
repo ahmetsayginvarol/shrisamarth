@@ -15,6 +15,7 @@
         ('hero',         '🏠', 'Hero Section',         'hero_title'),
         ('features',     '⭐', 'Feature Cards',         'feature_1_title'),
         ('about',        'ℹ️', 'About Section',         'about_text'),
+        ('faq',          '❓', 'FAQ',                   'faq_items'),
         ('contact',      '📞', 'Contact Info',          'contact_phone'),
         ('announcement', '📢', 'Announcement Banner',   'announcement_banner'),
         ('footer',       '🦶', 'Footer',                'footer_tagline'),
@@ -159,6 +160,23 @@
       </div>
       <div class="cms-save-bar">
         <button class="btn btn-primary cms-save-btn" onclick="saveAbout()" style="width:auto; padding:10px 28px;">Save</button>
+        <span class="cms-saved-msg" style="display:none; color:var(--sage); font-size:13px; font-weight:500;">Saved ✓</span>
+      </div>
+    </div>
+
+    <!-- FAQ -->
+    <div id="section-faq" class="cms-section" style="display:none; padding:32px 40px;">
+      <div class="cms-section-header">
+        <div class="serif" style="font-size:22px;">❓ FAQ</div>
+        <div style="font-size:13px; color:var(--muted); margin-top:4px;">Frequently Asked Questions shown on the homepage. Drag items to reorder. Maximum 20 items.</div>
+      </div>
+      <div id="faqList" style="margin-bottom:16px;"></div>
+      <button type="button" onclick="addFaqItem()"
+              style="width:100%; padding:12px; border:2px dashed var(--line); background:none; border-radius:8px; cursor:pointer; font-size:13px; color:var(--muted); margin-bottom:16px;">
+        + Add Question
+      </button>
+      <div class="cms-save-bar">
+        <button class="btn btn-primary cms-save-btn" onclick="saveFaq()" style="width:auto; padding:10px 28px;">Save All FAQs</button>
         <span class="cms-saved-msg" style="display:none; color:var(--sage); font-size:13px; font-weight:500;">Saved ✓</span>
       </div>
     </div>
@@ -363,6 +381,23 @@
 
 .color-option input[type=radio] { display: none; }
 .color-option input[type=radio]:checked + span { outline: 3px solid var(--ink); outline-offset: 2px; }
+
+/* FAQ editor */
+.faq-editor-item {
+  border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px;
+  background: var(--cream); overflow: hidden; transition: box-shadow 0.15s;
+}
+.faq-editor-item.drag-over { box-shadow: 0 0 0 2px var(--marigold); }
+.faq-editor-header {
+  display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+  cursor: pointer; user-select: none;
+}
+.faq-editor-header:hover { background: var(--cream-2); }
+.faq-drag-handle { font-size: 18px; color: var(--muted); cursor: grab; flex-shrink: 0; }
+.faq-editor-q { flex: 1; font-size: 13px; font-weight: 500; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.faq-editor-chevron { font-size: 11px; color: var(--muted); transition: transform 0.2s; flex-shrink: 0; }
+.faq-editor-chevron.open { transform: rotate(180deg); }
+.faq-editor-body { padding: 0 14px 16px; border-top: 1px solid var(--line); }
 </style>
 
 <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
@@ -387,6 +422,7 @@ function showSection(id) {
 
   // Init Quill editors on demand
   if (id === 'about' && !window._quillAboutEn) initQuillEditors();
+  if (id === 'faq') renderFaqList();
 }
 
 // ── Quill ──
@@ -555,6 +591,144 @@ function saveFooter() {
 }
 
 function v(id) { return document.getElementById(id)?.value || ''; }
+
+// ── FAQ Editor ──
+let _faqEn = {{ faq_en|tojson }};
+let _faqHi = {{ faq_hi|tojson }};
+let _faqOpenIdx = -1;
+let _dragSrcIdx = -1;
+
+function _normFaq() {
+  while (_faqHi.length < _faqEn.length) _faqHi.push({q:'', a:''});
+}
+
+function _escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _syncFromDom() {
+  const rows = document.querySelectorAll('.faq-editor-item');
+  const newEn = [], newHi = [];
+  rows.forEach(row => {
+    newEn.push({q: row.querySelector('[data-fq="q_en"]')?.value || '', a: row.querySelector('[data-fq="a_en"]')?.value || ''});
+    newHi.push({q: row.querySelector('[data-fq="q_hi"]')?.value || '', a: row.querySelector('[data-fq="a_hi"]')?.value || ''});
+  });
+  _faqEn = newEn; _faqHi = newHi;
+}
+
+function renderFaqList() {
+  _normFaq();
+  const list = document.getElementById('faqList');
+  if (!list) return;
+  if (_faqEn.length === 0) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:16px 0;text-align:center;">No FAQ items yet. Click "+ Add Question".</div>';
+    return;
+  }
+  list.innerHTML = _faqEn.map((item, idx) => {
+    const hi = _faqHi[idx] || {q:'', a:''};
+    const open = idx === _faqOpenIdx;
+    return `<div class="faq-editor-item${open ? ' open' : ''}" draggable="true" data-idx="${idx}"
+       ondragstart="faqDragStart(event,${idx})"
+       ondragover="event.preventDefault();this.classList.add('drag-over')"
+       ondragleave="this.classList.remove('drag-over')"
+       ondrop="faqDrop(event,${idx})">
+      <div class="faq-editor-header" onclick="toggleFaqEditor(${idx})">
+        <span class="faq-drag-handle" title="Drag to reorder" ondragstart="event.stopPropagation()" draggable="false">⠿</span>
+        <span class="faq-editor-q">${_escHtml((item.q || '(empty question)').substring(0,70))}</span>
+        <span class="faq-editor-chevron${open ? ' open' : ''}">▼</span>
+      </div>
+      <div class="faq-editor-body"${open ? '' : ' style="display:none"'}>
+        <div class="cms-field-row" style="margin:14px 0 12px;">
+          <div class="cms-field">
+            <label class="form-label">Question (English)</label>
+            <input type="text" class="form-input" data-fq="q_en" value="${_escHtml(item.q||'')}" oninput="markDirty('faq')">
+          </div>
+          <div class="cms-field">
+            <label class="form-label">Question (Hindi)</label>
+            <input type="text" class="form-input" data-fq="q_hi" value="${_escHtml(hi.q||'')}" oninput="markDirty('faq')">
+          </div>
+        </div>
+        <div class="cms-field-row" style="margin-bottom:14px;">
+          <div class="cms-field">
+            <label class="form-label">Answer (English)</label>
+            <textarea class="form-input" rows="3" data-fq="a_en" oninput="markDirty('faq')">${_escHtml(item.a||'')}</textarea>
+          </div>
+          <div class="cms-field">
+            <label class="form-label">Answer (Hindi)</label>
+            <textarea class="form-input" rows="3" data-fq="a_hi" oninput="markDirty('faq')">${_escHtml(hi.a||'')}</textarea>
+          </div>
+        </div>
+        <button type="button" onclick="deleteFaqItem(${idx})"
+                style="color:var(--ruby);border:1px solid var(--ruby);background:none;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;">
+          Delete
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleFaqEditor(idx) {
+  _syncFromDom();
+  _faqOpenIdx = (_faqOpenIdx === idx) ? -1 : idx;
+  renderFaqList();
+}
+
+function addFaqItem() {
+  if (_faqEn.length >= 20) { alert('Maximum 20 FAQ items allowed.'); return; }
+  _syncFromDom();
+  _faqEn.push({q:'', a:''}); _faqHi.push({q:'', a:''});
+  _faqOpenIdx = _faqEn.length - 1;
+  renderFaqList();
+  markDirty('faq');
+}
+
+function deleteFaqItem(idx) {
+  if (_faqEn.length <= 1) { alert('At least one FAQ item is required.'); return; }
+  if (!confirm('Delete this FAQ item?')) return;
+  _syncFromDom();
+  _faqEn.splice(idx, 1); _faqHi.splice(idx, 1);
+  _faqOpenIdx = -1;
+  renderFaqList();
+  markDirty('faq');
+}
+
+function faqDragStart(e, idx) {
+  _syncFromDom(); _dragSrcIdx = idx;
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function faqDrop(e, targetIdx) {
+  e.preventDefault();
+  document.querySelectorAll('.faq-editor-item').forEach(el => el.classList.remove('drag-over'));
+  if (_dragSrcIdx === targetIdx || _dragSrcIdx < 0) return;
+  const en = _faqEn.splice(_dragSrcIdx, 1)[0];
+  const hi = _faqHi.splice(_dragSrcIdx, 1)[0];
+  const adj = _dragSrcIdx < targetIdx ? targetIdx - 1 : targetIdx;
+  _faqEn.splice(adj, 0, en); _faqHi.splice(adj, 0, hi);
+  _faqOpenIdx = -1; _dragSrcIdx = -1;
+  renderFaqList(); markDirty('faq');
+}
+
+function saveFaq() {
+  _syncFromDom();
+  const saveBar = document.querySelector('#section-faq .cms-save-bar');
+  const btn = saveBar?.querySelector('.cms-save-btn');
+  const msg = saveBar?.querySelector('.cms-saved-msg');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  fetch('/admin/cms/save', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF},
+    body: JSON.stringify({section_key: 'faq_items', content_en: JSON.stringify(_faqEn), content_hi: JSON.stringify(_faqHi)}),
+  }).then(r => r.json()).then(() => {
+    const dot = document.querySelector('.cms-nav-item[data-section="faq"] .cms-dirty-dot');
+    if (dot) dot.style.display = 'none';
+    if (msg) { msg.style.display = 'inline'; setTimeout(() => msg.style.display = 'none', 2500); }
+    if (btn) { btn.disabled = false; btn.textContent = 'Save All FAQs'; }
+  }).catch(() => {
+    alert('Save failed. Please try again.');
+    if (btn) { btn.disabled = false; btn.textContent = 'Save All FAQs'; }
+  });
+}
 
 // ── Init ──
 document.addEventListener('DOMContentLoaded', () => {
