@@ -1,5 +1,6 @@
 import io
 import qrcode
+from flask import current_app
 from reportlab.lib import colors
 from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
@@ -208,7 +209,8 @@ def generate_ticket(booking, lang: str = 'en') -> io.BytesIO:
     ]], colWidths=[third, third, third])
 
     # ===== QR + footer =====
-    verify_url = f"https://shrisamarth.onrender.com/verify/{booking.booking_code}"
+    domain = current_app.config.get('APP_DOMAIN', 'https://shrisamarth.in')
+    verify_url = f"{domain}/verify/{booking.booking_code}"
     qr_buf = generate_qr(verify_url)
     qr_img = RLImage(qr_buf, width=20*mm, height=20*mm)
 
@@ -385,7 +387,8 @@ def generate_group_ticket(bookings, lang: str = 'en') -> io.BytesIO:
               colWidths=[half]),
     ]], colWidths=[half, half])
 
-    verify_url = f"https://shrisamarth.onrender.com/verify/{first.group_booking_code}"
+    domain = current_app.config.get('APP_DOMAIN', 'https://shrisamarth.in')
+    verify_url = f"{domain}/verify/{first.group_booking_code}"
     qr_buf = generate_qr(verify_url)
     qr_img = RLImage(qr_buf, width=20*mm, height=20*mm)
 

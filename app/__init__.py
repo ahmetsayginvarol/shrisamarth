@@ -40,4 +40,8 @@ def create_app(config_class=Config):
     with app.app_context():
         db.create_all()
 
+    @app.context_processor
+    def inject_domain():
+        return {'APP_DOMAIN': app.config['APP_DOMAIN']}
+
     return app

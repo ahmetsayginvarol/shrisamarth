@@ -3,7 +3,7 @@ import secrets
 from datetime import date, datetime, timedelta
 
 from flask import (Blueprint, render_template, request, jsonify, redirect,
-                   url_for, flash, session, send_file, abort)
+                   url_for, flash, session, send_file, abort, current_app)
 from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy.exc import IntegrityError
 
@@ -339,7 +339,8 @@ def confirmation(code):
             abort(404)
 
     # Generate QR
-    qr_buf = generate_qr(f"https://shrisamarth.onrender.com/verify/{code}")
+    domain = current_app.config.get('APP_DOMAIN', 'https://shrisamarth.in')
+    qr_buf = generate_qr(f"{domain}/verify/{code}")
     qr_b64 = base64.b64encode(qr_buf.read()).decode()
 
     return render_template(

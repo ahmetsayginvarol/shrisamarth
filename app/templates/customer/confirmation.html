@@ -168,7 +168,7 @@ function shareWhatsApp() {
         + `💺 Seats: ${seats.join(', ')}\n`
         + `💰 Total Fare: ₹${fare} (pay on board)\n\n`
         + `Show this at boarding.\n`
-        + `View/Download: https://shrisamarth.onrender.com/booking/confirmation/${code}`;
+        + `View/Download: {{ APP_DOMAIN }}/booking/confirmation/${code}`;
 
     const url = 'https://wa.me/?text=' + encodeURIComponent(msg);
     window.open(url, '_blank');

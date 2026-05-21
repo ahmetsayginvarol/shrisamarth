@@ -22,3 +22,5 @@ class Config:
     LANGUAGES = ['en', 'hi']
     BABEL_DEFAULT_LOCALE = 'en'
     PERMANENT_SESSION_LIFETIME = 60 * 60 * 8
+
+    APP_DOMAIN = os.environ.get('APP_DOMAIN', 'https://shrisamarth.in')
