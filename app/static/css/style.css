@@ -1752,3 +1752,16 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
 .phone-input-row { display: flex; gap: 6px; align-items: center; }
 .country-code-select { flex: 0 0 auto; min-width: 90px; max-width: 110px; font-size: 13px; padding: 8px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--cream); color: var(--ink); cursor: pointer; }
 .phone-number-input { flex: 1; }
+
+/* Inline stops display (home & search results) */
+.c-stops-inline { font-size: 13px; color: var(--ink-2); line-height: 1.5; }
+
+/* Route timeline on book page */
+.c-route-timeline-wrap { padding: 14px 24px 16px; background: var(--cream-2); border-bottom: 1px solid var(--line); overflow-x: auto; }
+.c-tl-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; margin-bottom: 8px; }
+.c-route-timeline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 0; font-size: 13px; white-space: nowrap; }
+.c-tl-city { font-weight: 700; color: var(--ink); font-size: 13px; }
+.c-tl-city.dest { color: var(--sage); }
+.c-tl-sep { color: var(--marigold); margin: 0 4px; font-size: 12px; }
+.c-tl-stop { color: var(--ink-2); font-size: 13px; }
+.c-tl-time { font-size: 11px; color: var(--muted); margin-left: 2px; }

@@ -49,12 +49,18 @@
                     <div>{{ booking.passenger_phone }}</div>
                 </div>
                 <div>
-                    <div class="form-label" data-i18n="c.boarding">Boarding</div>
-                    <div>{{ booking.boarding_point or '—' }}</div>
+                    {% set board_stop = booking.voyage.stops | selectattr('stop_type', 'equalto', 'boarding') | selectattr('stop_name', 'equalto', booking.boarding_point) | list | first %}
+                    <div class="form-label" data-i18n="c.you_board_at">You board at:</div>
+                    <div style="font-weight:600; color:var(--sage);">
+                        📍 {{ booking.boarding_point or '—' }}{% if board_stop and board_stop.stop_time %} <span style="font-weight:400; color:var(--muted); font-size:13px;">· {{ board_stop.stop_time }}</span>{% endif %}
+                    </div>
                 </div>
                 <div>
-                    <div class="form-label" data-i18n="c.dropping">Dropping</div>
-                    <div>{{ booking.dropping_point or '—' }}</div>
+                    {% set drop_stop = booking.voyage.stops | selectattr('stop_type', 'equalto', 'dropping') | selectattr('stop_name', 'equalto', booking.dropping_point) | list | first %}
+                    <div class="form-label" data-i18n="c.you_drop_at">You drop at:</div>
+                    <div style="font-weight:600; color:var(--male);">
+                        📍 {{ booking.dropping_point or '—' }}{% if drop_stop and drop_stop.stop_time %} <span style="font-weight:400; color:var(--muted); font-size:13px;">· {{ drop_stop.stop_time }}</span>{% endif %}
+                    </div>
                 </div>
             </div>
 

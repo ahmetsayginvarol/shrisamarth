@@ -16,6 +16,25 @@
         </div>
     </div>
 
+    {% if boarding_stops or dropping_stops %}
+    <div class="c-route-timeline-wrap">
+        <div class="c-tl-label" data-i18n="c.route_stops">Route stops:</div>
+        <div class="c-route-timeline">
+            <span class="c-tl-city">{{ voyage.origin }}</span>
+            {% for s in boarding_stops %}
+            <span class="c-tl-sep">──●</span>
+            <span class="c-tl-stop">{{ s.stop_name }}{% if s.stop_time %} <span class="c-tl-time">{{ s.stop_time }}</span>{% endif %}</span>
+            {% endfor %}
+            <span class="c-tl-sep">──▶</span>
+            <span class="c-tl-city dest">{{ voyage.destination }}</span>
+            {% for s in dropping_stops %}
+            <span class="c-tl-sep">──●</span>
+            <span class="c-tl-stop">{{ s.stop_name }}{% if s.stop_time %} <span class="c-tl-time">{{ s.stop_time }}</span>{% endif %}</span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
     <div class="c-book-layout">
 
         <!-- LEFT: Seat grid -->
