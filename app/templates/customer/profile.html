@@ -28,6 +28,22 @@
         </div>
     </div>
 
+    <!-- Email verification status -->
+    {% if current_user.email_verified %}
+    <div style="background:rgba(92,122,62,0.08); border:1px solid rgba(92,122,62,0.3); border-radius:10px; padding:14px 18px; margin-bottom:20px; display:flex; align-items:center; gap:10px;">
+        <span style="font-size:18px;">✅</span>
+        <span style="font-size:13px; color:var(--sage); font-weight:600;" data-i18n="c.email_verified">Email verified</span>
+    </div>
+    {% else %}
+    <div style="background:rgba(200,118,26,0.08); border:1px solid rgba(200,118,26,0.4); border-radius:10px; padding:14px 18px; margin-bottom:20px; display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <span style="font-size:18px;">⚠️</span>
+        <span style="font-size:13px; color:#c8761a; font-weight:600; flex:1;" data-i18n="c.email_not_verified">Email not verified</span>
+        <a href="{{ url_for('customer.verify_pending') }}"
+           style="font-size:12px; color:#c8761a; text-decoration:underline; font-weight:500; white-space:nowrap;"
+           data-i18n="c.resend_verification">Resend verification email</a>
+    </div>
+    {% endif %}
+
     <!-- Edit form -->
     <div style="background:var(--cream); border:1px solid var(--line); border-radius:12px; padding:28px;">
         <h2 class="serif" style="font-size:22px; margin-bottom:20px;" data-i18n="c.edit_profile">Edit Profile</h2>

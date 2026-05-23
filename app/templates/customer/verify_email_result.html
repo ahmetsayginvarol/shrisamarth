@@ -1,0 +1,35 @@
+{% extends 'customer/base_customer.html' %}
+{% block title %}Email Verification · SHRISAMARTH{% endblock %}
+
+{% block customer_content %}
+<div class="login-page">
+    <div class="login-card" style="max-width:460px; text-align:center;">
+
+        {% if state == 'used' %}
+        <div style="font-size:48px; margin-bottom:12px;">✅</div>
+        <h1 class="serif" style="font-size:24px; margin-bottom:8px;" data-i18n="c.already_verified">Already verified</h1>
+        <p style="color:var(--muted); font-size:13px; margin-bottom:24px;" data-i18n="c.already_verified_sub">
+            This link has already been used. Your email is verified — just sign in.
+        </p>
+        <a href="{{ url_for('customer.login') }}" class="btn btn-primary" style="width:100%;" data-i18n="c.back_to_login">Sign In</a>
+
+        {% elif state == 'expired' %}
+        <div style="font-size:48px; margin-bottom:12px;">⏰</div>
+        <h1 class="serif" style="font-size:24px; margin-bottom:8px;" data-i18n="c.link_expired">Link expired</h1>
+        <p style="color:var(--muted); font-size:13px; margin-bottom:24px;" data-i18n="c.link_expired_sub">
+            This verification link has expired (links are valid for 24 hours). Log in and request a new one.
+        </p>
+        <a href="{{ url_for('customer.login') }}" class="btn btn-primary" style="width:100%; margin-bottom:12px;" data-i18n="c.back_to_login">Sign In</a>
+
+        {% else %}
+        <div style="font-size:48px; margin-bottom:12px;">❌</div>
+        <h1 class="serif" style="font-size:24px; margin-bottom:8px;" data-i18n="c.reset_expired_title">Invalid link</h1>
+        <p style="color:var(--muted); font-size:13px; margin-bottom:24px;">
+            This verification link is invalid. Please register or sign in.
+        </p>
+        <a href="{{ url_for('customer.login') }}" class="btn btn-primary" style="width:100%;" data-i18n="c.back_to_login">Sign In</a>
+        {% endif %}
+
+    </div>
+</div>
+{% endblock %}

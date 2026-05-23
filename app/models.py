@@ -21,6 +21,8 @@ class User(UserMixin, db.Model):
     gender = db.Column(db.String(1), nullable=True)  # 'M' or 'F', optional
     credit_balance = db.Column(db.Numeric(10, 2), default=0, nullable=False)
     is_active_account = db.Column(db.Boolean, default=True)
+    email_verified = db.Column(db.Boolean, nullable=False, default=True, server_default='true')
+    email_verified_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def set_password(self, password):
@@ -230,6 +232,30 @@ class SeatLock(db.Model):
 
     def __repr__(self):
         return f'<SeatLock voyage={self.voyage_id} seat={self.seat_id}>'
+
+
+# ============================================================
+# EMAIL VERIFICATION TOKENS
+# ============================================================
+
+class EmailVerificationToken(db.Model):
+    __tablename__ = 'email_verification_tokens'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    token = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', foreign_keys=[user_id])
+
+    @property
+    def is_valid(self):
+        return self.used_at is None and datetime.utcnow() < self.expires_at
+
+    def __repr__(self):
+        return f'<EmailVerificationToken user={self.user_id}>'
 
 
 # ============================================================

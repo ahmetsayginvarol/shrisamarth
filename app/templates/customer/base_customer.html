@@ -59,6 +59,42 @@
     </div>
 </nav>
 
+{% if current_user.is_authenticated and current_user.role == 'customer' and not current_user.email_verified %}
+<div id="verifyBanner" style="background:#c8761a; color:white; text-align:center; padding:10px 20px; font-size:13px; font-weight:500; position:relative; z-index:90;">
+    <span>⚠️ </span>
+    <span data-i18n="c.verify_banner">Please verify your email to enable booking.</span>
+    <span style="margin:0 12px; opacity:0.6;">·</span>
+    <a href="{{ url_for('customer.verify_pending') }}" style="color:white; text-decoration:underline; font-weight:600;" data-i18n="c.check_inbox_link">Check inbox</a>
+    <span style="margin:0 12px; opacity:0.6;">·</span>
+    <button type="button" id="bannerResendBtn"
+            style="background:none; border:1px solid rgba(255,255,255,0.6); color:white; border-radius:4px; padding:2px 10px; font-size:12px; cursor:pointer;"
+            data-i18n="c.resend_verification"
+            onclick="bannerResend()">Resend email</button>
+    <span id="bannerResendMsg" style="margin-left:10px; font-size:12px; display:none;"></span>
+</div>
+<script>
+const _bannerCSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
+async function bannerResend() {
+    const btn = document.getElementById('bannerResendBtn');
+    const msg = document.getElementById('bannerResendMsg');
+    btn.disabled = true;
+    try {
+        const r = await fetch('{{ url_for("customer.resend_verification") }}', {
+            method: 'POST',
+            headers: {'X-CSRFToken': _bannerCSRF, 'Content-Type': 'application/json'},
+        });
+        const data = await r.json();
+        msg.style.display = 'inline';
+        msg.textContent = r.ok ? '✓ Sent!' : (data.message || 'Error');
+    } catch(e) {
+        msg.style.display = 'inline';
+        msg.textContent = 'Error';
+    }
+    btn.disabled = false;
+}
+</script>
+{% endif %}
+
 {% block customer_content %}{% endblock %}
 
 <footer class="c-footer">

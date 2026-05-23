@@ -9,7 +9,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db, socketio, csrf
-from app.models import Voyage, Booking, RouteStop, SeatLock, User, WINDOW_SEATS, SEAT_ADJACENCY, SiteContent, PasswordResetToken
+from app.models import Voyage, Booking, RouteStop, SeatLock, User, WINDOW_SEATS, SEAT_ADJACENCY, SiteContent, PasswordResetToken, EmailVerificationToken
 from app.customer.forms import CustomerLoginForm, CustomerRegisterForm, CustomerProfileForm, ForgotPasswordForm, ResetPasswordForm
 from app.logging import log_activity, notify_staff
 from app.staff.ticket import generate_ticket, generate_group_ticket, generate_qr
@@ -264,6 +264,14 @@ def customer_book():
         dropping_point = request.form.get('dropping_point', '')
         passengers = [{'seat_id': s, 'name': passenger_name, 'phone': passenger_phone, 'gender': gender} for s in seat_ids]
 
+    # --- Email verification gate ---
+    if current_user.is_authenticated and current_user.role == 'customer' and not current_user.email_verified:
+        return jsonify({
+            'status': 'error',
+            'message': 'Please verify your email before booking. Check your inbox or resend the verification email.',
+            'verify_required': True,
+        }), 403
+
     # --- Validate ---
     if not voyage_id or not passengers:
         return jsonify({'status': 'error', 'message': 'Missing required fields.'}), 400
@@ -473,6 +481,7 @@ def register():
             gender=form.gender.data or None,
             role='customer',
             is_active_account=True,
+            email_verified=False,
         )
         user.set_password(form.password.data)
         db.session.add(user)
@@ -484,9 +493,9 @@ def register():
             return render_template('customer/register.html', form=form)
 
         log_activity('user_created', f'New customer account: {email}', 'user', user.id)
+        _send_verification_email(user)
         login_user(user)
-        flash('Welcome to SHRISAMARTH! Your account has been created.', 'success')
-        return redirect(url_for('customer.my_bookings'))
+        return redirect(url_for('customer.verify_pending'))
 
     return render_template('customer/register.html', form=form)
 
@@ -696,6 +705,92 @@ def unlock_seat():
         socketio.emit('seat_unlocked', {'voyage_id': voyage_id, 'seat_id': seat_id})
 
     return jsonify({'status': 'unlocked'})
+
+
+# ============================================================
+# EMAIL VERIFICATION
+# ============================================================
+
+def _send_verification_email(user):
+    """Generate a fresh token and email it to the user. Expires old tokens first."""
+    EmailVerificationToken.query.filter_by(user_id=user.id).update({'used_at': datetime.utcnow()})
+    db.session.flush()
+
+    token_str = secrets.token_urlsafe(32)
+    token = EmailVerificationToken(
+        user_id=user.id,
+        token=token_str,
+        expires_at=datetime.utcnow() + timedelta(hours=24),
+    )
+    db.session.add(token)
+    db.session.commit()
+
+    from app.email import send_email
+    from flask import render_template as _rt
+    domain = current_app.config.get('APP_DOMAIN', 'https://shrisamarth.in')
+    verify_url = f"{domain}/verify-email/{token_str}"
+    html = _rt('email/verify_email.html', user=user, verify_url=verify_url, domain=domain)
+    send_email(user.email, 'Verify your email — SHRISAMARTH Travels', html)
+
+
+@customer_bp.route('/verify-pending')
+@login_required
+def verify_pending():
+    if current_user.role != 'customer':
+        return redirect(url_for('staff.dashboard'))
+    if current_user.email_verified:
+        return redirect(url_for('customer.my_bookings'))
+    return render_template('customer/verify_pending.html')
+
+
+@customer_bp.route('/verify-email/<token>')
+def verify_email(token):
+    record = EmailVerificationToken.query.filter_by(token=token).first()
+
+    if not record:
+        return render_template('customer/verify_email_result.html',
+                               state='invalid')
+
+    if record.used_at is not None:
+        return render_template('customer/verify_email_result.html',
+                               state='used')
+
+    if datetime.utcnow() >= record.expires_at:
+        return render_template('customer/verify_email_result.html',
+                               state='expired', user=record.user)
+
+    record.user.email_verified = True
+    record.user.email_verified_at = datetime.utcnow()
+    record.used_at = datetime.utcnow()
+    db.session.commit()
+    log_activity('email_verified',
+                 f'Customer {record.user.email} verified their email address',
+                 'user', record.user.id)
+    login_user(record.user)
+    flash('Email verified! Welcome to SHRISAMARTH.', 'success')
+    return redirect(url_for('customer.my_bookings'))
+
+
+@customer_bp.route('/resend-verification', methods=['POST'])
+@login_required
+def resend_verification():
+    if current_user.role != 'customer':
+        abort(403)
+    if current_user.email_verified:
+        return jsonify({'status': 'ok', 'message': 'Already verified.'})
+
+    # Rate limit: max 3 tokens in the last hour
+    one_hour_ago = datetime.utcnow() - timedelta(hours=1)
+    recent = EmailVerificationToken.query.filter(
+        EmailVerificationToken.user_id == current_user.id,
+        EmailVerificationToken.created_at >= one_hour_ago,
+    ).count()
+    if recent >= 3:
+        return jsonify({'status': 'error',
+                        'message': 'Too many requests. Please wait before trying again.'}), 429
+
+    _send_verification_email(current_user)
+    return jsonify({'status': 'ok'})
 
 
 # ============================================================

@@ -1,0 +1,70 @@
+{% extends 'customer/base_customer.html' %}
+{% block title %}Verify Your Email · SHRISAMARTH{% endblock %}
+
+{% block customer_content %}
+<div class="login-page">
+    <div class="login-card" style="max-width:460px;">
+        <div style="text-align:center; padding:12px 0;">
+            <div style="font-size:48px; margin-bottom:12px;">📬</div>
+            <h1 class="serif" style="font-size:26px; margin-bottom:8px;" data-i18n="c.verify_check_inbox">Check your inbox</h1>
+            <p style="color:var(--muted); font-size:14px; margin-bottom:6px;">
+                <span data-i18n="c.verify_sent_to">We sent a verification link to</span>
+            </p>
+            <p style="font-weight:600; font-size:14px; margin-bottom:20px;">{{ current_user.email }}</p>
+            <p style="color:var(--muted); font-size:13px; margin-bottom:28px;" data-i18n="c.verify_click_link">
+                Click the link in the email to activate your account and start booking.
+            </p>
+
+            <button id="resendBtn" type="button" class="btn btn-ghost"
+                    style="width:100%; margin-bottom:12px;"
+                    data-i18n="c.resend_verification"
+                    onclick="resend()">
+                Resend verification email
+            </button>
+            <div id="resendMsg" style="font-size:13px; margin-top:6px; display:none;"></div>
+
+            <div style="margin-top:20px; font-size:13px; color:var(--muted);">
+                <span data-i18n="c.wrong_email">Wrong email?</span>
+                <a href="{{ url_for('customer.logout') }}" style="color:var(--marigold); text-decoration:none; font-weight:500;">
+                    <span data-i18n="c.register_again">Register again</span>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const _CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
+async function resend() {
+    const btn = document.getElementById('resendBtn');
+    const msg = document.getElementById('resendMsg');
+    btn.disabled = true;
+    btn.textContent = '…';
+    try {
+        const r = await fetch('{{ url_for("customer.resend_verification") }}', {
+            method: 'POST',
+            headers: {'X-CSRFToken': _CSRF, 'Content-Type': 'application/json'},
+        });
+        const data = await r.json();
+        msg.style.display = 'block';
+        if (r.ok) {
+            msg.style.color = 'var(--sage)';
+            msg.textContent = '✓ Sent! Check your inbox.';
+        } else {
+            msg.style.color = 'var(--ruby)';
+            msg.textContent = data.message || 'Failed. Please try again.';
+        }
+    } catch(e) {
+        msg.style.display = 'block';
+        msg.style.color = 'var(--ruby)';
+        msg.textContent = 'Network error. Please try again.';
+    }
+    btn.disabled = false;
+    btn.setAttribute('data-i18n', 'c.resend_verification');
+    document.querySelectorAll('[data-i18n="c.resend_verification"]').forEach(el => {
+        const lang = document.documentElement.lang || localStorage.getItem('lang') || 'en';
+        if (window._t) el.textContent = window._t('c.resend_verification');
+    });
+}
+</script>
+{% endblock %}
