@@ -37,6 +37,9 @@ with app.app_context():
         exit(0)
 
     # Delete in correct order (foreign keys)
+    print("Deleting notifications...")
+    Notification.query.delete()
+
     print("Deleting bookings...")
     Booking.query.delete()
 
@@ -54,9 +57,6 @@ with app.app_context():
 
     print("Deleting activity logs...")
     ActivityLog.query.delete()
-
-    print("Deleting notifications...")
-    Notification.query.delete()
 
     if DriverLocation is not None:
         print("Deleting driver locations...")
