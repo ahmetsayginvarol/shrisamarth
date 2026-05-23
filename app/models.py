@@ -23,6 +23,8 @@ class User(UserMixin, db.Model):
     is_active_account = db.Column(db.Boolean, default=True)
     email_verified = db.Column(db.Boolean, nullable=False, default=True, server_default='true')
     email_verified_at = db.Column(db.DateTime, nullable=True)
+    unsubscribe_token = db.Column(db.String(64), nullable=True)
+    newsletter_unsubscribed = db.Column(db.Boolean, default=False, server_default='false')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def set_password(self, password):

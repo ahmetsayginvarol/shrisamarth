@@ -58,57 +58,76 @@ def create_app(config_class=Config):
 
 def _run_schema_migrations(db):
     """Idempotent schema migrations — safe to run on every startup."""
-    stmts = [
-        # users: new columns
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT TRUE",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS unsubscribe_token VARCHAR(64)",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS newsletter_unsubscribed BOOLEAN DEFAULT FALSE",
+    dialect = db.engine.dialect.name  # 'postgresql' or 'sqlite'
 
-        # abuse_logs table (in case db.create_all() didn't run or missed it)
-        """CREATE TABLE IF NOT EXISTS abuse_logs (
-            id SERIAL PRIMARY KEY,
-            ip_address VARCHAR(45) NOT NULL,
-            user_id INTEGER REFERENCES users(id),
-            event_type VARCHAR(50) NOT NULL,
-            details TEXT,
-            created_at TIMESTAMP DEFAULT NOW()
-        )""",
-        "CREATE INDEX IF NOT EXISTS ix_abuse_logs_ip ON abuse_logs(ip_address)",
-        "CREATE INDEX IF NOT EXISTS ix_abuse_logs_event ON abuse_logs(event_type)",
-        "CREATE INDEX IF NOT EXISTS ix_abuse_logs_created ON abuse_logs(created_at)",
+    if dialect == 'postgresql':
+        alter_stmts = [
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT TRUE",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS unsubscribe_token VARCHAR(64)",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS newsletter_unsubscribed BOOLEAN DEFAULT FALSE",
+        ]
+    else:
+        # SQLite: no IF NOT EXISTS for ALTER TABLE — catch duplicate-column errors
+        alter_stmts = [
+            "ALTER TABLE users ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT 1",
+            "ALTER TABLE users ADD COLUMN email_verified_at TIMESTAMP",
+            "ALTER TABLE users ADD COLUMN unsubscribe_token VARCHAR(64)",
+            "ALTER TABLE users ADD COLUMN newsletter_unsubscribed BOOLEAN DEFAULT 0",
+        ]
 
-        # ip_bans table
-        """CREATE TABLE IF NOT EXISTS ip_bans (
-            id SERIAL PRIMARY KEY,
-            ip_address VARCHAR(45) NOT NULL UNIQUE,
-            reason VARCHAR(200),
-            banned_by_id INTEGER REFERENCES users(id),
-            banned_at TIMESTAMP DEFAULT NOW(),
-            expires_at TIMESTAMP,
-            is_permanent BOOLEAN NOT NULL DEFAULT FALSE,
-            notes TEXT
-        )""",
-        "CREATE INDEX IF NOT EXISTS ix_ip_bans_ip ON ip_bans(ip_address)",
-
-        # newsletters table
-        """CREATE TABLE IF NOT EXISTS newsletters (
-            id SERIAL PRIMARY KEY,
-            subject_en VARCHAR(200),
-            subject_hi VARCHAR(200),
-            content_en TEXT,
-            content_hi TEXT,
-            theme VARCHAR(30) NOT NULL DEFAULT 'classic',
-            status VARCHAR(20) NOT NULL DEFAULT 'draft',
-            recipient_count INTEGER DEFAULT 0,
-            sent_at TIMESTAMP,
-            sent_by_id INTEGER REFERENCES users(id),
-            created_at TIMESTAMP DEFAULT NOW()
-        )""",
-    ]
-    for sql in stmts:
+    for sql in alter_stmts:
         try:
             db.session.execute(db.text(sql))
             db.session.commit()
         except Exception:
+            db.session.rollback()
+
+    if dialect == 'postgresql':
+        pg_stmts = [
+            # abuse_logs
+            """CREATE TABLE IF NOT EXISTS abuse_logs (
+                id SERIAL PRIMARY KEY,
+                ip_address VARCHAR(45) NOT NULL,
+                user_id INTEGER REFERENCES users(id),
+                event_type VARCHAR(50) NOT NULL,
+                details TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            )""",
+            "CREATE INDEX IF NOT EXISTS ix_abuse_logs_ip ON abuse_logs(ip_address)",
+            "CREATE INDEX IF NOT EXISTS ix_abuse_logs_event ON abuse_logs(event_type)",
+            "CREATE INDEX IF NOT EXISTS ix_abuse_logs_created ON abuse_logs(created_at)",
+            # ip_bans
+            """CREATE TABLE IF NOT EXISTS ip_bans (
+                id SERIAL PRIMARY KEY,
+                ip_address VARCHAR(45) NOT NULL UNIQUE,
+                reason VARCHAR(200),
+                banned_by_id INTEGER REFERENCES users(id),
+                banned_at TIMESTAMP DEFAULT NOW(),
+                expires_at TIMESTAMP,
+                is_permanent BOOLEAN NOT NULL DEFAULT FALSE,
+                notes TEXT
+            )""",
+            "CREATE INDEX IF NOT EXISTS ix_ip_bans_ip ON ip_bans(ip_address)",
+            # newsletters
+            """CREATE TABLE IF NOT EXISTS newsletters (
+                id SERIAL PRIMARY KEY,
+                subject_en VARCHAR(200),
+                subject_hi VARCHAR(200),
+                content_en TEXT,
+                content_hi TEXT,
+                theme VARCHAR(30) NOT NULL DEFAULT 'classic',
+                status VARCHAR(20) NOT NULL DEFAULT 'draft',
+                recipient_count INTEGER DEFAULT 0,
+                sent_at TIMESTAMP,
+                sent_by_id INTEGER REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT NOW()
+            )""",
+        ]
+        for sql in pg_stmts:
+            try:
+                db.session.execute(db.text(sql))
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
             db.session.rollback()
