@@ -1,7 +1,7 @@
 import os
-from flask import Flask
+from flask import Flask, request, render_template, jsonify
 from config import Config
-from app.extensions import db, migrate, login_manager, bcrypt, socketio, babel, csrf
+from app.extensions import db, migrate, login_manager, bcrypt, socketio, babel, csrf, limiter
 
 
 def create_app(config_class=Config):
@@ -18,6 +18,7 @@ def create_app(config_class=Config):
     socketio.init_app(app)
     babel.init_app(app)
     csrf.init_app(app)
+    limiter.init_app(app)
 
     # Register blueprints
     from app.auth.routes import auth_bp
@@ -44,6 +45,13 @@ def create_app(config_class=Config):
     @app.context_processor
     def inject_domain():
         return {'APP_DOMAIN': app.config['APP_DOMAIN']}
+
+    @app.errorhandler(429)
+    def rate_limit_error(e):
+        if request.is_json or request.path.startswith('/api/'):
+            return jsonify({'status': 'error',
+                            'message': 'Too many requests. Please wait and try again.'}), 429
+        return render_template('errors/rate_limited.html'), 429
 
     return app
 

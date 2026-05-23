@@ -45,9 +45,14 @@
             <span>Passengers</span>
         </a>
         <a href="{{ url_for('admin.logs') }}"
-           class="nav-item {% if 'logs' in request.endpoint %}active{% endif %}">
+           class="nav-item {% if request.endpoint == 'admin.logs' %}active{% endif %}">
             <span class="nav-icon">☰</span>
             <span data-i18n="nav.logs">Activity Log</span>
+        </a>
+        <a href="{{ url_for('admin.security') }}"
+           class="nav-item {% if 'security' in request.endpoint %}active{% endif %}">
+            <span class="nav-icon">🛡️</span>
+            <span>Security</span>
         </a>
     </nav>
 

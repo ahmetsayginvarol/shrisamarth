@@ -5,7 +5,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, abort, r
 from flask_login import login_required, current_user
 
 from app.extensions import db
-from app.models import Bus, Voyage, Booking, User, ActivityLog, RouteStop, SiteContent, PasswordResetToken
+from app.models import Bus, Voyage, Booking, User, ActivityLog, RouteStop, SiteContent, PasswordResetToken, AbuseLog, IpBan
 from datetime import datetime, timedelta, date as date_type
 from sqlalchemy import func, and_
 from app.admin.forms import BusForm, VoyageForm, UserForm, UserEditForm
@@ -1178,3 +1178,152 @@ def cms_save():
     except Exception as e:
         db.session.rollback()
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+# ============================================================
+# SECURITY & IP BAN MANAGEMENT
+# ============================================================
+
+@admin_bp.route('/security')
+@login_required
+def security():
+    now = datetime.utcnow()
+    day_ago = now - timedelta(hours=24)
+
+    active_bans = IpBan.query.filter(
+        (IpBan.is_permanent == True) |
+        (IpBan.expires_at > now)
+    ).order_by(IpBan.banned_at.desc()).all()
+
+    abuse_24h = AbuseLog.query.filter(AbuseLog.created_at >= day_ago).count()
+    blocked_today = AbuseLog.query.filter(
+        AbuseLog.created_at >= day_ago,
+        AbuseLog.event_type.in_([
+            'banned_ip_attempt', 'banned_ip_booking_attempt', 'honeypot_triggered',
+            'rapid_booking_attempt', 'daily_limit_exceeded', 'phone_limit_exceeded',
+            'seat_hoarding_attempt', 'cancel_rebook_abuse', 'suspicious_user_agent', 'velocity_too_fast',
+        ]),
+    ).count()
+
+    banned_ips = [b.ip_address for b in active_bans]
+    suspicious_q = (
+        db.session.query(AbuseLog.ip_address, func.count(AbuseLog.id).label('cnt'))
+        .filter(AbuseLog.ip_address.notin_(banned_ips) if banned_ips else db.text('1=1'))
+        .group_by(AbuseLog.ip_address)
+        .having(func.count(AbuseLog.id) >= 2)
+        .order_by(func.count(AbuseLog.id).desc())
+        .limit(10)
+        .all()
+    )
+    suspicious_ips = []
+    for row in suspicious_q:
+        last_log = AbuseLog.query.filter_by(ip_address=row.ip_address).order_by(AbuseLog.created_at.desc()).first()
+        types = list(set(
+            r.event_type for r in AbuseLog.query.filter_by(ip_address=row.ip_address).limit(20).all()
+        ))
+        suspicious_ips.append({'ip': row.ip_address, 'count': row.cnt,
+                                'last_seen': last_log.created_at if last_log else None,
+                                'types': types})
+
+    page = request.args.get('page', 1, type=int)
+    event_filter = request.args.get('event', 'all')
+    period_filter = request.args.get('period', '24h')
+    period_map = {'24h': day_ago, '7d': now - timedelta(days=7), '30d': now - timedelta(days=30)}
+    since = period_map.get(period_filter, day_ago)
+
+    log_q = AbuseLog.query.filter(AbuseLog.created_at >= since)
+    if event_filter != 'all':
+        log_q = log_q.filter(AbuseLog.event_type == event_filter)
+    abuse_logs = log_q.order_by(AbuseLog.created_at.desc()).paginate(page=page, per_page=50, error_out=False)
+    all_event_types = [r[0] for r in db.session.query(AbuseLog.event_type).distinct().all()]
+
+    return render_template('admin/security.html',
+        active_bans=active_bans, abuse_24h=abuse_24h, blocked_today=blocked_today,
+        suspicious_ips=suspicious_ips, abuse_logs=abuse_logs,
+        all_event_types=all_event_types, event_filter=event_filter,
+        period_filter=period_filter, now=now,
+    )
+
+
+@admin_bp.route('/security/ban', methods=['POST'])
+@login_required
+def security_ban_ip():
+    ip = request.form.get('ip', '').strip()
+    reason = request.form.get('reason', '').strip()
+    duration = request.form.get('duration', '24')
+    if not ip:
+        flash('IP address is required.', 'error')
+        return redirect(url_for('admin.security'))
+
+    from app.abuse import auto_ban_ip
+    if duration == 'permanent':
+        auto_ban_ip(ip, permanent=True, reason=reason or 'Manually banned by admin')
+    else:
+        auto_ban_ip(ip, hours=int(duration), reason=reason or f'Manually banned by admin')
+
+    ban = IpBan.query.filter_by(ip_address=ip).first()
+    if ban:
+        ban.banned_by_id = current_user.id
+        db.session.commit()
+
+    log_activity('ip_banned', f'Admin banned IP {ip}: {reason}', target_type='ip_ban')
+    flash(f'IP {ip} has been banned.', 'success')
+    return redirect(url_for('admin.security'))
+
+
+@admin_bp.route('/security/unban/<int:ban_id>', methods=['POST'])
+@login_required
+def security_unban(ban_id):
+    ban = IpBan.query.get_or_404(ban_id)
+    ip = ban.ip_address
+    db.session.delete(ban)
+    db.session.commit()
+    log_activity('ip_unbanned', f'Admin unbanned IP {ip}', target_type='ip_ban')
+    flash(f'IP {ip} has been unbanned.', 'success')
+    return redirect(url_for('admin.security'))
+
+
+@admin_bp.route('/security/make-permanent/<int:ban_id>', methods=['POST'])
+@login_required
+def security_make_permanent(ban_id):
+    ban = IpBan.query.get_or_404(ban_id)
+    ban.is_permanent = True
+    ban.expires_at = None
+    db.session.commit()
+    log_activity('ip_ban_made_permanent', f'Admin made IP {ban.ip_address} permanently banned')
+    flash(f'IP {ban.ip_address} is now permanently banned.', 'success')
+    return redirect(url_for('admin.security'))
+
+
+@admin_bp.route('/security/bulk-unban', methods=['POST'])
+@login_required
+def security_bulk_unban():
+    ban_ids = request.form.getlist('ban_ids[]')
+    count = 0
+    for bid in ban_ids:
+        ban = IpBan.query.get(int(bid))
+        if ban:
+            db.session.delete(ban)
+            count += 1
+    db.session.commit()
+    log_activity('ip_bulk_unbanned', f'Admin bulk unbanned {count} IP(s)')
+    flash(f'Unbanned {count} IP(s).', 'success')
+    return redirect(url_for('admin.security'))
+
+
+@admin_bp.route('/security/abuse-log/csv')
+@login_required
+def security_abuse_log_csv():
+    import csv
+    import io as _io
+    from flask import Response
+    logs = AbuseLog.query.order_by(AbuseLog.created_at.desc()).limit(5000).all()
+    output = _io.StringIO()
+    w = csv.writer(output)
+    w.writerow(['id', 'ip_address', 'event_type', 'user_id', 'details', 'created_at'])
+    for entry in logs:
+        w.writerow([entry.id, entry.ip_address, entry.event_type,
+                    entry.user_id, entry.details, entry.created_at])
+    output.seek(0)
+    return Response(output.getvalue(), mimetype='text/csv',
+                    headers={'Content-Disposition': 'attachment; filename=abuse_log.csv'})

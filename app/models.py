@@ -304,6 +304,52 @@ class SiteContent(db.Model):
 
 
 # ============================================================
+# ABUSE DETECTION
+# ============================================================
+
+class AbuseLog(db.Model):
+    __tablename__ = 'abuse_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    ip_address = db.Column(db.String(45), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    event_type = db.Column(db.String(50), nullable=False, index=True)
+    details = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    user = db.relationship('User', foreign_keys=[user_id])
+
+    def __repr__(self):
+        return f'<AbuseLog {self.event_type} from {self.ip_address}>'
+
+
+class IpBan(db.Model):
+    __tablename__ = 'ip_bans'
+
+    id = db.Column(db.Integer, primary_key=True)
+    ip_address = db.Column(db.String(45), unique=True, nullable=False, index=True)
+    reason = db.Column(db.String(200), nullable=True)
+    banned_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    banned_at = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=True)
+    is_permanent = db.Column(db.Boolean, default=False, nullable=False)
+    notes = db.Column(db.Text, nullable=True)
+
+    banned_by = db.relationship('User', foreign_keys=[banned_by_id])
+
+    @property
+    def is_active(self):
+        if self.is_permanent:
+            return True
+        if self.expires_at and datetime.utcnow() < self.expires_at:
+            return True
+        return False
+
+    def __repr__(self):
+        return f'<IpBan {self.ip_address}>'
+
+
+# ============================================================
     # SEAT LAYOUT HELPERS
     # ============================================================
 

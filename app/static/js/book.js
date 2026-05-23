@@ -389,8 +389,18 @@ if (bookingForm) {
 
             if (data.status === 'success') {
                 window.location.href = `/booking/confirmation/${data.code}`;
+            } else if (data.status === 'captcha_required') {
+                document.getElementById('captchaQuestion').textContent = data.question;
+                document.getElementById('captchaTokenInput').value = data.token;
+                document.getElementById('captchaSection').style.display = 'block';
+                document.getElementById('captchaAnswerInput').focus();
+                const errEl = document.getElementById('captchaError');
+                if (data.error) { errEl.textContent = data.error; errEl.style.display = 'block'; }
+                else { errEl.style.display = 'none'; }
+                submitBtn.disabled = false;
+                submitBtn.textContent = t('c.confirm_booking');
             } else {
-                alert(t('c.booking_failed_err'));
+                alert(data.message || t('c.booking_failed_err'));
                 submitBtn.disabled = false;
                 submitBtn.textContent = t('c.confirm_booking');
             }

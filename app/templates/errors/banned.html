@@ -1,0 +1,30 @@
+{% extends 'customer/base_customer.html' %}
+{% block title %}Access Restricted · SHRISAMARTH{% endblock %}
+{% block customer_content %}
+<div style="min-height:60vh; display:flex; align-items:center; justify-content:center; padding:40px 20px;">
+  <div style="max-width:480px; text-align:center;">
+    <div style="font-size:56px; margin-bottom:16px;">🚫</div>
+    <h1 class="serif" style="font-size:28px; margin-bottom:12px;" data-i18n="c.access_restricted">
+      Access Temporarily Restricted
+    </h1>
+    <p style="color:var(--muted); font-size:14px; line-height:1.7; margin-bottom:24px;" data-i18n="c.ban_reason_generic">
+      Your IP address has been temporarily blocked due to suspicious activity.
+    </p>
+    {% if expires_at %}
+    <div style="background:rgba(200,118,26,0.1); border:1px solid rgba(200,118,26,0.3); border-radius:10px; padding:16px; margin-bottom:24px;">
+      <p style="font-size:13px; color:#c8761a; margin:0;">
+        <span data-i18n="c.access_restored">Access will be restored at</span>
+        <strong>{{ expires_at.strftime('%d %b %Y %H:%M') }} UTC</strong>
+      </p>
+    </div>
+    {% else %}
+    <div style="background:rgba(168,50,50,0.08); border:1px solid rgba(168,50,50,0.3); border-radius:10px; padding:16px; margin-bottom:24px;">
+      <p style="font-size:13px; color:var(--ruby); margin:0;" data-i18n="c.permanent_ban_contact">
+        Please contact info@shrisamarth.in if you believe this is an error.
+      </p>
+    </div>
+    {% endif %}
+    <a href="{{ url_for('customer.home') }}" class="btn btn-ghost" data-i18n="c.back_home">← Back to Home</a>
+  </div>
+</div>
+{% endblock %}

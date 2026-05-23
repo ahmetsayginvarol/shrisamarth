@@ -1,0 +1,16 @@
+{% extends 'customer/base_customer.html' %}
+{% block title %}Too Many Requests · SHRISAMARTH{% endblock %}
+{% block customer_content %}
+<div style="min-height:60vh; display:flex; align-items:center; justify-content:center; padding:40px 20px;">
+  <div style="max-width:480px; text-align:center;">
+    <div style="font-size:56px; margin-bottom:16px;">⏱</div>
+    <h1 class="serif" style="font-size:28px; margin-bottom:12px;" data-i18n="c.too_many_requests">
+      Too Many Requests
+    </h1>
+    <p style="color:var(--muted); font-size:14px; line-height:1.7; margin-bottom:24px;" data-i18n="c.rate_limit_sub">
+      You've made too many requests. Please wait a moment and try again.
+    </p>
+    <a href="{{ url_for('customer.home') }}" class="btn btn-primary" data-i18n="c.back_home">← Back to Home</a>
+  </div>
+</div>
+{% endblock %}

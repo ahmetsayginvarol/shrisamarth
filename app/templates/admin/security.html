@@ -1,0 +1,209 @@
+{% extends 'admin/base_admin.html' %}
+{% block admin_content %}
+<style>
+.sec-stat { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 20px; }
+.sec-stat-val { font-size:30px; font-weight:700; font-family:'Instrument Serif',serif; margin-bottom:2px; }
+.sec-stat-label { font-size:12px; color:var(--muted); }
+.ip-badge { font-family:monospace; background:var(--surface); border:1px solid var(--border); border-radius:4px; padding:2px 8px; font-size:12px; user-select:all; }
+</style>
+
+<div class="page-header">
+    <div>
+        <div class="page-title serif">🛡️ Security</div>
+        <div class="page-subtitle">IP bans · Abuse detection · Rate limiting</div>
+    </div>
+    <a href="{{ url_for('admin.security_abuse_log_csv') }}" class="btn btn-ghost" style="font-size:12px;">⬇ Export CSV</a>
+</div>
+
+<!-- Stats -->
+<div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:32px;">
+    <div class="sec-stat">
+        <div class="sec-stat-val" style="color:var(--ruby);">{{ active_bans|length }}</div>
+        <div class="sec-stat-label">Active Bans</div>
+    </div>
+    <div class="sec-stat">
+        <div class="sec-stat-val" style="color:var(--marigold);">{{ abuse_24h }}</div>
+        <div class="sec-stat-label">Abuse Events (24h)</div>
+    </div>
+    <div class="sec-stat">
+        <div class="sec-stat-val" style="color:var(--sage);">{{ blocked_today }}</div>
+        <div class="sec-stat-label">Blocked Attempts (24h)</div>
+    </div>
+</div>
+
+<div style="display:grid; grid-template-columns:1fr 340px; gap:24px; margin-bottom:32px; align-items:start;">
+
+<!-- Active Bans -->
+<div>
+  <div style="font-size:15px; font-weight:600; margin-bottom:14px;">Active Bans</div>
+  {% if active_bans %}
+  <form method="POST" action="{{ url_for('admin.security_bulk_unban') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <table class="data-table">
+      <thead><tr>
+        <th style="width:32px;"><input type="checkbox" onchange="document.querySelectorAll('.ban-cb').forEach(cb=>cb.checked=this.checked)"></th>
+        <th>IP</th><th>Reason</th><th>Banned</th><th>Expires</th><th>Type</th><th>Actions</th>
+      </tr></thead>
+      <tbody>
+      {% for ban in active_bans %}
+      <tr>
+        <td><input type="checkbox" class="ban-cb" name="ban_ids[]" value="{{ ban.id }}"></td>
+        <td><span class="ip-badge">{{ ban.ip_address }}</span></td>
+        <td style="font-size:12px; color:var(--muted); max-width:180px; word-break:break-word;">{{ (ban.reason or '—')[:80] }}</td>
+        <td class="mono" style="font-size:11px; white-space:nowrap;">{{ ban.banned_at.strftime('%d %b %H:%M') }}</td>
+        <td style="font-size:12px; white-space:nowrap;">
+          {% if ban.is_permanent %}<span class="badge badge-cancelled">Permanent</span>
+          {% elif ban.expires_at %}{{ ban.expires_at.strftime('%d %b %H:%M') }}
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          {% if ban.is_permanent %}<span class="badge badge-cancelled">Permanent</span>
+          {% else %}<span class="badge badge-scheduled">Temporary</span>{% endif %}
+        </td>
+        <td>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <form method="POST" action="{{ url_for('admin.security_unban', ban_id=ban.id) }}" style="display:inline;"
+                  onsubmit="return confirm('Unban {{ ban.ip_address }}?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-ghost" style="padding:3px 10px; font-size:11px;">Unban</button>
+            </form>
+            {% if not ban.is_permanent %}
+            <form method="POST" action="{{ url_for('admin.security_make_permanent', ban_id=ban.id) }}" style="display:inline;"
+                  onsubmit="return confirm('Make {{ ban.ip_address }} permanently banned?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-ghost" style="padding:3px 10px; font-size:11px; color:var(--ruby); border-color:var(--ruby);">Permanent</button>
+            </form>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <div style="margin-top:10px;">
+      <button type="submit" class="btn btn-ghost"
+              style="color:var(--ruby); font-size:12px;"
+              onclick="return confirm('Unban all selected IPs?')">Unban Selected</button>
+    </div>
+  </form>
+  {% else %}
+  <div class="empty-state"><span class="serif">No active bans</span><p>The system is clean.</p></div>
+  {% endif %}
+</div>
+
+<!-- Right column: Manual ban + Suspicious IPs -->
+<div style="display:flex; flex-direction:column; gap:20px;">
+
+  <!-- Manual Ban Form -->
+  <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px;">
+    <div style="font-size:14px; font-weight:600; margin-bottom:14px;">Ban IP Manually</div>
+    <form method="POST" action="{{ url_for('admin.security_ban_ip') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group">
+        <label class="form-label">IP Address</label>
+        <input type="text" name="ip" class="form-input" placeholder="0.0.0.0" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Reason</label>
+        <input type="text" name="reason" class="form-input" placeholder="Reason for ban">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Duration</label>
+        <select name="duration" class="form-select">
+          <option value="1">1 hour</option>
+          <option value="6">6 hours</option>
+          <option value="24" selected>24 hours</option>
+          <option value="168">7 days</option>
+          <option value="720">30 days</option>
+          <option value="permanent">Permanent</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary"
+              style="width:100%; background:var(--ruby); border-color:var(--ruby);">Ban IP</button>
+    </form>
+  </div>
+
+  <!-- Suspicious IPs -->
+  {% if suspicious_ips %}
+  <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px;">
+    <div style="font-size:14px; font-weight:600; margin-bottom:12px;">⚠️ Suspicious IPs</div>
+    {% for item in suspicious_ips %}
+    <div style="border-bottom:1px solid var(--line); padding:10px 0; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+      <span class="ip-badge">{{ item.ip }}</span>
+      <span style="font-size:12px; color:var(--ruby); font-weight:600;">{{ item.count }}×</span>
+      <span style="font-size:11px; color:var(--muted); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ item.types|join(', ') }}">{{ item.types|join(', ') }}</span>
+      <form method="POST" action="{{ url_for('admin.security_ban_ip') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="ip" value="{{ item.ip }}">
+        <input type="hidden" name="reason" value="Flagged: {{ item.count }} abuse events">
+        <input type="hidden" name="duration" value="24">
+        <button class="btn btn-ghost" style="padding:3px 10px; font-size:11px; color:var(--ruby); border-color:var(--ruby);">Ban 24h</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+</div>
+</div><!-- /grid -->
+
+<!-- Abuse Log -->
+<div>
+  <div style="display:flex; align-items:center; gap:16px; margin-bottom:14px; flex-wrap:wrap;">
+    <div style="font-size:15px; font-weight:600;">Abuse Log</div>
+    <form method="GET" style="display:flex; gap:8px; align-items:center;">
+      <select name="event" class="form-select" style="width:auto; font-size:12px;" onchange="this.form.submit()">
+        <option value="all" {% if event_filter=='all' %}selected{% endif %}>All Events</option>
+        {% for et in all_event_types %}
+        <option value="{{ et }}" {% if event_filter==et %}selected{% endif %}>{{ et|replace('_',' ')|title }}</option>
+        {% endfor %}
+      </select>
+      <select name="period" class="form-select" style="width:auto; font-size:12px;" onchange="this.form.submit()">
+        <option value="24h" {% if period_filter=='24h' %}selected{% endif %}>Last 24h</option>
+        <option value="7d"  {% if period_filter=='7d'  %}selected{% endif %}>Last 7 days</option>
+        <option value="30d" {% if period_filter=='30d' %}selected{% endif %}>Last 30 days</option>
+      </select>
+    </form>
+    <span class="muted" style="font-size:12px;">{{ abuse_logs.total }} events</span>
+  </div>
+
+  {% if abuse_logs.items %}
+  <table class="data-table">
+    <thead><tr>
+      <th>Time</th><th>IP</th><th>Event</th><th>User</th><th>Details</th>
+    </tr></thead>
+    <tbody>
+    {% for log in abuse_logs.items %}
+    <tr>
+      <td class="mono" style="font-size:11px; white-space:nowrap;">{{ log.created_at.strftime('%d %b %H:%M:%S') }}</td>
+      <td><span class="ip-badge">{{ log.ip_address }}</span></td>
+      <td>
+        <span class="badge badge-{{ 'cancelled' if 'ban' in log.event_type or 'honeypot' in log.event_type else 'departed' if 'abuse' in log.event_type or 'hoarding' in log.event_type or 'limit' in log.event_type else 'scheduled' }}">
+          {{ log.event_type|replace('_',' ') }}
+        </span>
+      </td>
+      <td style="font-size:12px;">{{ log.user.full_name if log.user else '—' }}</td>
+      <td style="font-size:11px; color:var(--muted); max-width:260px; word-break:break-all;">{{ (log.details or '—')[:140] }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  {% if abuse_logs.pages > 1 %}
+  <div class="pagination">
+    {% if abuse_logs.has_prev %}
+    <a href="{{ url_for('admin.security', page=abuse_logs.prev_num, event=event_filter, period=period_filter) }}" class="btn btn-ghost">&larr; Newer</a>
+    {% endif %}
+    <span class="muted">Page {{ abuse_logs.page }} of {{ abuse_logs.pages }}</span>
+    {% if abuse_logs.has_next %}
+    <a href="{{ url_for('admin.security', page=abuse_logs.next_num, event=event_filter, period=period_filter) }}" class="btn btn-ghost">Older &rarr;</a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="empty-state"><span class="serif">No abuse events recorded</span></div>
+  {% endif %}
+</div>
+
+{% endblock %}

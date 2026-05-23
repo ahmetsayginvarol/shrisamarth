@@ -158,6 +158,8 @@
                 <form id="customerBookingForm" method="POST" action="{{ url_for('customer.customer_book') }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="voyage_id" value="{{ voyage.id }}">
+                    <!-- honeypot: bots fill this, humans don't see it -->
+                    <input type="text" name="website" style="position:absolute;left:-9999px;opacity:0;height:0;width:0;" tabindex="-1" autocomplete="off" aria-hidden="true">
                     <div id="seatInputsContainer"></div>
 
                     <div class="form-group">
@@ -228,6 +230,16 @@
 
                     <div style="background:var(--cream-2); border:1px solid var(--line); border-radius:6px; padding:14px; margin-bottom:16px; font-size:13px; color:var(--muted);">
                         Balance due on boarding — no advance payment required online.
+                    </div>
+
+                    <!-- Captcha (shown by JS when required) -->
+                    <div id="captchaSection" style="display:none;" class="form-group">
+                        <label class="form-label" data-i18n="c.security_check">Security Check</label>
+                        <div id="captchaQuestion" style="font-size:16px; font-weight:600; margin-bottom:10px; color:var(--ink-1);"></div>
+                        <input type="text" id="captchaAnswerInput" name="captcha_answer" class="form-input"
+                               placeholder="Your answer" style="max-width:160px;" inputmode="numeric">
+                        <input type="hidden" name="captcha_token" id="captchaTokenInput">
+                        <div id="captchaError" style="color:var(--ruby); font-size:12px; margin-top:6px; display:none;"></div>
                     </div>
 
                     <div class="form-actions" style="justify-content:space-between;">

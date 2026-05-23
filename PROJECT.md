@@ -33,6 +33,19 @@ Run locally:
 python run.py
 ```
 
+## Security System
+
+The app includes a built-in anti-abuse system (`app/abuse.py`, `app/captcha.py`):
+
+- **IP banning**: automatic and manual, temporary or permanent
+- **Detection rules**: rapid booking rate, daily IP limit, phone abuse, seat hoarding,
+  cancel-rebook pattern, bad user agents, honeypot field, velocity fingerprinting
+- **Math CAPTCHA**: no external service, served inline when suspicious activity detected
+- **Rate limiting**: Flask-Limiter on auth, booking, and registration endpoints
+- **Admin panel**: `/admin/security` — live ban management, abuse log with CSV export
+
+Admin env var needed on Render: none (security system works out of the box).
+
 ## Database
 
 The app auto-creates all tables on startup via `db.create_all()` — no manual migration

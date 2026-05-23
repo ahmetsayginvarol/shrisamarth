@@ -8,7 +8,9 @@ from flask import (Blueprint, render_template, request, jsonify, redirect,
 from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy.exc import IntegrityError
 
-from app.extensions import db, socketio, csrf
+from app.extensions import db, socketio, csrf, limiter
+from app.abuse import get_client_ip, is_ip_banned, check_booking_abuse, log_abuse_event, auto_ban_ip
+from app.captcha import generate_captcha, verify_captcha
 from app.models import Voyage, Booking, RouteStop, SeatLock, User, WINDOW_SEATS, SEAT_ADJACENCY, SiteContent, PasswordResetToken, EmailVerificationToken
 from app.customer.forms import CustomerLoginForm, CustomerRegisterForm, CustomerProfileForm, ForgotPasswordForm, ResetPasswordForm
 from app.logging import log_activity, notify_staff
@@ -224,6 +226,9 @@ def book(voyage_id):
             'gender': current_user.gender or '',
         }
 
+    import time as _time
+    session['booking_page_loaded'] = _time.time()
+
     return render_template(
         'customer/book.html',
         voyage=voyage,
@@ -263,6 +268,60 @@ def customer_book():
         boarding_point = request.form.get('boarding_point', '')
         dropping_point = request.form.get('dropping_point', '')
         passengers = [{'seat_id': s, 'name': passenger_name, 'phone': passenger_phone, 'gender': gender} for s in seat_ids]
+
+    # --- IP ban check ---
+    _ip = get_client_ip()
+    _banned, _ban_reason = is_ip_banned(_ip)
+    if _banned:
+        log_abuse_event(_ip, 'banned_ip_booking_attempt',
+                        user_id=current_user.id if current_user.is_authenticated else None)
+        return jsonify({'status': 'error', 'message': 'Access temporarily restricted.'}), 403
+
+    # --- Honeypot ---
+    if request.form.get('website', '').strip():
+        log_abuse_event(_ip, 'honeypot_triggered',
+                        user_id=current_user.id if current_user.is_authenticated else None)
+        auto_ban_ip(_ip, hours=168, reason='Honeypot triggered — automated submission')
+        return jsonify({'status': 'error', 'message': 'Access blocked.'}), 403
+
+    # --- Velocity check ---
+    import time as _time
+    _page_load = session.get('booking_page_loaded')
+    if _page_load and _time.time() - _page_load < 3:
+        log_abuse_event(_ip, 'velocity_too_fast',
+                        user_id=current_user.id if current_user.is_authenticated else None)
+        session['require_captcha'] = True
+
+    # --- Captcha verification (if required) ---
+    if session.get('require_captcha'):
+        _cap_token = request.form.get('captcha_token', '')
+        _cap_answer = request.form.get('captcha_answer', '')
+        if _cap_token and _cap_answer:
+            if verify_captcha(_cap_token, _cap_answer):
+                session.pop('require_captcha', None)
+                session['captcha_passed_for_ip'] = _ip
+            else:
+                _tok, _q = generate_captcha()
+                return jsonify({'status': 'captcha_required', 'token': _tok,
+                                'question': _q, 'error': 'Incorrect answer. Try again.'}), 200
+        elif session.get('captcha_passed_for_ip') != _ip:
+            _tok, _q = generate_captcha()
+            return jsonify({'status': 'captcha_required', 'token': _tok, 'question': _q}), 200
+
+    # --- Abuse checks ---
+    _phone_for_abuse = passengers[0].get('phone', '') if passengers else ''
+    _allowed, _abuse_reason, _severity = check_booking_abuse(
+        ip=_ip,
+        user_id=current_user.id if current_user.is_authenticated else None,
+        phone=_phone_for_abuse,
+        voyage_id=voyage_id,
+    )
+    if not _allowed:
+        if _severity == 'captcha_required' and session.get('captcha_passed_for_ip') != _ip:
+            session['require_captcha'] = True
+            _tok, _q = generate_captcha()
+            return jsonify({'status': 'captcha_required', 'token': _tok, 'question': _q}), 200
+        return jsonify({'status': 'error', 'message': _abuse_reason}), 403
 
     # --- Email verification gate ---
     if current_user.is_authenticated and current_user.role == 'customer' and not current_user.email_verified:
@@ -357,6 +416,11 @@ def customer_book():
         )
     db.session.commit()
 
+    # Log booking to abuse tracker
+    log_abuse_event(_ip, 'booking_created',
+                    user_id=current_user.id if current_user.is_authenticated else None,
+                    details=f'voyage:{voyage_id} seats:{",".join(b.seat_id for b in bookings_created)}')
+
     primary = bookings_created[0]
     notify_staff(
         title='New Customer Booking',
@@ -443,6 +507,7 @@ def download_group_ticket(group_code):
 # ============================================================
 
 @customer_bp.route('/login', methods=['GET', 'POST'])
+@limiter.limit("5 per hour", methods=["POST"])
 def login():
     if current_user.is_authenticated:
         if current_user.role == 'customer':
@@ -462,6 +527,7 @@ def login():
 
 
 @customer_bp.route('/register', methods=['GET', 'POST'])
+@limiter.limit("3 per hour", methods=["POST"])
 def register():
     if current_user.is_authenticated and current_user.role == 'customer':
         return redirect(url_for('customer.my_bookings'))
@@ -744,6 +810,7 @@ def verify_pending():
 
 
 @customer_bp.route('/verify-email/<token>')
+@limiter.limit("10 per hour")
 def verify_email(token):
     record = EmailVerificationToken.query.filter_by(token=token).first()
 
@@ -798,6 +865,7 @@ def resend_verification():
 # ============================================================
 
 @customer_bp.route('/forgot-password', methods=['GET', 'POST'])
+@limiter.limit("3 per hour", methods=["POST"])
 def forgot_password():
     if current_user.is_authenticated:
         return redirect(url_for('customer.dashboard'))

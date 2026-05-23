@@ -3,7 +3,7 @@ from flask import Blueprint, render_template, abort, request, jsonify, flash, re
 from flask_login import login_required, current_user
 from sqlalchemy.exc import IntegrityError
 
-from app.extensions import db, socketio
+from app.extensions import db, socketio, limiter
 from app.models import Voyage, Booking, SEAT_ADJACENCY, WINDOW_SEATS
 from app.staff.forms import BookingForm
 from flask import send_file
@@ -232,6 +232,7 @@ def seat_info(voyage_id, seat_id):
 # =================================# CANCEL BOOKING
 # ============================================================
 @staff_bp.route('/booking/create', methods=['POST'])
+@limiter.limit("10 per minute;100 per hour")
 def create_booking():
     if not current_user.has_role('admin', 'reservation'):
         abort(403)
@@ -320,6 +321,7 @@ def create_booking():
 
 
 @staff_bp.route('/booking/create-group', methods=['POST'])
+@limiter.limit("10 per minute;100 per hour")
 def create_group_booking():
     if not current_user.has_role('admin', 'reservation'):
         abort(403)
@@ -501,6 +503,13 @@ def cancel_booking(booking_id):
     log_activity('booking_cancelled',
                  f'Cancelled seat {booking.seat_id} ({booking.passenger_name}) on voyage {booking.voyage_id}',
                  'booking', booking_id)
+    try:
+        from app.abuse import get_client_ip, log_abuse_event
+        log_abuse_event(get_client_ip(), 'booking_cancelled',
+                        user_id=current_user.id,
+                        details=f'booking:{booking.booking_code}')
+    except Exception:
+        pass
     socketio.emit('seat_freed', {
         'voyage_id': booking.voyage_id,
         'seat_id': booking.seat_id,
