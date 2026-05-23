@@ -421,6 +421,12 @@ def customer_book():
                     user_id=current_user.id if current_user.is_authenticated else None,
                     details=f'voyage:{voyage_id} seats:{",".join(b.seat_id for b in bookings_created)}')
 
+    # Send e-ticket emails (fire-and-forget, never blocks response)
+    if passenger_email:
+        from app.email import send_eticket
+        for b in bookings_created:
+            send_eticket(b, voyage)
+
     primary = bookings_created[0]
     notify_staff(
         title='New Customer Booking',

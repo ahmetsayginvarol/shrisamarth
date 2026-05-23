@@ -294,6 +294,11 @@ def create_booking():
     log_activity('booking_created',
                  f'Booked seat {booking.seat_id} for {booking.passenger_name} on {voyage.origin}→{voyage.destination}',
                  'booking', booking.id)
+
+    if booking.passenger_email:
+        from app.email import send_eticket
+        send_eticket(booking, voyage)
+
     socketio.emit('seat_booked', {
         'voyage_id': voyage.id,
         'seat_id': booking.seat_id,
@@ -437,6 +442,13 @@ def create_group_booking():
         log_activity('booking_created',
                      f'Booking {b.booking_code}: seat {b.seat_id} for {b.passenger_name} on {voyage.origin}→{voyage.destination}',
                      'booking', b.id)
+
+    # Send e-tickets for any booking that has an email (fire-and-forget)
+    _has_email = any(b.passenger_email for b in bookings_created)
+    if _has_email:
+        from app.email import send_eticket
+        for b in bookings_created:
+            send_eticket(b, voyage)
 
     for b in bookings_created:
         socketio.emit('seat_booked', {
