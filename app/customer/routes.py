@@ -9,8 +9,8 @@ from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db, socketio, csrf
-from app.models import Voyage, Booking, RouteStop, SeatLock, User, WINDOW_SEATS, SEAT_ADJACENCY, SiteContent
-from app.customer.forms import CustomerLoginForm, CustomerRegisterForm, CustomerProfileForm
+from app.models import Voyage, Booking, RouteStop, SeatLock, User, WINDOW_SEATS, SEAT_ADJACENCY, SiteContent, PasswordResetToken
+from app.customer.forms import CustomerLoginForm, CustomerRegisterForm, CustomerProfileForm, ForgotPasswordForm, ResetPasswordForm
 from app.logging import log_activity, notify_staff
 from app.staff.ticket import generate_ticket, generate_group_ticket, generate_qr
 
@@ -696,3 +696,72 @@ def unlock_seat():
         socketio.emit('seat_unlocked', {'voyage_id': voyage_id, 'seat_id': seat_id})
 
     return jsonify({'status': 'unlocked'})
+
+
+# ============================================================
+# PASSWORD RESET
+# ============================================================
+
+@customer_bp.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if current_user.is_authenticated:
+        return redirect(url_for('customer.dashboard'))
+
+    form = ForgotPasswordForm()
+    sent = False
+
+    if form.validate_on_submit():
+        email = form.email.data.strip().lower()
+        user = User.query.filter_by(email=email, role='customer').first()
+        if user:
+            # Expire old unused tokens
+            PasswordResetToken.query.filter_by(user_id=user.id, used=False).delete()
+            db.session.flush()
+
+            token_str = secrets.token_urlsafe(48)
+            token = PasswordResetToken(
+                user_id=user.id,
+                token=token_str,
+                expires_at=datetime.utcnow() + timedelta(hours=1),
+            )
+            db.session.add(token)
+            db.session.commit()
+
+            domain = current_app.config.get('APP_DOMAIN', 'https://shrisamarth.in')
+            reset_url = f"{domain}/reset-password/{token_str}"
+
+            from app.email import send_email
+            from flask import render_template as _rt
+            html = _rt('email/reset_password.html',
+                       user=user, reset_url=reset_url, domain=domain)
+            send_email(user.email, 'Reset your SHRISAMARTH password', html)
+
+        # Always show sent message to prevent email enumeration
+        sent = True
+
+    return render_template('customer/forgot_password.html', form=form, sent=sent)
+
+
+@customer_bp.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    if current_user.is_authenticated:
+        return redirect(url_for('customer.dashboard'))
+
+    record = PasswordResetToken.query.filter_by(token=token).first()
+    if not record or not record.is_valid:
+        return render_template('customer/reset_password.html',
+                               form=None, invalid=True)
+
+    form = ResetPasswordForm()
+    done = False
+
+    if form.validate_on_submit():
+        record.user.set_password(form.password.data)
+        record.used = True
+        db.session.commit()
+        log_activity('password_reset', f'Password reset via email for {record.user.email}',
+                     'user', record.user.id)
+        done = True
+
+    return render_template('customer/reset_password.html',
+                           form=form, invalid=False, done=done)

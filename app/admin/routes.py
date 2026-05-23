@@ -5,7 +5,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, abort, r
 from flask_login import login_required, current_user
 
 from app.extensions import db
-from app.models import Bus, Voyage, Booking, User, ActivityLog, RouteStop, SiteContent
+from app.models import Bus, Voyage, Booking, User, ActivityLog, RouteStop, SiteContent, PasswordResetToken
 from datetime import datetime, timedelta, date as date_type
 from sqlalchemy import func, and_
 from app.admin.forms import BusForm, VoyageForm, UserForm, UserEditForm
@@ -654,6 +654,43 @@ def user_edit(user_id):
 
     return render_template('admin/user_form.html', form=form,
                            title='Edit User', user=user)
+
+
+@admin_bp.route('/users/<int:user_id>/send-reset', methods=['POST'])
+@login_required
+def user_send_reset(user_id):
+    user = User.query.get_or_404(user_id)
+    if not user.email:
+        return jsonify({'status': 'error', 'message': 'User has no email address.'}), 400
+
+    from app.email import send_email
+    from flask import current_app, render_template as _rt
+    import secrets as _sec
+
+    # Expire old unused tokens for this user
+    PasswordResetToken.query.filter_by(user_id=user.id, used=False).delete()
+    db.session.flush()
+
+    token_str = _sec.token_urlsafe(48)
+    token = PasswordResetToken(
+        user_id=user.id,
+        token=token_str,
+        expires_at=datetime.utcnow() + timedelta(hours=1),
+    )
+    db.session.add(token)
+    db.session.commit()
+
+    domain = current_app.config.get('APP_DOMAIN', 'https://shrisamarth.in')
+    reset_url = f"{domain}/reset-password/{token_str}"
+    html = _rt('email/reset_password.html', user=user, reset_url=reset_url, domain=domain)
+
+    ok = send_email(user.email, 'Reset your SHRISAMARTH password', html)
+    if ok:
+        log_activity('password_reset_sent',
+                     f'Password reset email sent to {user.email} (user {user.username})',
+                     'user', user.id)
+        return jsonify({'status': 'ok', 'email': user.email})
+    return jsonify({'status': 'error', 'message': 'Failed to send email.'}), 500
 
 # ============================================================
 # REGISTERED PASSENGERS

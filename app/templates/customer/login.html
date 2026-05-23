@@ -45,7 +45,11 @@
             </div>
         </form>
 
-        <div style="text-align:center; margin-top:20px; font-size:13px; color:var(--muted);">
+        <div style="text-align:center; margin-top:16px; font-size:13px; color:var(--muted);">
+            <a href="{{ url_for('customer.forgot_password') }}" style="color:var(--muted); text-decoration:none;" data-i18n="c.forgot_password">Forgot password?</a>
+        </div>
+
+        <div style="text-align:center; margin-top:12px; font-size:13px; color:var(--muted);">
             <span data-i18n="c.new_to_us">New to SHRISAMARTH?</span>
             <a href="{{ url_for('customer.register') }}" style="color:var(--marigold); text-decoration:none; font-weight:500;" data-i18n="c.create_account_link">
                 Create an account
