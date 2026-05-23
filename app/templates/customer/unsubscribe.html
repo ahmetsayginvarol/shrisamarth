@@ -1,0 +1,36 @@
+{% extends 'customer/base_customer.html' %}
+{% block title %}Unsubscribe — SHRISAMARTH{% endblock %}
+{% block content %}
+<div style="min-height:60vh; display:flex; align-items:center; justify-content:center; padding:60px 20px;">
+  <div style="max-width:440px; width:100%; text-align:center;">
+    {% if found %}
+      <div style="font-size:48px; margin-bottom:16px;">✅</div>
+      <h1 style="font-family:'Instrument Serif',serif; font-size:26px; margin:0 0 12px;">Unsubscribed</h1>
+      <p style="color:var(--muted); font-size:14px; line-height:1.7; margin-bottom:28px;">
+        You've been removed from our newsletter list.<br>
+        You won't receive any further emails from us.
+      </p>
+      {% if user %}
+      <p style="color:var(--muted); font-size:13px; margin-bottom:28px;">
+        {{ user.email }}
+      </p>
+      {% endif %}
+      <p style="font-size:13px; color:var(--muted); margin-bottom:28px;">
+        Changed your mind? You can re-subscribe from your
+        <a href="{{ url_for('customer.profile') }}" style="color:var(--marigold);">account profile</a>.
+      </p>
+    {% else %}
+      <div style="font-size:48px; margin-bottom:16px;">❓</div>
+      <h1 style="font-family:'Instrument Serif',serif; font-size:26px; margin:0 0 12px;">Link Not Found</h1>
+      <p style="color:var(--muted); font-size:14px; line-height:1.7; margin-bottom:28px;">
+        This unsubscribe link is invalid or has already been used.
+      </p>
+    {% endif %}
+    <a href="{{ url_for('customer.home') }}"
+       style="display:inline-block; background:var(--marigold); color:#fff; font-size:14px; font-weight:600;
+              text-decoration:none; padding:11px 28px; border-radius:8px;">
+      Back to Home
+    </a>
+  </div>
+</div>
+{% endblock %}

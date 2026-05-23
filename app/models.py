@@ -304,6 +304,31 @@ class SiteContent(db.Model):
 
 
 # ============================================================
+# NEWSLETTER
+# ============================================================
+
+class Newsletter(db.Model):
+    __tablename__ = 'newsletters'
+
+    id = db.Column(db.Integer, primary_key=True)
+    subject_en = db.Column(db.String(200), nullable=True)
+    subject_hi = db.Column(db.String(200), nullable=True)
+    content_en = db.Column(db.Text, nullable=True)
+    content_hi = db.Column(db.Text, nullable=True)
+    theme = db.Column(db.String(30), default='classic', nullable=False)
+    status = db.Column(db.String(20), default='draft', nullable=False)
+    recipient_count = db.Column(db.Integer, default=0)
+    sent_at = db.Column(db.DateTime, nullable=True)
+    sent_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    sent_by = db.relationship('User', foreign_keys=[sent_by_id])
+
+    def __repr__(self):
+        return f'<Newsletter {self.id} status={self.status}>'
+
+
+# ============================================================
 # ABUSE DETECTION
 # ============================================================
 

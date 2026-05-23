@@ -928,3 +928,17 @@ def reset_password(token):
 
     return render_template('customer/reset_password.html',
                            form=form, invalid=False, done=done)
+
+
+@customer_bp.route('/unsubscribe/<token>')
+def unsubscribe(token):
+    user = User.query.filter_by(unsubscribe_token=token).first()
+    if not user:
+        return render_template('customer/unsubscribe.html', found=False)
+    if not user.newsletter_unsubscribed:
+        user.newsletter_unsubscribed = True
+        db.session.commit()
+        log_activity('newsletter_unsubscribe',
+                     f'Customer {user.email} unsubscribed from newsletters',
+                     'user', user.id)
+    return render_template('customer/unsubscribe.html', found=True, user=user)

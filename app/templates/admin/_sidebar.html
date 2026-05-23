@@ -44,6 +44,11 @@
             <span class="nav-icon">👤</span>
             <span>Passengers</span>
         </a>
+        <a href="{{ url_for('admin.newsletter') }}"
+           class="nav-item {% if 'newsletter' in request.endpoint %}active{% endif %}">
+            <span class="nav-icon">✉️</span>
+            <span>Newsletter</span>
+        </a>
         <a href="{{ url_for('admin.logs') }}"
            class="nav-item {% if request.endpoint == 'admin.logs' %}active{% endif %}">
             <span class="nav-icon">☰</span>

@@ -55,3 +55,21 @@ needed for fresh deployments. For schema changes, use Flask-Migrate:
 flask db migrate -m "description"
 flask db upgrade
 ```
+
+## Newsletter System
+
+Admin-only email broadcast tool at `/admin/newsletter`:
+
+- **4 themes**: Classic (cream/navy), Dark (midnight), Festival (marigold/warm), Minimal (white)
+- **Bilingual**: English-only, Hindi-only, or both (auto-detected based on filled fields)
+- **Live preview**: right-side iframe, debounced 500ms as you type
+- **Mobile preview toggle**: simulates 375px width
+- **Draft save/edit/duplicate/delete**: full lifecycle before sending
+- **Unsubscribe**: every email includes a unique unsubscribe link (`/unsubscribe/<token>`)
+  - Token auto-generated per user on first send
+  - `newsletter_unsubscribed` flag excludes users from future sends
+- **Recipient filter**: verified + active customers who haven't unsubscribed
+- **Batch sending**: 50 emails/batch, 0.5s delay between batches
+- **Resend warning**: shown in UI when recipient count > 80
+
+Env var needed on Render: `RESEND_API_KEY` (same one used for auth emails).

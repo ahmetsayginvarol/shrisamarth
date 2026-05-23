@@ -61,6 +61,8 @@ def _run_schema_migrations(db):
     stmts = [
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT TRUE",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS unsubscribe_token VARCHAR(64)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS newsletter_unsubscribed BOOLEAN DEFAULT FALSE",
     ]
     for sql in stmts:
         try:

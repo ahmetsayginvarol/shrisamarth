@@ -5,7 +5,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, abort, r
 from flask_login import login_required, current_user
 
 from app.extensions import db
-from app.models import Bus, Voyage, Booking, User, ActivityLog, RouteStop, SiteContent, PasswordResetToken, AbuseLog, IpBan
+from app.models import Bus, Voyage, Booking, User, ActivityLog, RouteStop, SiteContent, PasswordResetToken, AbuseLog, IpBan, Newsletter
 from datetime import datetime, timedelta, date as date_type
 from sqlalchemy import func, and_
 from app.admin.forms import BusForm, VoyageForm, UserForm, UserEditForm
@@ -1327,3 +1327,190 @@ def security_abuse_log_csv():
     output.seek(0)
     return Response(output.getvalue(), mimetype='text/csv',
                     headers={'Content-Disposition': 'attachment; filename=abuse_log.csv'})
+
+
+# ============================================================
+# NEWSLETTER
+# ============================================================
+
+def _newsletter_recipients():
+    """Return list of eligible newsletter recipients."""
+    return User.query.filter(
+        User.role == 'customer',
+        User.email_verified == True,
+        User.is_active_account == True,
+        User.newsletter_unsubscribed == False,
+        User.email != None,
+    ).all()
+
+
+def _ensure_unsubscribe_token(user):
+    """Generate an unsubscribe token for a user if they don't have one."""
+    import secrets as _sec
+    if not user.unsubscribe_token:
+        user.unsubscribe_token = _sec.token_urlsafe(32)
+
+
+@admin_bp.route('/newsletter')
+@login_required
+def newsletter():
+    recipients = _newsletter_recipients()
+    history = Newsletter.query.order_by(Newsletter.created_at.desc()).all()
+    draft = request.args.get('draft', type=int)
+    edit_nl = Newsletter.query.get(draft) if draft else None
+    return render_template('admin/newsletter.html',
+                           recipient_count=len(recipients),
+                           history=history,
+                           edit_nl=edit_nl)
+
+
+@admin_bp.route('/newsletter/preview-email', methods=['POST'])
+@login_required
+def newsletter_preview():
+    data = request.get_json() or {}
+    theme = data.get('theme', 'classic')
+    content_en = data.get('content_en', '')
+    content_hi = data.get('content_hi', '')
+    lang = data.get('lang', 'en')
+    from flask import current_app
+    domain = current_app.config.get('APP_DOMAIN', 'https://shrisamarth.in')
+    html = render_template(
+        f'email/newsletter_{theme}.html',
+        content_en=content_en,
+        content_hi=content_hi,
+        lang=lang,
+        user_name='Preview User',
+        unsubscribe_url='#',
+        domain=domain,
+    )
+    return jsonify({'html': html})
+
+
+@admin_bp.route('/newsletter/save-draft', methods=['POST'])
+@login_required
+def newsletter_save_draft():
+    nl_id = request.form.get('newsletter_id', type=int)
+    nl = Newsletter.query.get(nl_id) if nl_id else Newsletter()
+    nl.subject_en = request.form.get('subject_en', '').strip() or None
+    nl.subject_hi = request.form.get('subject_hi', '').strip() or None
+    nl.content_en = request.form.get('content_en', '').strip() or None
+    nl.content_hi = request.form.get('content_hi', '').strip() or None
+    nl.theme = request.form.get('theme', 'classic')
+    nl.status = 'draft'
+    if not nl_id:
+        db.session.add(nl)
+    db.session.commit()
+    flash('Draft saved.', 'success')
+    return redirect(url_for('admin.newsletter', draft=nl.id))
+
+
+@admin_bp.route('/newsletter/send', methods=['POST'])
+@login_required
+def newsletter_send():
+    import time as _time
+    from flask import current_app
+    from app.email import send_email
+
+    nl_id = request.form.get('newsletter_id', type=int)
+    nl = Newsletter.query.get(nl_id) if nl_id else Newsletter()
+    nl.subject_en = request.form.get('subject_en', '').strip() or None
+    nl.subject_hi = request.form.get('subject_hi', '').strip() or None
+    nl.content_en = request.form.get('content_en', '').strip() or None
+    nl.content_hi = request.form.get('content_hi', '').strip() or None
+    nl.theme = request.form.get('theme', 'classic')
+
+    # Validate: need at least one language pair
+    has_en = bool(nl.subject_en and nl.content_en)
+    has_hi = bool(nl.subject_hi and nl.content_hi)
+    if not has_en and not has_hi:
+        flash('Please fill in at least one language (subject + content).', 'error')
+        return redirect(url_for('admin.newsletter'))
+
+    if not nl_id:
+        db.session.add(nl)
+        db.session.flush()
+
+    domain = current_app.config.get('APP_DOMAIN', 'https://shrisamarth.in')
+    recipients = _newsletter_recipients()
+
+    # Ensure all recipients have unsubscribe tokens
+    for user in recipients:
+        _ensure_unsubscribe_token(user)
+    db.session.commit()
+
+    # Determine subject
+    if has_en and has_hi:
+        subject = f"{nl.subject_en} / {nl.subject_hi}"
+        lang = 'both'
+    elif has_en:
+        subject = nl.subject_en
+        lang = 'en'
+    else:
+        subject = nl.subject_hi
+        lang = 'hi'
+
+    sent_count = 0
+    batch_size = 50
+    for i, user in enumerate(recipients):
+        unsubscribe_url = f"{domain}/unsubscribe/{user.unsubscribe_token}"
+        try:
+            html = render_template(
+                f'email/newsletter_{nl.theme}.html',
+                content_en=nl.content_en or '',
+                content_hi=nl.content_hi or '',
+                lang=lang,
+                user_name=user.full_name,
+                unsubscribe_url=unsubscribe_url,
+                domain=domain,
+            )
+            ok = send_email(user.email, subject, html)
+            if ok:
+                sent_count += 1
+        except Exception:
+            pass
+        # Small delay between batches
+        if (i + 1) % batch_size == 0:
+            _time.sleep(0.5)
+
+    nl.status = 'sent'
+    nl.sent_at = datetime.utcnow()
+    nl.sent_by_id = current_user.id
+    nl.recipient_count = sent_count
+    db.session.commit()
+
+    log_activity('newsletter_sent',
+                 f'Newsletter "{subject[:80]}" sent to {sent_count} customers',
+                 'newsletter', nl.id)
+    flash(f'Newsletter sent to {sent_count} customers ✓', 'success')
+    return redirect(url_for('admin.newsletter'))
+
+
+@admin_bp.route('/newsletter/<int:nl_id>/delete', methods=['POST'])
+@login_required
+def newsletter_delete(nl_id):
+    nl = Newsletter.query.get_or_404(nl_id)
+    if nl.status == 'sent':
+        flash('Cannot delete a sent newsletter.', 'error')
+        return redirect(url_for('admin.newsletter'))
+    db.session.delete(nl)
+    db.session.commit()
+    flash('Draft deleted.', 'success')
+    return redirect(url_for('admin.newsletter'))
+
+
+@admin_bp.route('/newsletter/<int:nl_id>/duplicate', methods=['POST'])
+@login_required
+def newsletter_duplicate(nl_id):
+    src = Newsletter.query.get_or_404(nl_id)
+    copy = Newsletter(
+        subject_en=src.subject_en,
+        subject_hi=src.subject_hi,
+        content_en=src.content_en,
+        content_hi=src.content_hi,
+        theme=src.theme,
+        status='draft',
+    )
+    db.session.add(copy)
+    db.session.commit()
+    flash('Duplicated as new draft.', 'success')
+    return redirect(url_for('admin.newsletter', draft=copy.id))
