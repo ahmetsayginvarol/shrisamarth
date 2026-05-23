@@ -39,9 +39,24 @@ def create_app(config_class=Config):
 
     with app.app_context():
         db.create_all()
+        _run_schema_migrations(db)
 
     @app.context_processor
     def inject_domain():
         return {'APP_DOMAIN': app.config['APP_DOMAIN']}
 
     return app
+
+
+def _run_schema_migrations(db):
+    """Add new columns to existing tables that db.create_all() won't touch."""
+    stmts = [
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT TRUE",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP",
+    ]
+    for sql in stmts:
+        try:
+            db.session.execute(db.text(sql))
+        except Exception:
+            db.session.rollback()
+    db.session.commit()
