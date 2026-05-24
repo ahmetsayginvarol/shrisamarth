@@ -5,7 +5,8 @@
 <div id="bookApp" data-voyage-id="{{ voyage.id }}" data-base-fare="{{ voyage.base_fare }}"
     data-prefill='{{ prefill | tojson }}'
     data-boarding-stops='{{ boarding_stops | map(attribute="stop_name") | list | tojson }}'
-    data-dropping-stops='{{ dropping_stops | map(attribute="stop_name") | list | tojson }}'>
+    data-dropping-stops='{{ dropping_stops | map(attribute="stop_name") | list | tojson }}'
+    data-stop-fares='{{ stop_fares | tojson }}'>
 
     <div class="c-book-header">
         <div class="c-book-route serif">{{ voyage.origin }} → {{ voyage.destination }}</div>
@@ -227,6 +228,8 @@
                             {% endif %}
                         </div>
                     </div>
+
+                    <div id="singleFareNote" style="display:none; font-size:13px; font-weight:500; padding:8px 0 4px;"></div>
 
                     <div style="background:var(--cream-2); border:1px solid var(--line); border-radius:6px; padding:14px; margin-bottom:16px; font-size:13px; color:var(--muted);">
                         Balance due on boarding — no advance payment required online.

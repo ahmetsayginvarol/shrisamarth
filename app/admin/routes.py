@@ -19,18 +19,27 @@ def _save_stops(voyage_id):
     names = request.form.getlist('stop_name[]')
     types = request.form.getlist('stop_type[]')
     times = request.form.getlist('stop_time[]')
+    fares = request.form.getlist('stop_fare_override[]')
     for i, name in enumerate(names):
         name = name.strip()
         if not name:
             continue
         stop_type = types[i] if i < len(types) else 'boarding'
         stop_time = times[i].strip() if i < len(times) else ''
+        raw_fare = fares[i].strip() if i < len(fares) else ''
+        fare_override = None
+        if stop_type == 'boarding' and raw_fare:
+            try:
+                fare_override = float(raw_fare)
+            except ValueError:
+                fare_override = None
         db.session.add(RouteStop(
             voyage_id=voyage_id,
             stop_name=name,
             stop_type=stop_type,
             stop_time=stop_time or None,
             stop_order=i,
+            fare_override=fare_override,
         ))
 
 
@@ -256,6 +265,22 @@ def bus_edit(bus_id):
 # ============================================================
 # VOYAGES
 # ============================================================
+
+@admin_bp.route('/api/voyage/<int:voyage_id>/stop-fare')
+def voyage_stop_fare(voyage_id):
+    voyage = Voyage.query.get_or_404(voyage_id)
+    stop_name = request.args.get('stop', '').strip()
+    base = float(voyage.base_fare)
+    if stop_name:
+        stop = RouteStop.query.filter_by(
+            voyage_id=voyage_id,
+            stop_name=stop_name,
+            stop_type='boarding',
+        ).first()
+        if stop and stop.fare_override is not None:
+            return jsonify({'fare': float(stop.fare_override), 'is_override': True, 'base_fare': base})
+    return jsonify({'fare': base, 'is_override': False, 'base_fare': base})
+
 
 @admin_bp.route('/voyages')
 def voyages():
@@ -617,7 +642,8 @@ def voyage_edit(voyage_id):
     import json
     existing = [
         {'name': s.stop_name, 'type': s.stop_type,
-         'time': s.stop_time or '', 'order': s.stop_order}
+         'time': s.stop_time or '', 'order': s.stop_order,
+         'fare_override': float(s.fare_override) if s.fare_override is not None else None}
         for s in sorted(voyage.stops, key=lambda s: s.stop_order)
     ]
     has_future_siblings = False

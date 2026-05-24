@@ -41,10 +41,15 @@ const bookApp = document.getElementById('bookApp');
 const VOYAGE_ID = parseInt(bookApp.dataset.voyageId);
 const BASE_FARE = parseFloat(bookApp.dataset.baseFare);
 const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').content;
+const STOP_FARES = JSON.parse(bookApp.dataset.stopFares || '{}');
 
 const _prefill = JSON.parse(bookApp.dataset.prefill || '{}');
 const _boardingStops = JSON.parse(bookApp.dataset.boardingStops || '[]');
 const _droppingStops = JSON.parse(bookApp.dataset.droppingStops || '[]');
+
+function getStopFare(stopName) {
+    return (stopName && STOP_FARES[stopName] != null) ? STOP_FARES[stopName] : BASE_FARE;
+}
 
 let myLockedSeats = new Set();  // seat IDs locked by this session
 let selectedSeats = new Set();  // seats selected for booking (subset of myLockedSeats)
@@ -210,6 +215,22 @@ function updateSelectionUI() {
     }
 }
 
+function updateSingleFareDisplay(stopName) {
+    const fare = getStopFare(stopName);
+    const fareEl = document.getElementById('formFareSummary');
+    if (fareEl) fareEl.textContent = '₹ ' + fare.toLocaleString('en-IN');
+    const noteEl = document.getElementById('singleFareNote');
+    if (!noteEl) return;
+    if (fare < BASE_FARE) {
+        const saving = BASE_FARE - fare;
+        noteEl.innerHTML = `<span style="color:var(--sage,#5a8a5a);">Fare for your journey: ₹${fare.toLocaleString('en-IN')} <span style="font-size:12px;">(₹${saving.toLocaleString('en-IN')} off base fare)</span></span>`;
+        noteEl.style.display = 'block';
+    } else {
+        noteEl.innerHTML = `Fare for your journey: ₹${fare.toLocaleString('en-IN')}`;
+        noteEl.style.display = fare !== BASE_FARE ? 'block' : 'none';
+    }
+}
+
 function showBookingForm() {
     document.getElementById('panel-empty').classList.add('hidden');
     document.getElementById('panel-selected').classList.add('hidden');
@@ -228,10 +249,18 @@ function showBookingForm() {
         inp.type = 'hidden'; inp.name = 'seat_ids[]'; inp.value = seats[0];
         container.appendChild(inp);
         document.getElementById('formSeatSummary').textContent = seats[0];
-        document.getElementById('formFareSummary').textContent = '₹ ' + BASE_FARE.toLocaleString('en-IN');
         // Prefill phone number input
         const custPhone = document.getElementById('custSinglePhone');
         if (custPhone && _prefill.phone) custPhone.value = _prefill.phone;
+        // Set initial fare based on first boarding stop option
+        const boardingSel = document.querySelector('#panel-form select[name="boarding_point"]');
+        const initStop = boardingSel ? boardingSel.value : '';
+        updateSingleFareDisplay(initStop);
+        // Wire boarding stop change to live fare update
+        if (boardingSel && !boardingSel._fareWired) {
+            boardingSel._fareWired = true;
+            boardingSel.addEventListener('change', () => updateSingleFareDisplay(boardingSel.value));
+        }
     } else {
         // Multi-seat: show per-passenger form
         document.getElementById('panel-form').classList.add('hidden');
@@ -301,6 +330,19 @@ function renderGroupForm(seats) {
 
     document.getElementById('groupFormBody').innerHTML = html;
     buildCountrySelect(document.getElementById('cgrp_cc'));
+
+    // Wire boarding stop change to update group fare summary
+    const grpBoarding = document.getElementById('cgrp_boarding');
+    if (grpBoarding) {
+        const updateGroupFare = () => {
+            const fare = getStopFare(grpBoarding.value);
+            const total = seats.length * fare;
+            document.getElementById('groupFormFareSummary').textContent =
+                '₹ ' + total.toLocaleString('en-IN');
+        };
+        grpBoarding.addEventListener('change', updateGroupFare);
+        updateGroupFare();
+    }
 }
 
 function cancelForm() {

@@ -110,6 +110,28 @@ class Voyage(db.Model):
             return 0
         return round((self.seats_booked / self.bus.total_seats) * 100)
 
+    @property
+    def min_fare(self):
+        """Lowest fare across all boarding stops (respects overrides)."""
+        overrides = [float(s.fare_override) for s in self.stops
+                     if s.stop_type == 'boarding' and s.fare_override is not None]
+        base = float(self.base_fare)
+        return min(overrides + [base]) if overrides else base
+
+    @property
+    def fare_display(self):
+        """'₹500 – ₹800' if overrides exist, else '₹800'."""
+        overrides = [float(s.fare_override) for s in self.stops
+                     if s.stop_type == 'boarding' and s.fare_override is not None]
+        base = float(self.base_fare)
+        if not overrides:
+            return f'₹{int(base)}'
+        lo = min(overrides + [base])
+        hi = base
+        if lo == hi:
+            return f'₹{int(hi)}'
+        return f'₹{int(lo)} – ₹{int(hi)}'
+
     def __repr__(self):
         return f'<Voyage {self.origin}→{self.destination} {self.departure_at}>'
 
@@ -126,6 +148,7 @@ class RouteStop(db.Model):
     stop_type = db.Column(db.String(10), nullable=False)  # 'boarding' or 'dropping'
     stop_time = db.Column(db.String(5), nullable=True)    # HH:MM format
     stop_order = db.Column(db.Integer, nullable=False, default=0)
+    fare_override = db.Column(db.Numeric(10, 2), nullable=True)  # NULL = use voyage base_fare
 
     def __repr__(self):
         return f'<RouteStop {self.stop_name} ({self.stop_type}) @{self.stop_time}>'

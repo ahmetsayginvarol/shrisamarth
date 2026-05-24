@@ -146,7 +146,7 @@
 </div>
 
 {% if voyage %}
-<main class="staff-main{% if role == 'driver' %} driver-view{% endif %}" data-voyage-id="{{ voyage.id }}" data-base-fare="{{ voyage.base_fare }}" data-departure="{{ voyage.departure_at.isoformat() }}">
+<main class="staff-main{% if role == 'driver' %} driver-view{% endif %}" data-voyage-id="{{ voyage.id }}" data-base-fare="{{ voyage.base_fare }}" data-departure="{{ voyage.departure_at.isoformat() }}" data-stop-fares='{{ stop_fares | tojson }}'>
     <section class="seat-section">
         <div class="seat-section-header">
             <h2 class="serif" data-i18n="dash.seatmap">Seat Map</h2>

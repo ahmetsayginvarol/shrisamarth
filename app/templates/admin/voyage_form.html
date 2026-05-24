@@ -85,6 +85,13 @@
                         onclick="addStop('dropping')">+ Add Dropping Stop</button>
             </div>
         </div>
+
+        <!-- Fare summary preview -->
+        <div id="fareSummary" style="margin-top:16px; display:none;">
+            <div style="font-size:12px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;" data-i18n="boarding_stop_fares">Boarding stop fares:</div>
+            <table id="fareSummaryTable" style="font-size:13px; border-collapse:collapse; width:100%; max-width:360px;">
+            </table>
+        </div>
     </div>
 
     <!-- Recurrence (only for new voyages) -->
@@ -281,24 +288,76 @@ function updateReturnPreview() {
 <script>
 const EXISTING_STOPS = {{ stops_json | safe }};
 
-function stopRow(type, name, time) {
+function getBaseFare() {
+    return parseFloat(document.querySelector('[name="base_fare"]')?.value) || 0;
+}
+
+function stopRow(type, name, time, fareOverride) {
     const row = document.createElement('div');
-    row.style.cssText = 'display:flex; gap:6px; align-items:center;';
+    row.style.cssText = 'display:flex; gap:6px; align-items:center; flex-wrap:wrap;';
+    const baseFare = getBaseFare();
+    const fareHtml = type === 'boarding' ? `
+        <input type="number" name="stop_fare_override[]" class="form-input stop-fare-input"
+               value="${fareOverride !== null && fareOverride !== undefined ? fareOverride : ''}"
+               placeholder="₹${baseFare || '—'}"
+               min="0" step="1"
+               title="Leave empty to use base fare"
+               style="width:90px; padding:7px 8px; font-size:12px;"
+               oninput="updateFareSummary()">
+    ` : `<input type="hidden" name="stop_fare_override[]" value="">`;
+
     row.innerHTML = `
         <input type="hidden" name="stop_type[]" value="${type}">
-        <input type="text" name="stop_name[]" class="form-input"
+        <input type="text" name="stop_name[]" class="form-input stop-name-input"
                value="${name}" placeholder="Stop name" required
-               style="flex:1; padding:7px 10px; font-size:13px;">
-        <input type="hidden" name="stop_time[]" value="">
-        <button type="button" onclick="this.parentNode.remove()"
-                style="background:none; border:none; color:var(--muted); font-size:16px; cursor:pointer; padding:4px 6px; line-height:1;">✕</button>
+               style="flex:1; min-width:100px; padding:7px 10px; font-size:13px;"
+               oninput="updateFareSummary()">
+        <input type="hidden" name="stop_time[]" value="${time || ''}">
+        ${fareHtml}
+        <button type="button" onclick="this.parentNode.remove(); updateFareSummary();"
+                style="background:none; border:none; color:var(--muted); font-size:16px; cursor:pointer; padding:4px 6px; line-height:1; flex-shrink:0;">✕</button>
     `;
     return row;
 }
 
-function addStop(type, name='', time='') {
+function addStop(type, name='', time='', fareOverride=null) {
     const container = document.getElementById(type === 'boarding' ? 'boardingStops' : 'droppingStops');
-    container.appendChild(stopRow(type, name, time));
+    container.appendChild(stopRow(type, name, time, fareOverride));
+    updateFareSummary();
+}
+
+function updateFareSummary() {
+    const baseFare = getBaseFare();
+    const rows = document.querySelectorAll('#boardingStops > div');
+    const summaryDiv = document.getElementById('fareSummary');
+    const table = document.getElementById('fareSummaryTable');
+
+    if (rows.length === 0) { summaryDiv.style.display = 'none'; return; }
+    summaryDiv.style.display = '';
+
+    // Update placeholder on all fare inputs when base fare changes
+    document.querySelectorAll('.stop-fare-input').forEach(inp => {
+        inp.placeholder = baseFare ? `₹${baseFare}` : '—';
+    });
+
+    let html = '';
+    rows.forEach(row => {
+        const nameEl = row.querySelector('.stop-name-input');
+        const fareEl = row.querySelector('.stop-fare-input');
+        const name = nameEl?.value?.trim() || '—';
+        const overrideVal = fareEl?.value?.trim();
+        const hasOverride = overrideVal && parseFloat(overrideVal) >= 0;
+        const displayFare = hasOverride ? parseFloat(overrideVal) : baseFare;
+        const tag = hasOverride
+            ? `<span style="color:var(--sage);font-size:11px;font-weight:700;margin-left:4px;">● custom</span>`
+            : `<span style="color:var(--muted);font-size:11px;margin-left:4px;">base</span>`;
+        html += `<tr>
+            <td style="padding:3px 8px 3px 0; color:var(--ink);">${name}</td>
+            <td style="padding:3px 0; font-weight:600; color:${hasOverride ? 'var(--sage)' : 'var(--ink)'};">₹${displayFare || '—'}</td>
+            <td style="padding:3px 0;">${tag}</td>
+        </tr>`;
+    });
+    table.innerHTML = html;
 }
 
 function loadMumbaiPuneDefaults() {
@@ -308,7 +367,10 @@ function loadMumbaiPuneDefaults() {
     [['Shivajinagar','01:30'],['Swargate','01:45'],['Katraj','02:00'],['Hinjewadi','02:30']].forEach(([n,t]) => addStop('dropping', n, t));
 }
 
+// Update fare placeholders when base_fare field changes
+document.querySelector('[name="base_fare"]')?.addEventListener('input', updateFareSummary);
+
 // Pre-populate on edit
-EXISTING_STOPS.forEach(s => addStop(s.type, s.name, s.time));
+EXISTING_STOPS.forEach(s => addStop(s.type, s.name, s.time, s.fare_override ?? null));
 </script>
 {% endblock %}

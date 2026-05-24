@@ -105,8 +105,13 @@
 
                     <!-- Fare + expand indicator -->
                     <div class="c-result-cta">
+                        {% if v.min_fare < v.base_fare | float %}
+                        <div class="c-result-fare" style="font-size:15px;">From ₹{{ v.min_fare | int }}</div>
+                        <div class="c-result-fare-sub" data-i18n="c.per_seat">per seat</div>
+                        {% else %}
                         <div class="c-result-fare">₹ {{ v.base_fare | int }}</div>
                         <div class="c-result-fare-sub" data-i18n="c.per_seat">per seat</div>
+                        {% endif %}
                         <div class="c-expand-chevron">&#8964;</div>
                     </div>
                 </div>
@@ -120,7 +125,15 @@
                             {% set bs = stops.boarding %}
                             <div class="c-stops-row">
                                 <span class="c-stops-label boarding" data-i18n="c.boards_at">Boards at:</span>
-                                <div class="c-stops-inline">📍 {% for s in bs[:4] %}{{ s.stop_name }}{% if not loop.last %} · {% endif %}{% endfor %}{% if bs|length > 4 %} …{% endif %}</div>
+                                <div class="c-stops-inline">
+                                {% for s in bs %}
+                                    <span style="white-space:nowrap;">📍 {{ s.stop_name }}
+                                    <span style="color:var(--marigold);font-weight:600;font-size:12px;">
+                                        ₹{% if s.fare_override is not none %}{{ s.fare_override | int }}{% else %}{{ v.base_fare | int }}{% endif %}
+                                    </span>
+                                    </span>{% if not loop.last %} &nbsp;·&nbsp; {% endif %}
+                                {% endfor %}
+                                </div>
                             </div>
                             {% endif %}
                             {% if stops.dropping %}

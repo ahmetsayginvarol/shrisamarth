@@ -73,3 +73,34 @@ Admin-only email broadcast tool at `/admin/newsletter`:
 - **Resend warning**: shown in UI when recipient count > 80
 
 Env var needed on Render: `RESEND_API_KEY` (same one used for auth emails).
+
+## Stop-Based Dynamic Fare Pricing
+
+Boarding stops can have individual fare overrides instead of the voyage base fare.
+
+**Model**: `RouteStop.fare_override` (NUMERIC 10,2, nullable). NULL means use voyage base_fare.
+
+**Admin voyage form**: Each boarding stop row has an optional "Override fare (₹)" input.
+Dropping stops always use base fare. A fare summary table below the stops list previews
+the range in real time.
+
+**Server enforcement**: Fare is never taken from client. `_get_stop_fare(voyage, boarding_point)`
+helper in both `customer/routes.py` and `staff/routes.py` computes the correct fare:
+- Looks up the `RouteStop` for the selected boarding stop
+- Returns `fare_override` if set, otherwise `voyage.base_fare`
+
+**Search results display**: Shows "From ₹X per seat" when any boarding stop is cheaper than
+base fare. Each boarding stop shows its fare next to the stop name in the expanded card.
+
+**Customer booking page**: When a boarding stop is selected, the fare updates live.
+Below the boarding stop selector: "Fare for your journey: ₹X (₹Y off base fare)" in green
+when discounted.
+
+**Staff dashboard**: Single-seat booking fare field updates when boarding stop is changed.
+Group booking fare-per-seat field also updates on boarding stop change.
+
+**Voyage list/display**: `Voyage.min_fare` property returns cheapest fare; `Voyage.fare_display`
+returns "₹X – ₹Y" range or single "₹X". Used in admin voyage list and search results.
+
+**Schema migration**: `_run_schema_migrations()` in `app/__init__.py` adds
+`route_stops.fare_override` column to existing databases automatically on startup.

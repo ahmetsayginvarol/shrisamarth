@@ -28,6 +28,19 @@ def _get_cms() -> dict:
         return {}
 
 
+def _get_stop_fare(voyage, boarding_point: str) -> float:
+    """Return the correct fare for a boarding stop, falling back to base fare."""
+    if boarding_point:
+        stop = RouteStop.query.filter_by(
+            voyage_id=voyage.id,
+            stop_name=boarding_point,
+            stop_type='boarding',
+        ).first()
+        if stop and stop.fare_override is not None:
+            return float(stop.fare_override)
+    return float(voyage.base_fare)
+
+
 _DEFAULT_FAQ_EN = [
     {"q": "How do I book a bus ticket on SHRISAMARTH?", "a": "Select your origin, destination and date on the homepage. Choose your preferred bus, pick your seat on the visual seat map, fill in your details and confirm. You'll receive an e-ticket instantly."},
     {"q": "Can I cancel my booking?", "a": "Yes. Go to My Bookings, find your booking and click Cancel. Cancellations are subject to the operator's refund policy."},
@@ -229,6 +242,12 @@ def book(voyage_id):
     import time as _time
     session['booking_page_loaded'] = _time.time()
 
+    # Build stop-fare map for JS: {stop_name: fare}
+    stop_fares = {
+        s.stop_name: float(s.fare_override) if s.fare_override is not None else float(voyage.base_fare)
+        for s in boarding_stops
+    }
+
     return render_template(
         'customer/book.html',
         voyage=voyage,
@@ -239,6 +258,7 @@ def book(voyage_id):
         locked_other=locked_other,
         locked_mine=locked_mine,
         prefill=prefill,
+        stop_fares=stop_fares,
     )
 
 
@@ -343,7 +363,8 @@ def customer_book():
             return jsonify({'status': 'error', 'message': 'Gender is required'}), 400
 
     voyage = Voyage.query.get_or_404(voyage_id)
-    fare = float(voyage.base_fare)
+    # Server-side fare lookup — never trust client-submitted fare
+    fare = _get_stop_fare(voyage, boarding_point)
     dep_date = voyage.departure_at.strftime('%Y%m%d')
 
     # Adjacent gender check only for single-seat bookings with gender

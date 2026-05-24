@@ -5,6 +5,11 @@
 const staffMain = document.querySelector('.staff-main');
 const VOYAGE_ID = staffMain ? staffMain.dataset.voyageId : null;
 const BASE_FARE = staffMain ? parseFloat(staffMain.dataset.baseFare) : 0;
+const STOP_FARES = staffMain ? JSON.parse(staffMain.dataset.stopFares || '{}') : {};
+
+function getStopFare(stopName) {
+    return (stopName && STOP_FARES[stopName] != null) ? STOP_FARES[stopName] : BASE_FARE;
+}
 
 // ============================================================
 // COUNTRY CODE PHONE HELPER
@@ -264,6 +269,17 @@ function openGroupBookingForm() {
     document.getElementById('groupBookingBody').innerHTML = html;
     buildCountrySelect(document.getElementById('grp_cc'));
 
+    // Wire up boarding stop change to update group fare field
+    const grpBoarding = document.getElementById('grp_boarding_grp');
+    const grpFareInput = document.getElementById('grpFare');
+    if (grpBoarding && grpFareInput) {
+        grpBoarding.addEventListener('change', () => {
+            grpFareInput.value = getStopFare(grpBoarding.value);
+        });
+        // Set initial value based on default selection
+        grpFareInput.value = getStopFare(grpBoarding.value);
+    }
+
     showPanel('group-booking');
 }
 
@@ -503,8 +519,23 @@ function showSingleBookingForm(data) {
     document.getElementById('bookingForm').reset();
     document.querySelector('input[name="seat_id"]').value = data.seat_id;
     document.querySelector('input[name="voyage_id"]').value = VOYAGE_ID;
-    document.querySelector('input[name="fare"]').value = BASE_FARE;
     document.querySelector('input[name="advance_paid"]').value = 0;
+
+    const fareInput = document.querySelector('input[name="fare"]');
+    if (fareInput) {
+        // Set initial fare from current boarding stop selection
+        const boardingSel = document.querySelector('#bookingForm select[name="boarding_point"]');
+        const initialStop = boardingSel ? boardingSel.value : '';
+        fareInput.value = getStopFare(initialStop);
+
+        // Wire up boarding stop change to update fare field
+        if (boardingSel && !boardingSel._fareWired) {
+            boardingSel._fareWired = true;
+            boardingSel.addEventListener('change', () => {
+                fareInput.value = getStopFare(boardingSel.value);
+            });
+        }
+    }
 
     document.getElementById('genderWarning').classList.add('hidden');
     window._adjacentGenders = data.adjacent_genders || [];

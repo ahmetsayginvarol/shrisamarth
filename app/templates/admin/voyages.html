@@ -47,7 +47,7 @@
             <td>{{ v.seats_booked }} / {{ v.bus.total_seats }}
                 <span class="muted">({{ v.occupancy_pct }}%)</span>
             </td>
-            <td>₹ {{ v.base_fare }}</td>
+            <td>{{ v.fare_display }}</td>
             <td><span class="badge badge-{{ v.status }}">{{ v.status|capitalize }}</span></td>
             <td style="display:flex; gap:6px; flex-wrap:wrap;">
                 {% if v.status == 'scheduled' %}

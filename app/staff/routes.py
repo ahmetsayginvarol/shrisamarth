@@ -4,7 +4,7 @@ from flask_login import login_required, current_user
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db, socketio, limiter
-from app.models import Voyage, Booking, SEAT_ADJACENCY, WINDOW_SEATS
+from app.models import Voyage, Booking, RouteStop, SEAT_ADJACENCY, WINDOW_SEATS
 from app.staff.forms import BookingForm
 from flask import send_file
 from app.staff.ticket import generate_ticket, generate_group_ticket
@@ -14,6 +14,19 @@ from app.logging import log_activity, notify_staff
 from app.models import Notification
 
 staff_bp = Blueprint('staff', __name__, template_folder='../templates/staff')
+
+
+def _get_stop_fare(voyage, boarding_point: str) -> float:
+    """Return the correct fare for a boarding stop, falling back to base fare."""
+    if boarding_point:
+        stop = RouteStop.query.filter_by(
+            voyage_id=voyage.id,
+            stop_name=boarding_point,
+            stop_type='boarding',
+        ).first()
+        if stop and stop.fare_override is not None:
+            return float(stop.fare_override)
+    return float(voyage.base_fare)
 
 
 @staff_bp.before_request
@@ -107,10 +120,14 @@ def dashboard():
 
     boarding_stops = []
     dropping_stops = []
+    stop_fares = {}
     if voyage:
         sorted_stops = sorted(voyage.stops, key=lambda s: s.stop_order)
         boarding_stops = [s for s in sorted_stops if s.stop_type == 'boarding']
         dropping_stops = [s for s in sorted_stops if s.stop_type == 'dropping']
+        for s in boarding_stops:
+            if s.fare_override is not None:
+                stop_fares[s.stop_name] = float(s.fare_override)
 
     return render_template(
         'staff/dashboard.html',
@@ -126,6 +143,7 @@ def dashboard():
         voyage_dates=voyage_dates,
         boarding_stops=boarding_stops,
         dropping_stops=dropping_stops,
+        stop_fares=stop_fares,
     )
 
 
@@ -261,8 +279,9 @@ def create_booking():
             'message': f'Adjacent seat(s) {", ".join(conflicts)} booked by opposite gender.'
         }), 200
 
-    fare = form.fare.data
-    advance = form.advance_paid.data or 0
+    # Server-side fare: ignore form value, look up correct stop fare
+    fare = _get_stop_fare(voyage, form.boarding_point.data)
+    advance = float(form.advance_paid.data or 0)
     balance = fare - advance
     code = f"SHRI-{voyage.departure_at.strftime('%Y%m%d')}-{seat_id}-{secrets.token_hex(3).upper()}"
     booking = Booking(
@@ -404,8 +423,11 @@ def create_group_booking():
     try:
         for p in passengers:
             sid = str(p['seat_id']).strip()
+            # Server-side fare lookup per passenger boarding point
+            p_boarding = (p.get('boarding_point') or boarding_point or '').strip()
+            p_fare = _get_stop_fare(voyage, p_boarding)
             per_seat_advance = round(advance_paid / len(passengers), 2)
-            per_seat_balance = fare_per_seat - per_seat_advance
+            per_seat_balance = p_fare - per_seat_advance
             code = f"SHRI-{voyage.departure_at.strftime('%Y%m%d')}-{sid}-{secrets.token_hex(3).upper()}"
             b = Booking(
                 voyage_id=voyage.id,
@@ -413,9 +435,9 @@ def create_group_booking():
                 passenger_name=p['name'].strip(),
                 passenger_phone=p['phone'].strip(),
                 gender=p['gender'],
-                boarding_point=(p.get('boarding_point') or boarding_point or '').strip(),
+                boarding_point=p_boarding,
                 dropping_point=(p.get('dropping_point') or dropping_point or '').strip(),
-                fare=fare_per_seat,
+                fare=p_fare,
                 advance_paid=per_seat_advance,
                 balance_due=per_seat_balance,
                 booking_code=code,
