@@ -302,14 +302,12 @@ def voyage_new():
             db.session.rollback()
             flash('Failed to create voyage. Please try again.', 'error')
             return redirect(url_for('admin.voyage_new'))
-        log_activity('voyage_created',
-                     f'Created voyage {voyage.origin}→{voyage.destination} on {voyage.departure_at.strftime("%d %b %Y")}',
-                     'voyage', voyage.id)
 
         # Handle recurrence
         recurrence = request.form.get('recurrence', 'none')
         repeat_until_str = request.form.get('repeat_until', '')
         custom_days_raw = request.form.getlist('custom_days')
+        rec_group = None
 
         if recurrence != 'none':
             import secrets as _secrets
@@ -338,13 +336,11 @@ def voyage_new():
 
             while current_dt.date() <= repeat_until.date() and created < 91:
                 if recurrence == 'custom':
-                    # Python weekday Mon=0..Sun=6
                     wd = current_dt.weekday()
                     if wd not in custom_days:
                         current_dt += timedelta(days=1)
                         continue
 
-                # Check for conflict
                 conflict = Voyage.query.filter_by(
                     bus_id=voyage.bus_id,
                     status='scheduled',
@@ -373,7 +369,6 @@ def voyage_new():
                     )
                     db.session.add(v)
                     db.session.flush()
-                    # Copy route stops
                     for s in voyage.stops:
                         db.session.add(RouteStop(
                             voyage_id=v.id,
@@ -395,13 +390,130 @@ def voyage_new():
                 db.session.rollback()
                 flash('Failed to create recurring voyages. Please try again.', 'error')
                 return redirect(url_for('admin.voyages'))
+
+        # Handle return voyage
+        create_return = request.form.get('create_return') == 'on'
+        return_dep_str = request.form.get('return_departure_at', '').strip()
+        return_voyage = None
+        return_created = 0
+
+        if create_return and return_dep_str:
+            try:
+                return_dep_at = datetime.strptime(return_dep_str, '%Y-%m-%dT%H:%M')
+            except Exception:
+                return_dep_at = None
+
+            if return_dep_at:
+                outbound_stops = sorted(voyage.stops, key=lambda s: s.stop_order)
+                reversed_stops = list(reversed(outbound_stops))
+
+                # Flip stop_type: boarding ↔ dropping
+                def _flip(t):
+                    return 'dropping' if t == 'boarding' else 'boarding'
+
+                ret_rec_group = (rec_group + '-RETURN') if rec_group else None
+
+                return_voyage = Voyage(
+                    origin=voyage.destination,
+                    destination=voyage.origin,
+                    departure_at=return_dep_at,
+                    bus_id=voyage.bus_id,
+                    driver_id=voyage.driver_id,
+                    base_fare=voyage.base_fare,
+                    notes=voyage.notes,
+                    recurrence_group=ret_rec_group,
+                    created_by_id=current_user.id,
+                    status='scheduled',
+                )
+                db.session.add(return_voyage)
+                db.session.flush()
+                for i, s in enumerate(reversed_stops):
+                    db.session.add(RouteStop(
+                        voyage_id=return_voyage.id,
+                        stop_name=s.stop_name,
+                        stop_type=_flip(s.stop_type),
+                        stop_time=s.stop_time,
+                        stop_order=i,
+                    ))
+                return_created = 1
+
+                # Create return recurrences for each outbound recurring voyage
+                if rec_group:
+                    recurring_out = Voyage.query.filter(
+                        Voyage.recurrence_group == rec_group,
+                        Voyage.id != voyage.id,
+                    ).order_by(Voyage.departure_at).all()
+
+                    for v_out in recurring_out:
+                        r_dt = v_out.departure_at.replace(
+                            hour=return_dep_at.hour,
+                            minute=return_dep_at.minute,
+                            second=0, microsecond=0,
+                        )
+                        r_v = Voyage(
+                            origin=voyage.destination,
+                            destination=voyage.origin,
+                            departure_at=r_dt,
+                            bus_id=voyage.bus_id,
+                            driver_id=voyage.driver_id,
+                            base_fare=voyage.base_fare,
+                            notes=voyage.notes,
+                            recurrence_group=ret_rec_group,
+                            created_by_id=current_user.id,
+                            status='scheduled',
+                        )
+                        db.session.add(r_v)
+                        db.session.flush()
+                        for i, s in enumerate(reversed_stops):
+                            db.session.add(RouteStop(
+                                voyage_id=r_v.id,
+                                stop_name=s.stop_name,
+                                stop_type=_flip(s.stop_type),
+                                stop_time=s.stop_time,
+                                stop_order=i,
+                            ))
+                        return_created += 1
+
+                try:
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+                    flash('Voyage created but failed to create return voyage.', 'error')
+                    return redirect(url_for('admin.voyages'))
+
+        # Flash and log
+        if recurrence != 'none':
             skip_msg = f" ({skipped} date{'s' if skipped != 1 else ''} skipped — bus conflict)" if skipped else ""
-            flash(f"Created {created} recurring voyage{'s' if created != 1 else ''}{skip_msg}.", 'success')
-            log_activity('voyage_created',
-                         f"Created recurring voyage {voyage.origin}→{voyage.destination} ({created} voyages, {recurrence}, {voyage.departure_at.strftime('%d %b')} - {repeat_until.strftime('%d %b %Y')})",
-                         'voyage', voyage.id)
+            if return_voyage:
+                flash(
+                    f"Created {created} recurring voyage{'s' if created != 1 else ''}{skip_msg}. "
+                    f"Return voyage {voyage.destination} → {voyage.origin} also created ({return_created} voyage{'s' if return_created != 1 else ''}).",
+                    'success'
+                )
+            else:
+                flash(f"Created {created} recurring voyage{'s' if created != 1 else ''}{skip_msg}.", 'success')
+            if return_voyage:
+                log_activity('voyage_created',
+                             f"Created recurring voyage {voyage.origin}→{voyage.destination} ({created} voyages) with return voyage {voyage.destination}→{voyage.origin} ({return_created} voyages)",
+                             'voyage', voyage.id)
+            else:
+                log_activity('voyage_created',
+                             f"Created recurring voyage {voyage.origin}→{voyage.destination} ({created} voyages, {recurrence}, {voyage.departure_at.strftime('%d %b')} - {repeat_until.strftime('%d %b %Y')})",
+                             'voyage', voyage.id)
         else:
-            flash(f'Voyage {voyage.origin} → {voyage.destination} created.', 'success')
+            if return_voyage:
+                flash(
+                    f'Voyage created. Return voyage {voyage.destination} → {voyage.origin} also created.',
+                    'success'
+                )
+                log_activity('voyage_created',
+                             f'Created voyage {voyage.origin}→{voyage.destination} with return voyage {voyage.destination}→{voyage.origin}',
+                             'voyage', voyage.id)
+            else:
+                flash(f'Voyage {voyage.origin} → {voyage.destination} created.', 'success')
+                log_activity('voyage_created',
+                             f'Created voyage {voyage.origin}→{voyage.destination} on {voyage.departure_at.strftime("%d %b %Y")}',
+                             'voyage', voyage.id)
 
         return redirect(url_for('admin.voyages'))
 

@@ -121,6 +121,26 @@
         </div>
         <div id="recurrencePreview" style="margin-top:12px; font-size:13px; color:var(--marigold); display:none;"></div>
     </div>
+
+    <!-- Return Voyage -->
+    <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line);">
+        <label style="display:flex; align-items:center; gap:10px; cursor:pointer; user-select:none;">
+            <input type="checkbox" name="create_return" id="createReturnCb" onchange="toggleReturnSection()" style="width:16px;height:16px;accent-color:var(--marigold);">
+            <span style="font-size:14px; font-weight:600;" data-i18n="voyage.create_return">Create return voyage (B → A)</span>
+            <span style="font-size:12px; color:var(--muted);" data-i18n-hi="voyage.create_return_hi">/ वापसी यात्रा बनाएं</span>
+        </label>
+
+        <div id="returnSection" style="display:none; margin-top:16px; padding:16px 20px; background:var(--surface); border:1px solid var(--border); border-radius:10px;">
+            <div id="returnPreviewLabel" style="font-size:13px; color:var(--marigold); font-weight:600; margin-bottom:14px;">
+                Return voyage: <span id="returnRoutePreview">— → —</span>
+            </div>
+            <div class="form-group">
+                <label class="form-label" data-i18n="voyage.return_departure_time">Return Departure Time <span style="font-size:11px;color:var(--muted);">/ वापसी प्रस्थान समय</span></label>
+                <input type="datetime-local" name="return_departure_at" id="returnDepartureAt"
+                       class="form-input" style="max-width:260px;">
+            </div>
+        </div>
+    </div>
     {% endif %}
 
     {% if voyage %}
@@ -216,10 +236,45 @@ function updatePreview() {
 
 document.addEventListener('DOMContentLoaded', () => {
     const depInput = document.querySelector('[name="departure_at"]');
-    if (depInput) depInput.addEventListener('change', updatePreview);
+    if (depInput) {
+        depInput.addEventListener('change', updatePreview);
+        depInput.addEventListener('change', syncReturnDate);
+    }
     document.getElementById('repeatUntil')?.addEventListener('change', updatePreview);
     document.querySelectorAll('[name="custom_days"]').forEach(cb => cb.addEventListener('change', updatePreview));
+
+    // Update live return route preview when origin/destination change
+    document.querySelector('[name="origin"]')?.addEventListener('input', updateReturnPreview);
+    document.querySelector('[name="destination"]')?.addEventListener('input', updateReturnPreview);
 });
+
+function toggleReturnSection() {
+    const show = document.getElementById('createReturnCb').checked;
+    document.getElementById('returnSection').style.display = show ? '' : 'none';
+    if (show) {
+        syncReturnDate();
+        updateReturnPreview();
+    }
+}
+
+function syncReturnDate() {
+    const depVal = document.querySelector('[name="departure_at"]')?.value;
+    const retInput = document.getElementById('returnDepartureAt');
+    if (!depVal || !retInput) return;
+    // Keep existing time if already set, just update the date portion
+    const depDate = depVal.substring(0, 10); // YYYY-MM-DD
+    const existingTime = retInput.value ? retInput.value.substring(11) : '';
+    retInput.value = depDate + 'T' + (existingTime || depVal.substring(11) || '00:00');
+    // Set min date to the departure date
+    retInput.min = depDate + 'T00:00';
+}
+
+function updateReturnPreview() {
+    const origin = document.querySelector('[name="origin"]')?.value.trim() || '—';
+    const dest = document.querySelector('[name="destination"]')?.value.trim() || '—';
+    const el = document.getElementById('returnRoutePreview');
+    if (el) el.textContent = `${dest} → ${origin}`;
+}
 </script>
 {% endif %}
 
