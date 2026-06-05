@@ -84,6 +84,27 @@ def _get_faq_items():
     ]
 
 
+@customer_bp.before_request
+def check_site_suspension():
+    """Block customer pages when site is suspended; let staff/admin through."""
+    # Skip suspension check for auth routes (so admin can still log in)
+    if request.path.startswith('/auth') or request.path.startswith('/admin') or request.path.startswith('/staff'):
+        return
+    try:
+        row = SiteContent.query.filter_by(section_key='site_suspended').first()
+        if row and row.content_en == '1':
+            # Staff and admin bypass suspension
+            if current_user.is_authenticated and current_user.has_role('admin'):
+                return
+            if current_user.is_authenticated and current_user.has_role('reservation'):
+                return
+            msg_row = SiteContent.query.filter_by(section_key='suspension_message').first()
+            message = msg_row.content_en if msg_row else None
+            return render_template('errors/suspended.html', message=message), 503
+    except Exception:
+        pass
+
+
 @customer_bp.context_processor
 def inject_cms():
     """Make CMS content and announcement banner available in all customer templates."""

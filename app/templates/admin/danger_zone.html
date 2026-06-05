@@ -1,0 +1,318 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}Danger Zone · SHRISAMARTH Admin{% endblock %}
+
+{% block admin_content %}
+<div style="max-width:740px;">
+
+    <div style="margin-bottom:28px;">
+        <h1 class="serif" style="font-size:26px; color:var(--ruby);">⚠ Danger Zone</h1>
+        <p style="color:var(--muted); font-size:13px; margin-top:6px;">
+            Destructive and irreversible actions. All operations require your admin password. Proceed with extreme caution.
+        </p>
+    </div>
+
+    <!-- ── Site Suspension ─────────────────────────────────── -->
+    <div class="dz-card">
+        <div class="dz-card-header">
+            <div>
+                <div class="dz-card-title">Site Suspension</div>
+                <div class="dz-card-sub">Immediately blocks all customer access with a maintenance page. Staff and admins are unaffected.</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+                <span id="suspendStatus" class="dz-badge {{ 'badge-danger' if is_suspended else 'badge-ok' }}">
+                    {{ 'SUSPENDED' if is_suspended else 'LIVE' }}
+                </span>
+            </div>
+        </div>
+        <div style="margin-top:14px;">
+            <label class="form-label" style="font-size:12px;">Suspension message shown to visitors</label>
+            <textarea id="suspensionMsg" class="form-input" rows="2"
+                style="resize:vertical; font-size:13px;"
+                placeholder="We'll be right back — scheduled maintenance in progress.">{{ suspension_message or '' }}</textarea>
+        </div>
+        <div class="dz-actions">
+            {% if is_suspended %}
+            <button class="btn btn-ghost dz-btn-ok" onclick="dzAction('unsuspend')">▶ Restore site</button>
+            {% else %}
+            <button class="btn" style="background:var(--ruby);color:#fff;" onclick="dzPrompt('suspend', 'Suspend the site? All visitors will see the maintenance page until you restore it.')">⏸ Suspend site</button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ── Purge Seat Locks ────────────────────────────────── -->
+    <div class="dz-card">
+        <div class="dz-card-header">
+            <div>
+                <div class="dz-card-title">Purge Seat Locks</div>
+                <div class="dz-card-sub">Releases all temporary seat reservations held in active booking sessions. Use if seats are stuck "locked" without a booking.</div>
+            </div>
+            <span class="dz-badge badge-warn">{{ lock_count }} lock{{ 's' if lock_count != 1 else '' }}</span>
+        </div>
+        <div class="dz-actions">
+            <button class="btn btn-ghost" onclick="dzPrompt('purge-locks', 'Release all {{ lock_count }} seat lock(s)? Active booking sessions will lose their selected seats.')">🔓 Purge all locks</button>
+        </div>
+    </div>
+
+    <!-- ── Clear Activity Log ──────────────────────────────── -->
+    <div class="dz-card">
+        <div class="dz-card-header">
+            <div>
+                <div class="dz-card-title">Clear Activity Log</div>
+                <div class="dz-card-sub">Permanently deletes all activity log entries. Financial records are not affected.</div>
+            </div>
+            <span class="dz-badge badge-warn">{{ log_count }} entries</span>
+        </div>
+        <div class="dz-actions">
+            <button class="btn btn-ghost" onclick="dzPrompt('clear-logs', 'Delete all {{ log_count }} activity log entries? This cannot be undone.')">🗑 Clear logs</button>
+        </div>
+    </div>
+
+    <!-- ── Export Full Backup ──────────────────────────────── -->
+    <div class="dz-card">
+        <div class="dz-card-header">
+            <div>
+                <div class="dz-card-title">Export Data Backup</div>
+                <div class="dz-card-sub">Download a full CSV export of all bookings, voyages, and financial entries. Always export before any destructive action.</div>
+            </div>
+            <span class="dz-badge badge-ok">Safe</span>
+        </div>
+        <div class="dz-actions">
+            <a href="{{ url_for('admin.danger_backup') }}" class="btn btn-ghost">⬇ Download CSV backup</a>
+        </div>
+    </div>
+
+    <!-- ── Reset Database Content ─────────────────────────── -->
+    <div class="dz-card dz-card-critical">
+        <div class="dz-card-header">
+            <div>
+                <div class="dz-card-title" style="color:var(--ruby);">Reset Database Content</div>
+                <div class="dz-card-sub">
+                    Permanently deletes <strong>all bookings, voyages, buses, financial entries, seat locks, activity logs, newsletters, and abuse logs</strong>.
+                    Admin and staff user accounts are preserved. This cannot be undone.
+                </div>
+            </div>
+            <span class="dz-badge badge-danger">DESTRUCTIVE</span>
+        </div>
+        <div class="dz-actions">
+            <button class="btn" style="background:var(--ruby);color:#fff;opacity:0.9;"
+                onclick="dzResetPrompt()">💣 Reset all data</button>
+        </div>
+    </div>
+
+</div>
+
+<!-- ── Confirmation Modal ──────────────────────────────────── -->
+<div id="dzModal" class="dz-modal-backdrop hidden">
+    <div class="dz-modal">
+        <div id="dzModalTitle" style="font-size:17px; font-weight:600; margin-bottom:8px; color:var(--ink);"></div>
+        <div id="dzModalBody" style="font-size:13px; color:var(--muted); margin-bottom:20px; line-height:1.6;"></div>
+
+        <div id="dzConfirmPhraseWrap" style="display:none; margin-bottom:16px;">
+            <label class="form-label" style="font-size:12px;">Type <code id="dzConfirmPhrase" style="background:var(--cream-2);padding:2px 6px;border-radius:4px;"></code> to confirm</label>
+            <input type="text" id="dzConfirmPhraseInput" class="form-input" style="margin-top:6px;" placeholder="">
+        </div>
+
+        <div style="margin-bottom:20px;">
+            <label class="form-label" style="font-size:12px;">Admin password</label>
+            <input type="password" id="dzPassword" class="form-input" style="margin-top:6px;" placeholder="Your password" autocomplete="current-password">
+        </div>
+
+        <div id="dzModalError" style="color:var(--ruby); font-size:12px; margin-bottom:12px; display:none;"></div>
+
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+            <button class="btn btn-ghost" onclick="closeDzModal()">Cancel</button>
+            <button id="dzConfirmBtn" class="btn" style="background:var(--ruby);color:#fff;" onclick="submitDzAction()">Confirm</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<style>
+.dz-card {
+    background: var(--cream-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+}
+.dz-card-critical {
+    border-color: rgba(180,30,30,0.3);
+    background: rgba(180,30,30,0.04);
+}
+.dz-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+}
+.dz-card-title {
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--ink);
+    margin-bottom: 4px;
+}
+.dz-card-sub {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+    max-width: 480px;
+}
+.dz-actions {
+    margin-top: 16px;
+    display: flex;
+    gap: 10px;
+}
+.dz-badge {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    padding: 3px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.badge-ok   { background: rgba(40,160,80,0.15); color: #1a7a3a; }
+.badge-warn { background: rgba(200,118,26,0.15); color: var(--marigold); }
+.badge-danger { background: rgba(180,30,30,0.15); color: var(--ruby); }
+
+.dz-modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+}
+.dz-modal-backdrop.hidden { display: none; }
+.dz-modal {
+    background: var(--cream);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 28px;
+    width: 100%;
+    max-width: 420px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+}
+.dz-btn-ok { border-color: rgba(40,160,80,0.4); color: #1a7a3a; }
+</style>
+
+<script>
+const CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
+let _dzAction = '';
+
+function dzPrompt(action, message) {
+    _dzAction = action;
+    document.getElementById('dzModalTitle').textContent = confirmTitle(action);
+    document.getElementById('dzModalBody').textContent = message;
+    document.getElementById('dzConfirmPhraseWrap').style.display = 'none';
+    document.getElementById('dzPassword').value = '';
+    document.getElementById('dzModalError').style.display = 'none';
+    document.getElementById('dzModal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('dzPassword').focus(), 80);
+}
+
+function dzResetPrompt() {
+    _dzAction = 'reset-db';
+    document.getElementById('dzModalTitle').textContent = '💣 Reset all database content';
+    document.getElementById('dzModalBody').textContent =
+        'This will permanently delete ALL bookings, voyages, buses, financial entries, logs, and newsletters. Admin/staff accounts are kept. THIS CANNOT BE UNDONE.';
+    const phraseWrap = document.getElementById('dzConfirmPhraseWrap');
+    phraseWrap.style.display = 'block';
+    document.getElementById('dzConfirmPhrase').textContent = 'RESET EVERYTHING';
+    document.getElementById('dzConfirmPhraseInput').value = '';
+    document.getElementById('dzPassword').value = '';
+    document.getElementById('dzModalError').style.display = 'none';
+    document.getElementById('dzModal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('dzConfirmPhraseInput').focus(), 80);
+}
+
+function dzAction(action) {
+    // No-prompt actions (e.g. unsuspend already confirmed by context)
+    _dzAction = action;
+    document.getElementById('dzModalTitle').textContent = confirmTitle(action);
+    document.getElementById('dzModalBody').textContent = 'Enter your password to confirm.';
+    document.getElementById('dzConfirmPhraseWrap').style.display = 'none';
+    document.getElementById('dzPassword').value = '';
+    document.getElementById('dzModalError').style.display = 'none';
+    document.getElementById('dzModal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('dzPassword').focus(), 80);
+}
+
+function confirmTitle(action) {
+    return {
+        'suspend':      '⏸ Suspend site',
+        'unsuspend':    '▶ Restore site',
+        'purge-locks':  '🔓 Purge seat locks',
+        'clear-logs':   '🗑 Clear activity log',
+        'reset-db':     '💣 Reset all data',
+    }[action] || 'Confirm';
+}
+
+function closeDzModal() {
+    document.getElementById('dzModal').classList.add('hidden');
+}
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeDzModal();
+});
+
+async function submitDzAction() {
+    const password = document.getElementById('dzPassword').value.trim();
+    const errEl = document.getElementById('dzModalError');
+    errEl.style.display = 'none';
+
+    if (!password) {
+        errEl.textContent = 'Password is required.';
+        errEl.style.display = 'block';
+        return;
+    }
+
+    // Confirm phrase check for reset-db
+    if (_dzAction === 'reset-db') {
+        const phrase = document.getElementById('dzConfirmPhraseInput').value.trim();
+        if (phrase !== 'RESET EVERYTHING') {
+            errEl.textContent = 'Confirmation phrase does not match.';
+            errEl.style.display = 'block';
+            return;
+        }
+    }
+
+    // Also check for suspend: get message
+    const suspensionMsg = document.getElementById('suspensionMsg')?.value?.trim() || '';
+
+    const btn = document.getElementById('dzConfirmBtn');
+    btn.disabled = true;
+    btn.textContent = 'Working…';
+
+    try {
+        const body = { password };
+        if (_dzAction === 'suspend') body.message = suspensionMsg;
+
+        const res = await fetch(`/admin/danger/${_dzAction}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify(body),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+            errEl.textContent = data.message || 'Error. Please try again.';
+            errEl.style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = 'Confirm';
+            return;
+        }
+
+        closeDzModal();
+        window.location.reload();
+
+    } catch(e) {
+        errEl.textContent = 'Network error. Please try again.';
+        errEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Confirm';
+    }
+}
+</script>
+{% endblock %}

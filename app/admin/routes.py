@@ -1,12 +1,13 @@
 from datetime import datetime
 import io
+import csv as _csv_mod
 import calendar as cal_module
 from flask import Blueprint, render_template, redirect, url_for, flash, abort, request, jsonify, send_file
 from flask_login import login_required, current_user
 
 from app.extensions import db
 from app.models import (Bus, Voyage, Booking, User, ActivityLog, RouteStop, SiteContent,
-                        PasswordResetToken, AbuseLog, IpBan, Newsletter,
+                        PasswordResetToken, AbuseLog, IpBan, Newsletter, SeatLock, Notification,
                         FinancialEntry, EXPENSE_CATEGORIES, INCOME_CATEGORIES)
 from datetime import datetime, timedelta, date as date_type
 from sqlalchemy import func, and_
@@ -2038,6 +2039,175 @@ def finances_export():
     filename = f"shrisamarth_finances_{date_start.strftime('%b%Y').lower()}.csv"
     return send_file(
         _io.BytesIO(output.getvalue().encode('utf-8-sig')),
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
+# ============================================================
+# DANGER ZONE
+# ============================================================
+
+@admin_bp.route('/danger-zone')
+def danger_zone():
+    lock_count = SeatLock.query.count()
+    log_count = ActivityLog.query.count()
+    suspended_row = SiteContent.query.filter_by(section_key='site_suspended').first()
+    is_suspended = suspended_row and suspended_row.content_en == '1'
+    msg_row = SiteContent.query.filter_by(section_key='suspension_message').first()
+    suspension_message = msg_row.content_en if msg_row else ''
+    return render_template('admin/danger_zone.html',
+                           lock_count=lock_count,
+                           log_count=log_count,
+                           is_suspended=is_suspended,
+                           suspension_message=suspension_message)
+
+
+def _dz_check_password(data):
+    """Return (ok, error_response). ok=True means password verified."""
+    password = data.get('password', '')
+    if not password or not current_user.check_password(password):
+        return False, jsonify({'status': 'error', 'message': 'Incorrect password.'}), 403
+    return True, None, None
+
+
+@admin_bp.route('/danger/suspend', methods=['POST'])
+def danger_suspend():
+    data = request.get_json() or {}
+    ok, err, code = _dz_check_password(data)
+    if not ok:
+        return err, code
+    message = data.get('message', '').strip()
+    row = SiteContent.query.filter_by(section_key='site_suspended').first()
+    if not row:
+        row = SiteContent(section_key='site_suspended')
+        db.session.add(row)
+    row.content_en = '1'
+    msg_row = SiteContent.query.filter_by(section_key='suspension_message').first()
+    if not msg_row:
+        msg_row = SiteContent(section_key='suspension_message')
+        db.session.add(msg_row)
+    msg_row.content_en = message
+    db.session.commit()
+    log_activity('site_suspended', f'Site suspended by {current_user.username}. Message: {message or "(none)"}')
+    return jsonify({'status': 'success'})
+
+
+@admin_bp.route('/danger/unsuspend', methods=['POST'])
+def danger_unsuspend():
+    data = request.get_json() or {}
+    ok, err, code = _dz_check_password(data)
+    if not ok:
+        return err, code
+    row = SiteContent.query.filter_by(section_key='site_suspended').first()
+    if row:
+        row.content_en = '0'
+        db.session.commit()
+    log_activity('site_unsuspended', f'Site restored by {current_user.username}')
+    return jsonify({'status': 'success'})
+
+
+@admin_bp.route('/danger/purge-locks', methods=['POST'])
+def danger_purge_locks():
+    data = request.get_json() or {}
+    ok, err, code = _dz_check_password(data)
+    if not ok:
+        return err, code
+    count = SeatLock.query.count()
+    SeatLock.query.delete()
+    db.session.commit()
+    log_activity('locks_purged', f'All seat locks purged ({count}) by {current_user.username}')
+    return jsonify({'status': 'success', 'count': count})
+
+
+@admin_bp.route('/danger/clear-logs', methods=['POST'])
+def danger_clear_logs():
+    data = request.get_json() or {}
+    ok, err, code = _dz_check_password(data)
+    if not ok:
+        return err, code
+    count = ActivityLog.query.count()
+    ActivityLog.query.delete()
+    db.session.commit()
+    log_activity('log_cleared', f'Activity log cleared ({count} entries) by {current_user.username}')
+    return jsonify({'status': 'success', 'count': count})
+
+
+@admin_bp.route('/danger/reset-db', methods=['POST'])
+def danger_reset_db():
+    data = request.get_json() or {}
+    ok, err, code = _dz_check_password(data)
+    if not ok:
+        return err, code
+    # Delete in FK-safe order
+    try:
+        Notification.query.delete()
+    except Exception:
+        db.session.rollback()
+    SeatLock.query.delete()
+    # Bookings reference voyages
+    Booking.query.delete()
+    RouteStop.query.delete()
+    Voyage.query.delete()
+    Bus.query.delete()
+    FinancialEntry.query.delete()
+    ActivityLog.query.delete()
+    AbuseLog.query.delete()
+    IpBan.query.delete()
+    Newsletter.query.delete()
+    # Keep user accounts (admin/staff preserved)
+    User.query.filter(~User.role.in_(['admin', 'reservation', 'driver'])).delete(synchronize_session='fetch')
+    db.session.commit()
+    log_activity('db_reset', f'Full database content reset by {current_user.username}')
+    return jsonify({'status': 'success'})
+
+
+@admin_bp.route('/danger/backup')
+def danger_backup():
+    """Export a full CSV backup of bookings, voyages, and financial entries."""
+    output = io.StringIO()
+    writer = _csv_mod.writer(output)
+
+    # Bookings
+    writer.writerow(['=== BOOKINGS ==='])
+    writer.writerow(['ID', 'Voyage', 'Seat', 'Passenger', 'Phone', 'Email', 'Gender',
+                     'Boarding', 'Dropping', 'Fare', 'Advance Paid', 'Status', 'Created At'])
+    for b in Booking.query.order_by(Booking.created_at.desc()).all():
+        writer.writerow([
+            b.id,
+            f"{b.voyage.origin} → {b.voyage.destination} {b.voyage.departure_at.strftime('%d %b %Y %H:%M')}" if b.voyage else '',
+            b.seat_id, b.passenger_name, b.passenger_phone or '', b.passenger_email or '',
+            b.gender or '', b.boarding_point or '', b.dropping_point or '',
+            f"{float(b.fare or 0):.2f}", f"{float(b.advance_paid or 0):.2f}",
+            b.status, b.created_at.strftime('%Y-%m-%d %H:%M') if b.created_at else '',
+        ])
+
+    writer.writerow([])
+    writer.writerow(['=== VOYAGES ==='])
+    writer.writerow(['ID', 'Origin', 'Destination', 'Departure', 'Arrival', 'Bus', 'Base Fare', 'Status'])
+    for v in Voyage.query.order_by(Voyage.departure_at.desc()).all():
+        writer.writerow([
+            v.id, v.origin, v.destination,
+            v.departure_at.strftime('%Y-%m-%d %H:%M') if v.departure_at else '',
+            v.arrival_at.strftime('%Y-%m-%d %H:%M') if v.arrival_at else '',
+            v.bus.registration if v.bus else '', f"{float(v.base_fare or 0):.2f}", v.status,
+        ])
+
+    writer.writerow([])
+    writer.writerow(['=== FINANCIAL ENTRIES ==='])
+    writer.writerow(['ID', 'Type', 'Category', 'Amount', 'Description', 'Date', 'Created By'])
+    for e in FinancialEntry.query.order_by(FinancialEntry.entry_date.desc()).all():
+        writer.writerow([
+            e.id, e.entry_type, e.category, f"{float(e.amount):.2f}",
+            e.description or '', str(e.entry_date),
+            e.created_by.full_name if e.created_by else '',
+        ])
+
+    from datetime import datetime as _dt
+    filename = f"shrisamarth_backup_{_dt.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
+    return send_file(
+        io.BytesIO(output.getvalue().encode('utf-8-sig')),
         mimetype='text/csv',
         as_attachment=True,
         download_name=filename,

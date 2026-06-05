@@ -137,3 +137,26 @@ Booked seats display a small white silhouette icon (18×18 px) inside the colour
 **Legend**: Both staff `dashboard.html` and customer `book.html` legends use the actual icons inside coloured swatches instead of plain text M/F labels.
 
 **CSS**: `.seat.booked-m`, `.seat.booked-f`, `.seat.checked-in-m`, `.seat.checked-in-f` switch from `grid` to `flex column` layout so icon and seat-number stack vertically. `.seat-gender-icon` (18×18) and `.seat-num` (8 px font) added. `.legend-swatch-icon` added for legend use.
+
+## Danger Zone
+
+Admin-only destructive operations at `/admin/danger-zone`. All actions require admin password confirmation.
+
+### Features
+
+| Action | Description |
+|---|---|
+| **Site Suspension** | Toggle a maintenance mode for all customer pages. Visitors see a customisable "We'll be right back" page (503). Staff and admins bypass it. |
+| **Purge Seat Locks** | Release all temporary session seat locks. Use when seats are stuck "locked" with no active booking. |
+| **Clear Activity Log** | Permanently delete all `ActivityLog` entries. |
+| **Export Data Backup** | Download a full CSV of all bookings, voyages, and financial entries before any destructive action. |
+| **Reset Database Content** | Delete ALL bookings, voyages, buses, financial entries, logs, newsletters, abuse logs, and customer accounts. Admin/staff accounts are preserved. Requires typing `RESET EVERYTHING` + password. |
+
+### Implementation
+
+- **Suspension**: Stored in `SiteContent` with `section_key='site_suspended'` (`content_en='1'`/`'0'`) and `section_key='suspension_message'`. `customer_bp.before_request` checks this on every customer-facing route.
+- **Suspension page**: `app/templates/errors/suspended.html` — extends `base_customer.html`, served with HTTP 503.
+- **Routes**: `admin.danger_zone` (GET), `admin.danger_suspend`, `admin.danger_unsuspend`, `admin.danger_purge_locks`, `admin.danger_clear_logs`, `admin.danger_reset_db` (POST, JSON body with `password`), `admin.danger_backup` (GET).
+- **Password helper**: `_dz_check_password(data)` calls `current_user.check_password(password)` → 403 on failure.
+- **Sidebar**: "Danger Zone" link at the bottom in red, below Security.
+- **Reset-DB deletion order**: Notifications → SeatLocks → Bookings → RouteStops → Voyages → Buses → FinancialEntries → ActivityLogs → AbuseLogs → IpBans → Newsletters → Customer users.
