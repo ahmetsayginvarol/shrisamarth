@@ -160,12 +160,12 @@
                     <span data-i18n="dash.window">Window</span>
                 </span>
                 <span class="legend-item">
-                    <span class="legend-swatch booked-m"></span>
-                    <span>M</span>
+                    <span class="legend-swatch-icon booked-m"><img src="/static/icons/male.png" alt="M"></span>
+                    <span>Male</span>
                 </span>
                 <span class="legend-item">
-                    <span class="legend-swatch booked-f"></span>
-                    <span>F</span>
+                    <span class="legend-swatch-icon booked-f"><img src="/static/icons/female.png" alt="F"></span>
+                    <span>Female</span>
                 </span>
                 <span class="legend-item">
                     <span class="legend-swatch group"></span>
@@ -244,7 +244,7 @@
                         {% if b %}data-boarding="{{ b.boarding_point or '' }}" data-dropping="{{ b.dropping_point or '' }}"{% endif %}
                         {% if b and b.group_booking_code %}data-group="{{ b.group_booking_code }}"{% endif %}
                         title="{% if b %}{{ b.passenger_name }}{% if b.boarding_point %} | Boards: {{ b.boarding_point }}{% endif %}{% if b.dropping_point %} | Drops: {{ b.dropping_point }}{% endif %}{% if b.group_booking_code %} (group){% endif %}{% elif seat_id in locked_seats %}Being reserved by a customer{% else %}Seat {{ seat_id }}{% endif %}">
-                        {{ seat_id }}
+                        {% if b and b.gender in ('M', 'F') %}<img src="/static/icons/{{ 'male' if b.gender == 'M' else 'female' }}.png" class="seat-gender-icon" alt="{{ b.gender }}"><span class="seat-num">{{ seat_id }}</span>{% else %}{{ seat_id }}{% endif %}
                     </div>
                     {% if loop.index == 2 %}<div class="aisle"></div>{% endif %}
                 {% endfor %}
@@ -261,7 +261,7 @@
                         {% if b %}data-boarding="{{ b.boarding_point or '' }}" data-dropping="{{ b.dropping_point or '' }}"{% endif %}
                         {% if b and b.group_booking_code %}data-group="{{ b.group_booking_code }}"{% endif %}
                         title="{% if b %}{{ b.passenger_name }}{% if b.boarding_point %} | Boards: {{ b.boarding_point }}{% endif %}{% if b.dropping_point %} | Drops: {{ b.dropping_point }}{% endif %}{% if b.group_booking_code %} (group){% endif %}{% elif seat_id in locked_seats %}Being reserved by a customer{% else %}Seat {{ seat_id }}{% endif %}">
-                        {{ seat_id }}
+                        {% if b and b.gender in ('M', 'F') %}<img src="/static/icons/{{ 'male' if b.gender == 'M' else 'female' }}.png" class="seat-gender-icon" alt="{{ b.gender }}"><span class="seat-num">{{ seat_id }}</span>{% else %}{{ seat_id }}{% endif %}
                     </div>
                 {% endfor %}
             </div>

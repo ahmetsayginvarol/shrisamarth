@@ -119,6 +119,50 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
 .legend-swatch.checked-in { background: #15803d; border-color: #15803d; position: relative; }
 .legend-swatch.checked-in::after { content: '✓'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #fff; }
 
+/* ===== Gender icon inside booked seats ===== */
+.seat.booked-m,
+.seat.booked-f,
+.seat.checked-in-m,
+.seat.checked-in-f {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    position: relative;
+}
+.seat-gender-icon {
+    width: 18px;
+    height: 18px;
+    display: block;
+    opacity: 0.9;
+    pointer-events: none;
+    flex-shrink: 0;
+}
+.seat-num {
+    font-size: 8px;
+    display: block;
+    text-align: center;
+    color: white;
+    opacity: 0.8;
+    line-height: 1;
+    font-family: 'JetBrains Mono', monospace;
+}
+/* Legend mini icons */
+.legend-swatch-icon {
+    width: 11px;
+    height: 11px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid transparent;
+    flex-shrink: 0;
+}
+.legend-swatch-icon.booked-m { background: var(--male); border-color: var(--male); }
+.legend-swatch-icon.booked-f { background: var(--female); border-color: var(--female); }
+.legend-swatch-icon img { width: 7px; height: 7px; opacity: 0.95; display: block; }
+
 /* ===== Manifest check-in UI ===== */
 .checkin-btn { width: 36px; height: 36px; min-width: 44px; min-height: 44px; border-radius: 50%; border: 2px solid var(--line); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; color: var(--muted); transition: all 0.15s; flex-shrink: 0; padding: 0; }
 .checkin-btn:hover { border-color: var(--sage); color: var(--sage); }

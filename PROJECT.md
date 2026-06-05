@@ -123,3 +123,17 @@ Admin-only ledger at `/admin/finances`:
 Model: `FinancialEntry` — `entry_type` (income/expense), `category`, `amount`, `entry_date`, `description`, `created_by_id`
 
 Schema: `CREATE TABLE IF NOT EXISTS financial_entries` — auto-created via `_run_schema_migrations` on startup (PostgreSQL), or `db.create_all()` (SQLite).
+
+## Gender Silhouette Icons on Seat Map
+
+Booked seats display a small white silhouette icon (18×18 px) inside the coloured seat cell:
+- Blue seats (male booking): male silhouette (broad shoulders, rectangular torso, two legs)
+- Pink seats (female booking): female silhouette (narrow torso, triangular skirt, two legs)
+- Gender-neutral / unknown: no icon (seat number only, same as before)
+- Checked-in seats: same icon + CSS `::after` ✓ overlay still applied
+
+**Generated icons**: `app/static/icons/male.png` and `female.png` (64×64, RGBA, white fill on transparent background). Regenerate with `python3 scripts/generate_icons.py` (requires Pillow).
+
+**Legend**: Both staff `dashboard.html` and customer `book.html` legends use the actual icons inside coloured swatches instead of plain text M/F labels.
+
+**CSS**: `.seat.booked-m`, `.seat.booked-f`, `.seat.checked-in-m`, `.seat.checked-in-f` switch from `grid` to `flex column` layout so icon and seat-number stack vertically. `.seat-gender-icon` (18×18) and `.seat-num` (8 px font) added. `.legend-swatch-icon` added for legend use.
