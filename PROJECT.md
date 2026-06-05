@@ -104,3 +104,22 @@ returns "₹X – ₹Y" range or single "₹X". Used in admin voyage list and se
 
 **Schema migration**: `_run_schema_migrations()` in `app/__init__.py` adds
 `route_stops.fare_override` column to existing databases automatically on startup.
+
+## Financial Tracker
+
+Admin-only ledger at `/admin/finances`:
+
+- **Manual entries**: income and expense entries with category, amount, description, date
+- **Auto ticket sales**: advance_paid from bookings grouped by date — read-only 🎫 rows, no entry needed
+- **Categories** — Expense: Fuel, Driver Salary, Bus Maintenance, Toll & Permits, Office Rent, Staff Salary, Insurance, Cleaning, Food & Refreshments, Marketing, Other Expense
+  Income: Charter Booking, Parcel/Cargo, Advance Payment, Other Income
+- **Summary cards**: This Month Income / Expenses / Ticket Sales / Net Balance with % vs last month
+- **Filters**: Today / This Week / This Month / This Year / Custom date range; category, type, search
+- **Pagination**: 25 entries per page
+- **Monthly breakdown**: last 6 months, collapsible, category bar charts for income + expenses
+- **CSV export**: `/admin/finances/export` — filters respected, UTF-8 BOM for Excel compatibility
+- **Dashboard net profit card**: ticket revenue minus logged expenses, with link to finances
+
+Model: `FinancialEntry` — `entry_type` (income/expense), `category`, `amount`, `entry_date`, `description`, `created_by_id`
+
+Schema: `CREATE TABLE IF NOT EXISTS financial_entries` — auto-created via `_run_schema_migrations` on startup (PostgreSQL), or `db.create_all()` (SQLite).

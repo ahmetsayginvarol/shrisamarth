@@ -5,7 +5,9 @@ from flask import Blueprint, render_template, redirect, url_for, flash, abort, r
 from flask_login import login_required, current_user
 
 from app.extensions import db
-from app.models import Bus, Voyage, Booking, User, ActivityLog, RouteStop, SiteContent, PasswordResetToken, AbuseLog, IpBan, Newsletter
+from app.models import (Bus, Voyage, Booking, User, ActivityLog, RouteStop, SiteContent,
+                        PasswordResetToken, AbuseLog, IpBan, Newsletter,
+                        FinancialEntry, EXPENSE_CATEGORIES, INCOME_CATEGORIES)
 from datetime import datetime, timedelta, date as date_type
 from sqlalchemy import func, and_
 from app.admin.forms import BusForm, VoyageForm, UserForm, UserEditForm
@@ -116,6 +118,22 @@ def dashboard():
             'outstanding': v_outstanding,
         })
 
+    # Net profit for dashboard card (this month ticket revenue minus logged expenses)
+    month_start = today.replace(day=1)
+    month_ticket_rev = float(db.session.query(
+        func.coalesce(func.sum(Booking.advance_paid), 0)
+    ).filter(
+        Booking.status == 'confirmed',
+        func.date(Booking.created_at) >= month_start,
+    ).scalar() or 0)
+    month_expenses = float(db.session.query(
+        func.coalesce(func.sum(FinancialEntry.amount), 0)
+    ).filter(
+        FinancialEntry.entry_type == 'expense',
+        FinancialEntry.entry_date >= month_start,
+    ).scalar() or 0)
+    month_net_profit = month_ticket_rev - month_expenses
+
     return render_template('admin/dashboard.html',
         total_revenue=total_revenue,
         total_collected=total_collected,
@@ -127,6 +145,9 @@ def dashboard():
         upcoming=upcoming,
         voyage_stats=voyage_stats,
         recent=recent,
+        month_ticket_rev=month_ticket_rev,
+        month_expenses=month_expenses,
+        month_net_profit=month_net_profit,
     )
 
 # ============================================================
@@ -1652,3 +1673,372 @@ def newsletter_duplicate(nl_id):
     db.session.commit()
     flash('Duplicated as new draft.', 'success')
     return redirect(url_for('admin.newsletter', draft=copy.id))
+
+
+# ============================================================
+# FINANCIAL TRACKER
+# ============================================================
+
+import csv
+import io as _io
+from datetime import date as _date
+from calendar import month_abbr
+
+_ALL_CATEGORIES = EXPENSE_CATEGORIES + INCOME_CATEGORIES
+
+
+def _date_range(period, custom_start=None, custom_end=None):
+    today = _date.today()
+    if period == 'today':
+        return today, today
+    if period == 'week':
+        return today - timedelta(days=today.weekday()), today
+    if period == 'year':
+        return today.replace(month=1, day=1), today
+    if period == 'custom' and custom_start and custom_end:
+        return custom_start, custom_end
+    # default: this month
+    return today.replace(day=1), today
+
+
+def _ticket_sales_by_date(date_start, date_end, type_filter, category_filter, search):
+    """Synthetic read-only ticket-sales rows derived from bookings."""
+    if type_filter == 'expense':
+        return []
+    if category_filter and category_filter != 'Ticket Sales':
+        return []
+    q = (db.session.query(
+            func.date(Booking.created_at).label('entry_date'),
+            func.sum(Booking.advance_paid).label('total'),
+            func.count(Booking.id).label('cnt'),
+         )
+         .filter(Booking.status == 'confirmed', Booking.advance_paid > 0)
+         .filter(func.date(Booking.created_at) >= date_start)
+         .filter(func.date(Booking.created_at) <= date_end)
+         .group_by(func.date(Booking.created_at))
+         .all())
+    entries = []
+    for r in q:
+        if float(r.total or 0) <= 0:
+            continue
+        desc = f'{r.cnt} booking(s)'
+        if search and search.lower() not in desc.lower() and 'ticket' not in search.lower():
+            continue
+        entries.append({
+            'id': None, 'entry_type': 'income', 'category': 'Ticket Sales',
+            'amount': float(r.total), 'description': desc,
+            'entry_date': r.entry_date, 'created_by': None, 'is_auto': True,
+        })
+    return entries
+
+
+def _this_month_summary():
+    today = _date.today()
+    ms = today.replace(day=1)
+    # last month
+    if ms.month == 1:
+        lms = ms.replace(year=ms.year - 1, month=12)
+    else:
+        lms = ms.replace(month=ms.month - 1)
+    lme = ms - timedelta(days=1)
+
+    def _month_income(start, end):
+        return float(db.session.query(func.coalesce(func.sum(FinancialEntry.amount), 0))
+                     .filter(FinancialEntry.entry_type == 'income',
+                             FinancialEntry.entry_date >= start,
+                             FinancialEntry.entry_date <= end).scalar() or 0)
+
+    def _month_expense(start, end):
+        return float(db.session.query(func.coalesce(func.sum(FinancialEntry.amount), 0))
+                     .filter(FinancialEntry.entry_type == 'expense',
+                             FinancialEntry.entry_date >= start,
+                             FinancialEntry.entry_date <= end).scalar() or 0)
+
+    def _month_tickets(start, end):
+        r = (db.session.query(
+                func.coalesce(func.sum(Booking.advance_paid), 0).label('total'),
+                func.count(Booking.id).label('cnt'))
+             .filter(Booking.status == 'confirmed', Booking.advance_paid > 0,
+                     func.date(Booking.created_at) >= start,
+                     func.date(Booking.created_at) <= end)
+             .first())
+        return float(r.total or 0), int(r.cnt or 0)
+
+    cur_income = _month_income(ms, today)
+    cur_expense = _month_expense(ms, today)
+    cur_tickets, cur_ticket_count = _month_tickets(ms, today)
+    last_income = _month_income(lms, lme)
+    last_expense = _month_expense(lms, lme)
+    last_tickets, _ = _month_tickets(lms, lme)
+
+    def _pct_change(cur, prev):
+        if prev == 0:
+            return None
+        return round((cur - prev) / prev * 100)
+
+    return {
+        'income': cur_income,
+        'expense': cur_expense,
+        'tickets': cur_tickets,
+        'ticket_count': cur_ticket_count,
+        'balance': cur_income + cur_tickets - cur_expense,
+        'income_pct': _pct_change(cur_income, last_income),
+        'expense_pct': _pct_change(cur_expense, last_expense),
+        'tickets_pct': _pct_change(cur_tickets, last_tickets),
+    }
+
+
+def _monthly_breakdown(n_months=6):
+    today = _date.today()
+    rows = []
+    for i in range(n_months):
+        if today.month - i < 1:
+            yr = today.year - 1
+            mo = 12 + (today.month - i)
+        else:
+            yr = today.year
+            mo = today.month - i
+        ms = _date(yr, mo, 1)
+        import calendar
+        last_day = calendar.monthrange(yr, mo)[1]
+        me = _date(yr, mo, last_day)
+
+        # Manual income by category
+        inc_cats = (db.session.query(FinancialEntry.category,
+                                     func.sum(FinancialEntry.amount).label('total'))
+                    .filter(FinancialEntry.entry_type == 'income',
+                            FinancialEntry.entry_date >= ms,
+                            FinancialEntry.entry_date <= me)
+                    .group_by(FinancialEntry.category).all())
+        # Ticket sales
+        ts = float(db.session.query(func.coalesce(func.sum(Booking.advance_paid), 0))
+                   .filter(Booking.status == 'confirmed', Booking.advance_paid > 0,
+                           func.date(Booking.created_at) >= ms,
+                           func.date(Booking.created_at) <= me).scalar() or 0)
+
+        # Expense by category
+        exp_cats = (db.session.query(FinancialEntry.category,
+                                     func.sum(FinancialEntry.amount).label('total'))
+                    .filter(FinancialEntry.entry_type == 'expense',
+                            FinancialEntry.entry_date >= ms,
+                            FinancialEntry.entry_date <= me)
+                    .group_by(FinancialEntry.category).all())
+
+        inc_total = sum(float(c.total) for c in inc_cats) + ts
+        exp_total = sum(float(c.total) for c in exp_cats)
+
+        income_breakdown = [{'category': 'Ticket Sales', 'amount': ts, 'is_auto': True}] if ts > 0 else []
+        income_breakdown += [{'category': c.category, 'amount': float(c.total), 'is_auto': False}
+                              for c in inc_cats]
+        expense_breakdown = [{'category': c.category, 'amount': float(c.total)}
+                              for c in sorted(exp_cats, key=lambda x: -float(x.total))]
+
+        rows.append({
+            'label': f'{ms.strftime("%B")} {yr}',
+            'month_key': f'{yr}-{mo:02d}',
+            'income': inc_total,
+            'expense': exp_total,
+            'net': inc_total - exp_total,
+            'income_breakdown': income_breakdown,
+            'expense_breakdown': expense_breakdown,
+            'exp_max': max((float(c.total) for c in exp_cats), default=1),
+        })
+    return rows
+
+
+@admin_bp.route('/finances', methods=['GET', 'POST'])
+def finances():
+    today = _date.today()
+
+    if request.method == 'POST':
+        action = request.form.get('action', 'add')
+        if action == 'add':
+            entry_type = request.form.get('entry_type', 'expense')
+            category = request.form.get('category', '').strip()
+            try:
+                amount = float(request.form.get('amount', 0))
+            except ValueError:
+                flash('Invalid amount.', 'error')
+                return redirect(url_for('admin.finances'))
+            if amount <= 0:
+                flash('Amount must be positive.', 'error')
+                return redirect(url_for('admin.finances'))
+            description = request.form.get('description', '').strip() or None
+            try:
+                entry_date = _date.fromisoformat(request.form.get('entry_date', str(today)))
+            except ValueError:
+                entry_date = today
+            entry = FinancialEntry(
+                entry_type=entry_type,
+                category=category,
+                amount=amount,
+                description=description,
+                entry_date=entry_date,
+                created_by_id=current_user.id,
+            )
+            db.session.add(entry)
+            db.session.commit()
+            log_activity('finance_add', f'Added {entry_type} entry: {category} ₹{amount:.0f}')
+            flash('Entry added.', 'success')
+        return redirect(url_for('admin.finances',
+                                period=request.args.get('period', 'month'),
+                                category=request.args.get('category', ''),
+                                type=request.args.get('type', ''),
+                                q=request.args.get('q', '')))
+
+    period = request.args.get('period', 'month')
+    category_filter = request.args.get('category', '')
+    type_filter = request.args.get('type', '')
+    search = request.args.get('q', '').strip()
+    custom_start_raw = request.args.get('date_start', '')
+    custom_end_raw = request.args.get('date_end', '')
+    custom_start = _date.fromisoformat(custom_start_raw) if custom_start_raw else None
+    custom_end = _date.fromisoformat(custom_end_raw) if custom_end_raw else None
+    page = max(1, int(request.args.get('page', 1)))
+    per_page = 25
+
+    date_start, date_end = _date_range(period, custom_start, custom_end)
+
+    # Manual entries
+    q = FinancialEntry.query.filter(
+        FinancialEntry.entry_date >= date_start,
+        FinancialEntry.entry_date <= date_end,
+    )
+    if category_filter and category_filter != 'Ticket Sales':
+        q = q.filter(FinancialEntry.category == category_filter)
+    if type_filter:
+        q = q.filter(FinancialEntry.entry_type == type_filter)
+    if search:
+        q = q.filter(FinancialEntry.description.ilike(f'%{search}%'))
+    manual = q.order_by(FinancialEntry.entry_date.desc(), FinancialEntry.created_at.desc()).all()
+
+    manual_dicts = [{
+        'id': e.id, 'entry_type': e.entry_type, 'category': e.category,
+        'amount': float(e.amount), 'description': e.description,
+        'entry_date': e.entry_date,
+        'created_by': e.created_by.full_name if e.created_by else '—',
+        'is_auto': False,
+    } for e in manual]
+
+    # Synthetic ticket sales (if not filtering to exclude income/other category)
+    auto = _ticket_sales_by_date(date_start, date_end, type_filter, category_filter, search)
+
+    # Merge and sort
+    all_entries = sorted(manual_dicts + auto, key=lambda e: e['entry_date'], reverse=True)
+
+    total_pages = max(1, (len(all_entries) + per_page - 1) // per_page)
+    page = min(page, total_pages)
+    paginated = all_entries[(page - 1) * per_page: page * per_page]
+
+    summary = _this_month_summary()
+    monthly = _monthly_breakdown(6)
+
+    all_category_options = ['Ticket Sales'] + INCOME_CATEGORIES + EXPENSE_CATEGORIES
+
+    return render_template('admin/finances.html',
+        entries=paginated,
+        page=page,
+        total_pages=total_pages,
+        total_entries=len(all_entries),
+        summary=summary,
+        monthly=monthly,
+        period=period,
+        category_filter=category_filter,
+        type_filter=type_filter,
+        search=search,
+        custom_start=custom_start_raw,
+        custom_end=custom_end_raw,
+        date_start=date_start,
+        date_end=date_end,
+        today=today,
+        expense_categories=EXPENSE_CATEGORIES,
+        income_categories=INCOME_CATEGORIES,
+        all_category_options=all_category_options,
+    )
+
+
+@admin_bp.route('/finances/<int:entry_id>/edit', methods=['POST'])
+def finances_edit(entry_id):
+    entry = FinancialEntry.query.get_or_404(entry_id)
+    data = request.get_json() or {}
+    try:
+        amount = float(data.get('amount', entry.amount))
+    except (ValueError, TypeError):
+        return jsonify({'status': 'error', 'message': 'Invalid amount'}), 400
+    if amount <= 0:
+        return jsonify({'status': 'error', 'message': 'Amount must be positive'}), 400
+    entry.amount = amount
+    entry.category = data.get('category', entry.category)
+    entry.description = data.get('description', entry.description) or None
+    raw_date = data.get('entry_date', '')
+    if raw_date:
+        try:
+            entry.entry_date = _date.fromisoformat(raw_date)
+        except ValueError:
+            pass
+    db.session.commit()
+    log_activity('finance_edit', f'Edited entry #{entry_id}: {entry.category} ₹{float(entry.amount):.0f}')
+    return jsonify({'status': 'ok', 'amount': float(entry.amount),
+                    'category': entry.category, 'description': entry.description or ''})
+
+
+@admin_bp.route('/finances/<int:entry_id>/delete', methods=['POST'])
+def finances_delete(entry_id):
+    entry = FinancialEntry.query.get_or_404(entry_id)
+    db.session.delete(entry)
+    db.session.commit()
+    log_activity('finance_delete', f'Deleted entry #{entry_id}: {entry.category} ₹{float(entry.amount):.0f}')
+    return jsonify({'status': 'ok'})
+
+
+@admin_bp.route('/finances/export')
+def finances_export():
+    period = request.args.get('period', 'month')
+    category_filter = request.args.get('category', '')
+    type_filter = request.args.get('type', '')
+    search = request.args.get('q', '').strip()
+    custom_start_raw = request.args.get('date_start', '')
+    custom_end_raw = request.args.get('date_end', '')
+    custom_start = _date.fromisoformat(custom_start_raw) if custom_start_raw else None
+    custom_end = _date.fromisoformat(custom_end_raw) if custom_end_raw else None
+
+    date_start, date_end = _date_range(period, custom_start, custom_end)
+
+    q = FinancialEntry.query.filter(
+        FinancialEntry.entry_date >= date_start,
+        FinancialEntry.entry_date <= date_end,
+    )
+    if category_filter and category_filter != 'Ticket Sales':
+        q = q.filter(FinancialEntry.category == category_filter)
+    if type_filter:
+        q = q.filter(FinancialEntry.entry_type == type_filter)
+    if search:
+        q = q.filter(FinancialEntry.description.ilike(f'%{search}%'))
+    manual = q.order_by(FinancialEntry.entry_date.desc()).all()
+
+    manual_dicts = [{
+        'entry_date': e.entry_date, 'entry_type': e.entry_type, 'category': e.category,
+        'description': e.description or '', 'amount': float(e.amount), 'is_auto': False,
+    } for e in manual]
+    auto = _ticket_sales_by_date(date_start, date_end, type_filter, category_filter, search)
+    all_rows = sorted(manual_dicts + auto, key=lambda e: e['entry_date'], reverse=True)
+
+    output = _io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Date', 'Type', 'Category', 'Description', 'Amount'])
+    for r in all_rows:
+        writer.writerow([
+            r['entry_date'].strftime('%Y-%m-%d') if hasattr(r['entry_date'], 'strftime') else str(r['entry_date']),
+            r['entry_type'].capitalize(),
+            r['category'],
+            r['description'],
+            f"{r['amount']:.2f}",
+        ])
+
+    filename = f"shrisamarth_finances_{date_start.strftime('%b%Y').lower()}.csv"
+    return send_file(
+        _io.BytesIO(output.getvalue().encode('utf-8-sig')),
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name=filename,
+    )

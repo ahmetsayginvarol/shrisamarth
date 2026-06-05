@@ -400,6 +400,39 @@ class IpBan(db.Model):
 
 
 # ============================================================
+# FINANCIAL TRACKER
+# ============================================================
+
+EXPENSE_CATEGORIES = [
+    'Fuel', 'Driver Salary', 'Bus Maintenance', 'Toll & Permits',
+    'Office Rent', 'Staff Salary', 'Insurance', 'Cleaning',
+    'Food & Refreshments', 'Marketing', 'Other Expense',
+]
+
+INCOME_CATEGORIES = [
+    'Charter Booking', 'Parcel/Cargo', 'Advance Payment', 'Other Income',
+]
+
+
+class FinancialEntry(db.Model):
+    __tablename__ = 'financial_entries'
+
+    id = db.Column(db.Integer, primary_key=True)
+    entry_type = db.Column(db.String(10), nullable=False)   # 'income' or 'expense'
+    category = db.Column(db.String(50), nullable=False)
+    amount = db.Column(db.Numeric(10, 2), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    entry_date = db.Column(db.Date, nullable=False)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    created_by = db.relationship('User', foreign_keys=[created_by_id])
+
+    def __repr__(self):
+        return f'<FinancialEntry {self.entry_type} {self.category} {self.amount}>'
+
+
+# ============================================================
     # SEAT LAYOUT HELPERS
     # ============================================================
 

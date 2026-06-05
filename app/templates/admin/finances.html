@@ -1,0 +1,557 @@
+{% extends 'admin/base_admin.html' %}
+{% block admin_content %}
+<style>
+.fin-summary { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:28px; }
+.fin-card { background:var(--cream-2); border:1px solid var(--line); border-radius:10px; padding:20px; position:relative; overflow:hidden; }
+.fin-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:var(--accent-color,var(--marigold)); }
+.fin-card-label { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px; }
+.fin-card-value { font-size:26px; font-weight:700; font-family:'Cormorant Garamond',serif; color:var(--ink); line-height:1.1; margin-bottom:4px; }
+.fin-card-sub { font-size:12px; color:var(--muted); }
+.fin-card-pct { display:inline-block; font-size:11px; font-weight:600; padding:2px 7px; border-radius:20px; margin-top:4px; }
+.fin-card-pct.pos { background:rgba(122,154,90,0.12); color:var(--sage); }
+.fin-card-pct.neg { background:rgba(168,50,50,0.1); color:var(--ruby); }
+
+.fin-add-form { background:var(--cream-2); border:1px solid var(--line); border-radius:10px; padding:20px; margin-bottom:24px; }
+.fin-add-row { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+.fin-add-row .form-group { margin:0; flex:1; min-width:120px; }
+.fin-add-row .form-group.wide { flex:2; min-width:200px; }
+.fin-add-row .form-label { font-size:11px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px; }
+
+.fin-filter-bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:16px; }
+.fin-filter-bar select, .fin-filter-bar input[type="text"] { padding:7px 10px; border:1px solid var(--line); border-radius:6px; font-size:13px; background:var(--cream); color:var(--ink); min-width:120px; }
+.fin-filter-bar input[type="text"] { min-width:160px; }
+.fin-date-btns { display:flex; gap:4px; flex-wrap:wrap; }
+.fin-date-btn { padding:6px 12px; font-size:12px; border:1px solid var(--line); border-radius:6px; background:var(--cream); color:var(--ink-2); cursor:pointer; text-decoration:none; transition:all .15s; }
+.fin-date-btn:hover, .fin-date-btn.active { background:var(--ink); color:var(--cream); border-color:var(--ink); }
+
+.fin-table { width:100%; border-collapse:collapse; font-size:13px; }
+.fin-table th { padding:10px 12px; text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:600; border-bottom:2px solid var(--line); white-space:nowrap; }
+.fin-table td { padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:middle; }
+.fin-table tr:last-child td { border-bottom:none; }
+.fin-table tr:hover td { background:var(--cream-2); }
+.fin-row-income td:first-child { border-left:3px solid var(--sage); }
+.fin-row-expense td:first-child { border-left:3px solid var(--ruby); }
+.fin-row-auto td:first-child { border-left:3px solid var(--marigold); }
+.fin-amount-income { color:var(--sage); font-weight:600; }
+.fin-amount-expense { color:var(--ruby); font-weight:600; }
+.fin-badge-auto { display:inline-flex; align-items:center; gap:3px; font-size:11px; background:rgba(200,118,26,0.1); color:var(--marigold); padding:2px 7px; border-radius:20px; font-weight:600; }
+.fin-type-pill { font-size:11px; font-weight:600; padding:3px 8px; border-radius:20px; }
+.fin-type-income { background:rgba(122,154,90,0.12); color:var(--sage); }
+.fin-type-expense { background:rgba(168,50,50,0.1); color:var(--ruby); }
+
+.fin-monthly { margin-top:32px; }
+.fin-month-block { border:1px solid var(--line); border-radius:10px; margin-bottom:10px; overflow:hidden; }
+.fin-month-header { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; cursor:pointer; user-select:none; background:var(--cream-2); }
+.fin-month-header:hover { background:var(--line); }
+.fin-month-title { font-weight:600; font-size:15px; }
+.fin-month-net { font-weight:700; font-size:15px; }
+.fin-month-body { padding:16px 18px; display:none; }
+.fin-month-block.open .fin-month-body { display:block; }
+.fin-month-block.open .fin-month-chevron { transform:rotate(90deg); }
+.fin-month-chevron { transition:transform .2s; color:var(--muted); }
+.fin-cat-bar-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; font-size:13px; }
+.fin-cat-bar-label { width:160px; flex-shrink:0; color:var(--ink-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.fin-cat-bar-track { flex:1; height:8px; background:var(--line); border-radius:4px; }
+.fin-cat-bar-fill { height:8px; border-radius:4px; transition:width .4s; }
+.fin-cat-bar-amount { width:80px; text-align:right; color:var(--muted); font-size:12px; flex-shrink:0; }
+.fin-cat-pct { width:36px; text-align:right; color:var(--muted); font-size:11px; flex-shrink:0; }
+
+.fin-edit-btn, .fin-del-btn { background:none; border:1px solid var(--line); border-radius:5px; padding:4px 8px; font-size:12px; cursor:pointer; transition:all .15s; }
+.fin-edit-btn:hover { background:var(--cream-2); border-color:var(--marigold); color:var(--marigold); }
+.fin-del-btn:hover { background:rgba(168,50,50,0.08); border-color:var(--ruby); color:var(--ruby); }
+
+.fin-pagination { display:flex; gap:6px; align-items:center; justify-content:center; margin-top:20px; }
+.fin-page-btn { padding:6px 12px; border:1px solid var(--line); border-radius:6px; font-size:13px; text-decoration:none; color:var(--ink-2); background:var(--cream); }
+.fin-page-btn:hover { background:var(--cream-2); }
+.fin-page-btn.active { background:var(--ink); color:var(--cream); border-color:var(--ink); font-weight:600; }
+.fin-page-btn.disabled { opacity:.4; pointer-events:none; }
+
+@media(max-width:900px) {
+  .fin-summary { grid-template-columns:1fr 1fr; }
+  .fin-add-row { flex-direction:column; }
+  .fin-add-row .form-group { min-width:unset; width:100%; }
+  .fin-filter-bar { flex-direction:column; align-items:stretch; }
+}
+@media(max-width:500px) {
+  .fin-summary { grid-template-columns:1fr; }
+}
+</style>
+
+<div class="page-header">
+    <div>
+        <div class="page-title serif" data-i18n="nav.finances">Finances</div>
+        <div class="page-subtitle">Income &amp; expense tracker</div>
+    </div>
+    <a href="{{ url_for('admin.finances_export',
+                period=period, category=category_filter,
+                type=type_filter, q=search,
+                date_start=custom_start, date_end=custom_end) }}"
+       class="btn btn-ghost" style="width:auto;" data-i18n="fin.export_csv">⬇ Export CSV</a>
+</div>
+
+<!-- ============================================================
+     SUMMARY CARDS
+     ============================================================ -->
+<div class="fin-summary">
+    <!-- Income -->
+    <div class="fin-card" style="--accent-color:var(--sage);">
+        <div class="fin-card-label" data-i18n="fin.income">This Month · Income</div>
+        <div class="fin-card-value">₹ {{ '{:,.0f}'.format(summary.income) }}</div>
+        <div class="fin-card-sub">manual entries</div>
+        {% if summary.income_pct is not none %}
+        <div class="fin-card-pct {{ 'pos' if summary.income_pct >= 0 else 'neg' }}">
+            {{ '+' if summary.income_pct >= 0 else '' }}{{ summary.income_pct }}% vs last month
+        </div>
+        {% endif %}
+    </div>
+    <!-- Expenses -->
+    <div class="fin-card" style="--accent-color:var(--ruby);">
+        <div class="fin-card-label" data-i18n="fin.expense">This Month · Expenses</div>
+        <div class="fin-card-value" style="color:var(--ruby);">₹ {{ '{:,.0f}'.format(summary.expense) }}</div>
+        <div class="fin-card-sub">logged expenses</div>
+        {% if summary.expense_pct is not none %}
+        <div class="fin-card-pct {{ 'neg' if summary.expense_pct >= 0 else 'pos' }}">
+            {{ '+' if summary.expense_pct >= 0 else '' }}{{ summary.expense_pct }}% vs last month
+        </div>
+        {% endif %}
+    </div>
+    <!-- Ticket Sales -->
+    <div class="fin-card" style="--accent-color:var(--marigold);">
+        <div class="fin-card-label" data-i18n="fin.ticket_sales">Ticket Sales · This Month</div>
+        <div class="fin-card-value" style="color:var(--marigold);">₹ {{ '{:,.0f}'.format(summary.tickets) }}</div>
+        <div class="fin-card-sub">{{ summary.ticket_count }} booking(s)</div>
+        {% if summary.tickets_pct is not none %}
+        <div class="fin-card-pct {{ 'pos' if summary.tickets_pct >= 0 else 'neg' }}">
+            {{ '+' if summary.tickets_pct >= 0 else '' }}{{ summary.tickets_pct }}% vs last month
+        </div>
+        {% endif %}
+    </div>
+    <!-- Net Balance -->
+    <div class="fin-card" style="--accent-color:{{ 'var(--sage)' if summary.balance >= 0 else 'var(--ruby)' }};">
+        <div class="fin-card-label" data-i18n="fin.balance">Balance · This Month</div>
+        <div class="fin-card-value" style="color:{{ 'var(--sage)' if summary.balance >= 0 else 'var(--ruby)' }};">
+            ₹ {{ '{:,.0f}'.format(summary.balance|abs) }}
+        </div>
+        <div class="fin-card-sub">
+            {% if summary.balance >= 0 %}
+            <span style="color:var(--sage);" data-i18n="fin.profit">✓ Profit</span>
+            {% else %}
+            <span style="color:var(--ruby);" data-i18n="fin.loss">⚠ Loss</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     ADD ENTRY FORM
+     ============================================================ -->
+<div class="fin-add-form">
+    <div style="font-size:13px; font-weight:600; margin-bottom:12px; color:var(--ink-2);" data-i18n="fin.add_entry">+ Add Entry</div>
+    <form method="POST" action="{{ url_for('admin.finances') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="add">
+        <div class="fin-add-row">
+            <!-- Type -->
+            <div class="form-group" style="min-width:130px; max-width:150px;">
+                <label class="form-label" data-i18n="fin.type">Type</label>
+                <div class="gender-choice" style="gap:8px;">
+                    <label class="gender-btn" style="flex:1; justify-content:center;">
+                        <input type="radio" name="entry_type" value="income" id="typeIncome" checked onchange="updateCategoryOptions()">
+                        <span class="gender-dot" style="background:var(--sage);border-color:var(--sage);"></span>
+                        <span data-i18n="fin.income">Income</span>
+                    </label>
+                    <label class="gender-btn" style="flex:1; justify-content:center;">
+                        <input type="radio" name="entry_type" value="expense" id="typeExpense" onchange="updateCategoryOptions()">
+                        <span class="gender-dot" style="background:var(--ruby);border-color:var(--ruby);"></span>
+                        <span data-i18n="fin.expense">Expense</span>
+                    </label>
+                </div>
+            </div>
+            <!-- Category -->
+            <div class="form-group" style="min-width:150px;">
+                <label class="form-label" data-i18n="fin.category">Category</label>
+                <select name="category" id="addCategory" class="form-select" required>
+                    <optgroup label="Income" id="optIncome">
+                        {% for c in income_categories %}
+                        <option value="{{ c }}">{{ c }}</option>
+                        {% endfor %}
+                    </optgroup>
+                    <optgroup label="Expense" id="optExpense" style="display:none;">
+                        {% for c in expense_categories %}
+                        <option value="{{ c }}">{{ c }}</option>
+                        {% endfor %}
+                    </optgroup>
+                </select>
+            </div>
+            <!-- Amount -->
+            <div class="form-group" style="min-width:100px; max-width:140px;">
+                <label class="form-label">₹ <span data-i18n="fin.amount">Amount</span></label>
+                <input type="number" name="amount" class="form-input" placeholder="0" min="1" step="1" required style="text-align:right;">
+            </div>
+            <!-- Description -->
+            <div class="form-group wide">
+                <label class="form-label" data-i18n="fin.description">Description (optional)</label>
+                <input type="text" name="description" class="form-input" placeholder="Notes, invoice ref, etc.">
+            </div>
+            <!-- Date -->
+            <div class="form-group" style="min-width:140px; max-width:160px;">
+                <label class="form-label">Date</label>
+                <input type="date" name="entry_date" class="form-input" value="{{ today.isoformat() }}" required>
+            </div>
+            <!-- Submit -->
+            <div class="form-group" style="min-width:100px; max-width:130px;">
+                <label class="form-label" style="visibility:hidden;">.</label>
+                <button type="submit" class="btn btn-primary" style="width:100%;" data-i18n="fin.add_entry">+ Add</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- ============================================================
+     FILTER BAR + TABLE
+     ============================================================ -->
+<div class="fin-filter-bar">
+    <div class="fin-date-btns">
+        {% for lbl, val in [('Today','today'),('This Week','week'),('This Month','month'),('This Year','year')] %}
+        <a href="{{ url_for('admin.finances', period=val, category=category_filter, type=type_filter, q=search) }}"
+           class="fin-date-btn {{ 'active' if period == val }}" data-i18n="{{ 'fin.today' if val=='today' else 'fin.this_week' if val=='week' else 'fin.this_month' if val=='month' else 'fin.this_year' }}">{{ lbl }}</a>
+        {% endfor %}
+        <a href="#" class="fin-date-btn {{ 'active' if period == 'custom' }}" onclick="toggleCustomDate(event)">Custom</a>
+    </div>
+
+    <form method="GET" action="{{ url_for('admin.finances') }}" id="filterForm" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+        <input type="hidden" name="period" value="{{ period }}">
+        {% if period == 'custom' %}
+        <input type="date" name="date_start" value="{{ custom_start }}" class="form-input" style="max-width:150px;">
+        <input type="date" name="date_end" value="{{ custom_end }}" class="form-input" style="max-width:150px;">
+        {% endif %}
+        <select name="category" class="form-select" style="min-width:160px;" onchange="this.form.submit()">
+            <option value="">All Categories</option>
+            <option value="Ticket Sales" {{ 'selected' if category_filter == 'Ticket Sales' }}>🎫 Ticket Sales</option>
+            <optgroup label="Income">
+                {% for c in income_categories %}
+                <option value="{{ c }}" {{ 'selected' if category_filter == c }}>{{ c }}</option>
+                {% endfor %}
+            </optgroup>
+            <optgroup label="Expenses">
+                {% for c in expense_categories %}
+                <option value="{{ c }}" {{ 'selected' if category_filter == c }}>{{ c }}</option>
+                {% endfor %}
+            </optgroup>
+        </select>
+        <select name="type" class="form-select" style="min-width:120px;" onchange="this.form.submit()">
+            <option value="">All Types</option>
+            <option value="income" {{ 'selected' if type_filter == 'income' }} data-i18n="fin.income">Income</option>
+            <option value="expense" {{ 'selected' if type_filter == 'expense' }} data-i18n="fin.expense">Expense</option>
+        </select>
+        <input type="text" name="q" value="{{ search }}" placeholder="Search…" class="form-input" style="min-width:160px;"
+               onkeydown="if(event.key==='Enter'){this.form.submit();}">
+        <button type="submit" class="btn btn-ghost" style="width:auto; padding:7px 14px;">Filter</button>
+        {% if category_filter or type_filter or search %}
+        <a href="{{ url_for('admin.finances', period=period) }}" class="btn btn-ghost" style="width:auto; padding:7px 12px; color:var(--ruby);">✕ Clear</a>
+        {% endif %}
+    </form>
+</div>
+
+<div id="customDateRow" style="display:{{ 'flex' if period == 'custom' else 'none' }}; gap:8px; margin-bottom:12px;">
+    <form method="GET" action="{{ url_for('admin.finances') }}" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <input type="hidden" name="period" value="custom">
+        <input type="hidden" name="category" value="{{ category_filter }}">
+        <input type="hidden" name="type" value="{{ type_filter }}">
+        <input type="hidden" name="q" value="{{ search }}">
+        <label style="font-size:13px; color:var(--muted);">From</label>
+        <input type="date" name="date_start" value="{{ custom_start }}" class="form-input" style="max-width:150px;" required>
+        <label style="font-size:13px; color:var(--muted);">To</label>
+        <input type="date" name="date_end" value="{{ custom_end }}" class="form-input" style="max-width:150px;" required>
+        <button type="submit" class="btn btn-ghost" style="width:auto; padding:7px 14px;">Apply</button>
+    </form>
+</div>
+
+<div style="font-size:12px; color:var(--muted); margin-bottom:8px;">
+    {{ total_entries }} entr{{ 'y' if total_entries == 1 else 'ies' }}
+    · {{ date_start.strftime('%d %b %Y') }} – {{ date_end.strftime('%d %b %Y') }}
+</div>
+
+{% if entries %}
+<div style="overflow-x:auto;">
+<table class="fin-table">
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Type</th>
+            <th data-i18n="fin.category">Category</th>
+            <th data-i18n="fin.description">Description</th>
+            <th style="text-align:right;">Amount</th>
+            <th>Added by</th>
+            <th style="width:80px;"></th>
+        </tr>
+    </thead>
+    <tbody id="finTableBody">
+        {% for e in entries %}
+        <tr class="fin-row-{{ 'auto' if e.is_auto else e.entry_type }}"
+            id="fin-row-{{ e.id if e.id else 'auto-' ~ loop.index }}">
+            <td class="mono" style="font-size:12px; white-space:nowrap;">
+                {{ e.entry_date.strftime('%d %b %Y') if e.entry_date }}
+            </td>
+            <td>
+                <span class="fin-type-pill fin-type-{{ e.entry_type }}">
+                    {{ e.entry_type | capitalize }}
+                </span>
+            </td>
+            <td>
+                {% if e.is_auto %}
+                <span class="fin-badge-auto">🎫 {{ e.category }}</span>
+                {% else %}
+                {{ e.category }}
+                {% endif %}
+            </td>
+            <td style="color:var(--ink-2); max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                {{ e.description or '—' }}
+            </td>
+            <td style="text-align:right;" class="fin-amount-{{ e.entry_type }}">
+                ₹ {{ '{:,.0f}'.format(e.amount) }}
+            </td>
+            <td style="font-size:12px; color:var(--muted);">{{ e.created_by or '—' }}</td>
+            <td style="text-align:right;">
+                {% if not e.is_auto %}
+                <button class="fin-edit-btn" onclick="openEdit({{ e.id }}, '{{ e.entry_type }}', '{{ e.category }}', {{ e.amount }}, '{{ e.description or '' | replace("'", "\\'") }}', '{{ e.entry_date.isoformat() }}')">✏️</button>
+                <button class="fin-del-btn" onclick="deleteEntry({{ e.id }})">🗑</button>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+
+<!-- Pagination -->
+{% if total_pages > 1 %}
+<div class="fin-pagination">
+    <a href="{{ url_for('admin.finances', period=period, category=category_filter, type=type_filter, q=search, page=page-1) }}"
+       class="fin-page-btn {{ 'disabled' if page <= 1 }}">← Prev</a>
+    {% for p in range(1, total_pages + 1) %}
+    {% if p == page or p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+    <a href="{{ url_for('admin.finances', period=period, category=category_filter, type=type_filter, q=search, page=p) }}"
+       class="fin-page-btn {{ 'active' if p == page }}">{{ p }}</a>
+    {% elif p == page - 3 or p == page + 3 %}
+    <span style="padding:6px 4px; color:var(--muted);">…</span>
+    {% endif %}
+    {% endfor %}
+    <a href="{{ url_for('admin.finances', period=period, category=category_filter, type=type_filter, q=search, page=page+1) }}"
+       class="fin-page-btn {{ 'disabled' if page >= total_pages }}">Next →</a>
+</div>
+{% endif %}
+
+{% else %}
+<div class="empty-state">
+    <span class="serif">No entries</span>
+    <p>Add your first entry above, or change the date filter.</p>
+</div>
+{% endif %}
+
+<!-- ============================================================
+     MONTHLY BREAKDOWN
+     ============================================================ -->
+<div class="fin-monthly">
+    <div class="section-summary" style="margin-bottom:14px;">
+        <span class="serif" style="font-size:18px;">Monthly Breakdown</span>
+        <span class="section-meta">last 6 months</span>
+    </div>
+
+    {% for m in monthly %}
+    <div class="fin-month-block {{ 'open' if loop.index <= 2 }}" id="month-{{ m.month_key }}">
+        <div class="fin-month-header" onclick="toggleMonth('{{ m.month_key }}')">
+            <div style="display:flex; align-items:center; gap:14px;">
+                <span class="fin-month-title">{{ m.label }}</span>
+                <span style="font-size:13px; color:var(--sage);">↑ ₹{{ '{:,.0f}'.format(m.income) }}</span>
+                <span style="font-size:13px; color:var(--ruby);">↓ ₹{{ '{:,.0f}'.format(m.expense) }}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span class="fin-month-net" style="color:{{ 'var(--sage)' if m.net >= 0 else 'var(--ruby)' }};">
+                    Net: {{ '+' if m.net >= 0 else '' }}₹{{ '{:,.0f}'.format(m.net|abs) }}
+                </span>
+                <span class="fin-month-chevron">›</span>
+            </div>
+        </div>
+        <div class="fin-month-body">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
+                <!-- Income breakdown -->
+                <div>
+                    <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--sage); margin-bottom:10px;" data-i18n="fin.income">Income</div>
+                    {% if m.income_breakdown %}
+                        {% set inc_max = m.income_breakdown | map(attribute='amount') | max %}
+                        {% for cat in m.income_breakdown %}
+                        <div class="fin-cat-bar-row">
+                            <div class="fin-cat-bar-label">
+                                {% if cat.is_auto %}🎫 {% endif %}{{ cat.category }}
+                            </div>
+                            <div class="fin-cat-bar-track">
+                                <div class="fin-cat-bar-fill" style="width:{{ (cat.amount / inc_max * 100)|int if inc_max > 0 else 0 }}%; background:var(--sage);"></div>
+                            </div>
+                            <div class="fin-cat-bar-amount">₹{{ '{:,.0f}'.format(cat.amount) }}</div>
+                            <div class="fin-cat-pct">{{ (cat.amount / m.income * 100)|int if m.income > 0 else 0 }}%</div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                    <div style="font-size:13px; color:var(--muted);">No income recorded</div>
+                    {% endif %}
+                </div>
+                <!-- Expense breakdown -->
+                <div>
+                    <div style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--ruby); margin-bottom:10px;" data-i18n="fin.expense">Expenses</div>
+                    {% if m.expense_breakdown %}
+                        {% set exp_max = m.expense_breakdown | map(attribute='amount') | max %}
+                        {% for cat in m.expense_breakdown %}
+                        <div class="fin-cat-bar-row">
+                            <div class="fin-cat-bar-label">{{ cat.category }}</div>
+                            <div class="fin-cat-bar-track">
+                                <div class="fin-cat-bar-fill" style="width:{{ (cat.amount / exp_max * 100)|int if exp_max > 0 else 0 }}%; background:var(--ruby);"></div>
+                            </div>
+                            <div class="fin-cat-bar-amount">₹{{ '{:,.0f}'.format(cat.amount) }}</div>
+                            <div class="fin-cat-pct">{{ (cat.amount / m.expense * 100)|int if m.expense > 0 else 0 }}%</div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                    <div style="font-size:13px; color:var(--muted);">No expenses recorded</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- ============================================================
+     EDIT MODAL
+     ============================================================ -->
+<div id="finEditModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:1000; align-items:center; justify-content:center;">
+    <div style="background:var(--cream); border-radius:12px; padding:28px; width:400px; max-width:95vw; box-shadow:0 20px 60px rgba(0,0,0,0.25);">
+        <div style="font-size:17px; font-weight:600; margin-bottom:20px;">Edit Entry</div>
+        <input type="hidden" id="editEntryId">
+        <div class="form-group">
+            <label class="form-label" data-i18n="fin.category">Category</label>
+            <select id="editCategory" class="form-select"></select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Amount (₹)</label>
+            <input type="number" id="editAmount" class="form-input" min="1" step="1">
+        </div>
+        <div class="form-group">
+            <label class="form-label" data-i18n="fin.description">Description</label>
+            <input type="text" id="editDescription" class="form-input" placeholder="optional">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Date</label>
+            <input type="date" id="editDate" class="form-input">
+        </div>
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button class="btn btn-ghost" onclick="closeEdit()" style="flex:1;">Cancel</button>
+            <button class="btn btn-primary" onclick="saveEdit()" style="flex:1;">Save</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content || '';
+const EXPENSE_CATS = {{ expense_categories | tojson }};
+const INCOME_CATS = {{ income_categories | tojson }};
+
+// ===== Type → Category coupling =====
+function updateCategoryOptions() {
+    const isIncome = document.getElementById('typeIncome').checked;
+    const sel = document.getElementById('addCategory');
+    const incGroup = document.getElementById('optIncome');
+    const expGroup = document.getElementById('optExpense');
+    incGroup.style.display = isIncome ? '' : 'none';
+    expGroup.style.display = isIncome ? 'none' : '';
+    // Select first option of visible group
+    const cats = isIncome ? INCOME_CATS : EXPENSE_CATS;
+    if (cats.length) sel.value = cats[0];
+}
+
+// ===== Custom date range toggle =====
+function toggleCustomDate(e) {
+    e.preventDefault();
+    const row = document.getElementById('customDateRow');
+    row.style.display = row.style.display === 'none' ? 'flex' : 'none';
+    // Update period hidden input in filter form
+    document.querySelector('#filterForm input[name="period"]').value = 'custom';
+}
+
+// ===== Monthly accordion =====
+function toggleMonth(key) {
+    const block = document.getElementById('month-' + key);
+    block.classList.toggle('open');
+}
+
+// ===== Edit modal =====
+let _editType = 'expense';
+function openEdit(id, type, category, amount, description, date) {
+    _editType = type;
+    document.getElementById('editEntryId').value = id;
+    document.getElementById('editAmount').value = amount;
+    document.getElementById('editDescription').value = description;
+    document.getElementById('editDate').value = date;
+    const sel = document.getElementById('editCategory');
+    const cats = type === 'income' ? INCOME_CATS : EXPENSE_CATS;
+    sel.innerHTML = cats.map(c => `<option value="${c}" ${c === category ? 'selected' : ''}>${c}</option>`).join('');
+    document.getElementById('finEditModal').style.display = 'flex';
+}
+function closeEdit() {
+    document.getElementById('finEditModal').style.display = 'none';
+}
+async function saveEdit() {
+    const id = document.getElementById('editEntryId').value;
+    const payload = {
+        category: document.getElementById('editCategory').value,
+        amount: parseFloat(document.getElementById('editAmount').value),
+        description: document.getElementById('editDescription').value.trim(),
+        entry_date: document.getElementById('editDate').value,
+    };
+    try {
+        const res = await fetch(`/admin/finances/${id}/edit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+            body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+            closeEdit();
+            location.reload();
+        } else {
+            alert(data.message || 'Failed to save');
+        }
+    } catch (e) {
+        alert('Network error');
+    }
+}
+
+// ===== Delete =====
+async function deleteEntry(id) {
+    if (!confirm('Delete this entry? This cannot be undone.')) return;
+    try {
+        const res = await fetch(`/admin/finances/${id}/delete`, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN },
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+            const row = document.getElementById('fin-row-' + id);
+            if (row) row.remove();
+        } else {
+            alert('Failed to delete');
+        }
+    } catch (e) {
+        alert('Network error');
+    }
+}
+
+// Close modal on backdrop click
+document.getElementById('finEditModal').addEventListener('click', function(e) {
+    if (e.target === this) closeEdit();
+});
+</script>
+{% endblock %}

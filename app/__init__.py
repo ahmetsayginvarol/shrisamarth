@@ -125,6 +125,19 @@ def _run_schema_migrations(db):
                 sent_by_id INTEGER REFERENCES users(id),
                 created_at TIMESTAMP DEFAULT NOW()
             )""",
+            # financial_entries
+            """CREATE TABLE IF NOT EXISTS financial_entries (
+                id SERIAL PRIMARY KEY,
+                entry_type VARCHAR(10) NOT NULL,
+                category VARCHAR(50) NOT NULL,
+                amount NUMERIC(10,2) NOT NULL,
+                description TEXT,
+                entry_date DATE NOT NULL,
+                created_by_id INTEGER REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )""",
+            "CREATE INDEX IF NOT EXISTS ix_financial_entries_date ON financial_entries(entry_date)",
+            "CREATE INDEX IF NOT EXISTS ix_financial_entries_type ON financial_entries(entry_type)",
         ]
         for sql in pg_stmts:
             try:
