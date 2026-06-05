@@ -1,102 +1,109 @@
-"""Generate gender silhouette PNG icons for the seat map."""
+"""Generate gender silhouette PNG icons for the seat map.
+Draws at 2× (128×128) then downsamples to 64×64 for clean antialiasing.
+"""
 import os
 from PIL import Image, ImageDraw
 
-SIZE = 64
+RENDER = 128   # draw at 2×
+OUT    = 64    # output size
+W = RENDER
+
 OUT_DIR = os.path.join(os.path.dirname(__file__), '..', 'app', 'static', 'icons')
 os.makedirs(OUT_DIR, exist_ok=True)
 
 
-def new_canvas():
-    return Image.new('RGBA', (SIZE, SIZE), (0, 0, 0, 0))
+def canvas():
+    return Image.new('RGBA', (W, W), (0, 0, 0, 0))
 
 
+def save(img, name):
+    img = img.resize((OUT, OUT), Image.LANCZOS)
+    path = os.path.join(OUT_DIR, name)
+    img.save(path)
+    print(f'Generated: {path}')
+
+
+# ── Male silhouette ─────────────────────────────────────────────
 def draw_male():
-    img = new_canvas()
+    img = canvas()
     d = ImageDraw.Draw(img)
-    W = SIZE  # 64
+    cx = W // 2     # 64
 
-    # Head — circle, r=10, centre (32, 13)
-    hcx, hcy, hr = W // 2, 13, 10
-    d.ellipse([hcx - hr, hcy - hr, hcx + hr, hcy + hr], fill='white')
+    # Head (larger, dominant)
+    hr = 19
+    hcy = 22
+    d.ellipse([cx - hr, hcy - hr, cx + hr, hcy + hr], fill='white')
 
-    # Neck — thin rectangle
-    neck_w, neck_h = 7, 5
-    nx = W // 2 - neck_w // 2
-    ny = hcy + hr
-    d.rectangle([nx, ny, nx + neck_w, ny + neck_h], fill='white')
+    # Torso: trapezoidal — wide at shoulders, slightly narrower at waist
+    t_top   = hcy + hr + 2        # 43
+    t_bot   = t_top + 38          # 81
+    t_top_w = 54                  # shoulder width
+    t_bot_w = 42                  # waist width
+    torso = [
+        (cx - t_top_w // 2, t_top),
+        (cx + t_top_w // 2, t_top),
+        (cx + t_bot_w // 2, t_bot),
+        (cx - t_bot_w // 2, t_bot),
+    ]
+    d.polygon(torso, fill='white')
 
-    # Torso — broad rectangle (wide shoulders)
-    torso_top = ny + neck_h
-    torso_w, torso_h = 30, 16
-    tx = W // 2 - torso_w // 2
-    d.rectangle([tx, torso_top, tx + torso_w, torso_top + torso_h], fill='white')
-
-    # Legs — two rectangles with a gap
-    legs_top = torso_top + torso_h
-    leg_w, leg_h = 11, 17
-    gap = 8
-    lx = W // 2 - gap // 2 - leg_w   # left leg x
-    rx = W // 2 + gap // 2             # right leg x
-    d.rectangle([lx, legs_top, lx + leg_w, legs_top + leg_h], fill='white')
-    d.rectangle([rx, legs_top, rx + leg_w, legs_top + leg_h], fill='white')
+    # Legs: two solid blocks, narrow gap between them
+    leg_top = t_bot
+    leg_bot = W - 8               # 120
+    leg_w   = 18
+    gap     = 10
+    lx = cx - gap // 2 - leg_w   # left leg start x
+    rx = cx + gap // 2            # right leg start x
+    d.rectangle([lx, leg_top, lx + leg_w, leg_bot], fill='white')
+    d.rectangle([rx, leg_top, rx + leg_w, leg_bot], fill='white')
 
     return img
 
 
+# ── Female silhouette ────────────────────────────────────────────
 def draw_female():
-    img = new_canvas()
+    img = canvas()
     d = ImageDraw.Draw(img)
-    W = SIZE  # 64
+    cx = W // 2     # 64
 
-    # Head — circle, r=9, centre (32, 11)
-    hcx, hcy, hr = W // 2, 11, 9
-    d.ellipse([hcx - hr, hcy - hr, hcx + hr, hcy + hr], fill='white')
+    # Head
+    hr = 18
+    hcy = 21
+    d.ellipse([cx - hr, hcy - hr, cx + hr, hcy + hr], fill='white')
 
-    # Neck — thin
-    neck_w, neck_h = 6, 4
-    nx = W // 2 - neck_w // 2
-    ny = hcy + hr
-    d.rectangle([nx, ny, nx + neck_w, ny + neck_h], fill='white')
+    # Neck + upper body: narrow rectangle
+    body_top = hcy + hr + 2        # 41
+    body_bot = body_top + 18       # 59
+    body_w   = 26
+    bx = cx - body_w // 2
+    d.rectangle([bx, body_top, bx + body_w, body_bot], fill='white')
 
-    # Upper body — narrow rectangle
-    body_top = ny + neck_h
-    body_w, body_h = 14, 10
-    bx = W // 2 - body_w // 2
-    d.rectangle([bx, body_top, bx + body_w, body_top + body_h], fill='white')
+    # Skirt: wide trapezoid — distinctive feminine shape
+    sk_top   = body_bot
+    sk_bot   = W - 22              # 106
+    sk_top_w = 40
+    sk_bot_w = 82
+    skirt = [
+        (cx - sk_top_w // 2, sk_top),
+        (cx + sk_top_w // 2, sk_top),
+        (cx + sk_bot_w // 2, sk_bot),
+        (cx - sk_bot_w // 2, sk_bot),
+    ]
+    d.polygon(skirt, fill='white')
 
-    # Skirt — trapezoid (wider at bottom)
-    skirt_top = body_top + body_h
-    skirt_h = 18
-    skirt_top_w = 18
-    skirt_bot_w = 34
-    stx = W // 2 - skirt_top_w // 2
-    sbx = W // 2 - skirt_bot_w // 2
-    skirt_bot = skirt_top + skirt_h
-    d.polygon([
-        (stx, skirt_top),
-        (stx + skirt_top_w, skirt_top),
-        (sbx + skirt_bot_w, skirt_bot),
-        (sbx, skirt_bot),
-    ], fill='white')
-
-    # Legs — two thin rectangles below skirt
-    leg_w, leg_h = 7, 12
-    gap = 6
-    lx = W // 2 - gap // 2 - leg_w
-    rx = W // 2 + gap // 2
-    d.rectangle([lx, skirt_bot, lx + leg_w, skirt_bot + leg_h], fill='white')
-    d.rectangle([rx, skirt_bot, rx + leg_w, skirt_bot + leg_h], fill='white')
+    # Legs below skirt (short, peeking out)
+    leg_top = sk_bot
+    leg_bot = W - 6                # 122
+    leg_w   = 16
+    gap     = 12
+    lx = cx - gap // 2 - leg_w
+    rx = cx + gap // 2
+    d.rectangle([lx, leg_top, lx + leg_w, leg_bot], fill='white')
+    d.rectangle([rx, leg_top, rx + leg_w, leg_bot], fill='white')
 
     return img
 
 
 if __name__ == '__main__':
-    male_path = os.path.join(OUT_DIR, 'male.png')
-    female_path = os.path.join(OUT_DIR, 'female.png')
-
-    draw_male().save(male_path)
-    draw_female().save(female_path)
-
-    print(f'Generated: {male_path}')
-    print(f'Generated: {female_path}')
+    save(draw_male(),   'male.png')
+    save(draw_female(), 'female.png')
