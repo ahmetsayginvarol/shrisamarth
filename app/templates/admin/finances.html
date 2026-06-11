@@ -13,9 +13,9 @@
 
 .fin-add-form { background:var(--cream-2); border:1px solid var(--line); border-radius:10px; padding:20px; margin-bottom:24px; }
 /* Row 1: Type | Category | Amount | Date */
-.fin-add-row  { display:grid; grid-template-columns:156px 1fr 118px 148px; gap:10px; align-items:end; margin-bottom:10px; }
+.fin-add-row  { display:grid; grid-template-columns:210px 1fr 110px 148px; gap:10px; align-items:end; margin-bottom:10px; }
 /* Row 2: Description | Submit */
-.fin-add-row2 { display:grid; grid-template-columns:1fr 118px; gap:10px; align-items:end; }
+.fin-add-row2 { display:grid; grid-template-columns:1fr 110px; gap:10px; align-items:end; }
 .fin-add-row .form-group,
 .fin-add-row2 .form-group { margin:0; }
 .fin-add-row .form-label,
@@ -162,7 +162,7 @@
         <div class="fin-add-row">
             <div class="form-group">
                 <label class="form-label" data-i18n="fin.type">Type</label>
-                <div class="gender-choice" style="gap:6px;">
+                <div class="gender-choice">
                     <label class="gender-btn" style="flex:1; justify-content:center;">
                         <input type="radio" name="entry_type" value="income" id="typeIncome" checked onchange="updateCategoryOptions()">
                         <span class="gender-dot" style="background:var(--sage);border-color:var(--sage);"></span>
