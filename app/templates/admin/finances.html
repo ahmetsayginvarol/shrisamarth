@@ -12,10 +12,14 @@
 .fin-card-pct.neg { background:rgba(168,50,50,0.1); color:var(--ruby); }
 
 .fin-add-form { background:var(--cream-2); border:1px solid var(--line); border-radius:10px; padding:20px; margin-bottom:24px; }
-.fin-add-row { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
-.fin-add-row .form-group { margin:0; flex:1; min-width:120px; }
-.fin-add-row .form-group.wide { flex:2; min-width:200px; }
-.fin-add-row .form-label { font-size:11px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px; }
+/* Row 1: Type | Category | Amount | Date */
+.fin-add-row  { display:grid; grid-template-columns:156px 1fr 118px 148px; gap:10px; align-items:end; margin-bottom:10px; }
+/* Row 2: Description | Submit */
+.fin-add-row2 { display:grid; grid-template-columns:1fr 118px; gap:10px; align-items:end; }
+.fin-add-row .form-group,
+.fin-add-row2 .form-group { margin:0; }
+.fin-add-row .form-label,
+.fin-add-row2 .form-label { font-size:11px; text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px; }
 
 .fin-filter-bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:16px; }
 .fin-filter-bar select, .fin-filter-bar input[type="text"] { padding:7px 10px; border:1px solid var(--line); border-radius:6px; font-size:13px; background:var(--cream); color:var(--ink); min-width:120px; }
@@ -68,9 +72,13 @@
 
 @media(max-width:900px) {
   .fin-summary { grid-template-columns:1fr 1fr; }
-  .fin-add-row { flex-direction:column; }
-  .fin-add-row .form-group { min-width:unset; width:100%; }
+  .fin-add-row  { grid-template-columns:1fr 1fr; }
+  .fin-add-row2 { grid-template-columns:1fr 1fr; }
   .fin-filter-bar { flex-direction:column; align-items:stretch; }
+}
+@media(max-width:560px) {
+  .fin-add-row  { grid-template-columns:1fr; }
+  .fin-add-row2 { grid-template-columns:1fr; }
 }
 @media(max-width:500px) {
   .fin-summary { grid-template-columns:1fr; }
@@ -150,11 +158,11 @@
     <form method="POST" action="{{ url_for('admin.finances') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="action" value="add">
+        <!-- Row 1: Type · Category · Amount · Date -->
         <div class="fin-add-row">
-            <!-- Type -->
-            <div class="form-group" style="min-width:130px; max-width:150px;">
+            <div class="form-group">
                 <label class="form-label" data-i18n="fin.type">Type</label>
-                <div class="gender-choice" style="gap:8px;">
+                <div class="gender-choice" style="gap:6px;">
                     <label class="gender-btn" style="flex:1; justify-content:center;">
                         <input type="radio" name="entry_type" value="income" id="typeIncome" checked onchange="updateCategoryOptions()">
                         <span class="gender-dot" style="background:var(--sage);border-color:var(--sage);"></span>
@@ -167,8 +175,7 @@
                     </label>
                 </div>
             </div>
-            <!-- Category -->
-            <div class="form-group" style="min-width:150px;">
+            <div class="form-group">
                 <label class="form-label" data-i18n="fin.category">Category</label>
                 <select name="category" id="addCategory" class="form-select" required>
                     <optgroup label="Income" id="optIncome">
@@ -183,24 +190,23 @@
                     </optgroup>
                 </select>
             </div>
-            <!-- Amount -->
-            <div class="form-group" style="min-width:100px; max-width:140px;">
+            <div class="form-group">
                 <label class="form-label">₹ <span data-i18n="fin.amount">Amount</span></label>
                 <input type="number" name="amount" class="form-input" placeholder="0" min="1" step="1" required style="text-align:right;">
             </div>
-            <!-- Description -->
-            <div class="form-group wide">
-                <label class="form-label" data-i18n="fin.description">Description (optional)</label>
-                <input type="text" name="description" class="form-input" placeholder="Notes, invoice ref, etc.">
-            </div>
-            <!-- Date -->
-            <div class="form-group" style="min-width:140px; max-width:160px;">
+            <div class="form-group">
                 <label class="form-label">Date</label>
                 <input type="date" name="entry_date" class="form-input" value="{{ today.isoformat() }}" required>
             </div>
-            <!-- Submit -->
-            <div class="form-group" style="min-width:100px; max-width:130px;">
-                <label class="form-label" style="visibility:hidden;">.</label>
+        </div>
+        <!-- Row 2: Description · Submit -->
+        <div class="fin-add-row2">
+            <div class="form-group">
+                <label class="form-label" data-i18n="fin.description">Description (optional)</label>
+                <input type="text" name="description" class="form-input" placeholder="Notes, invoice ref, etc.">
+            </div>
+            <div class="form-group">
+                <label class="form-label" style="visibility:hidden;">·</label>
                 <button type="submit" class="btn btn-primary" style="width:100%;" data-i18n="fin.add_entry">+ Add</button>
             </div>
         </div>
