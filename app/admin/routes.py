@@ -564,9 +564,32 @@ def voyage_new():
 
         return redirect(url_for('admin.voyages'))
 
-    return render_template('admin/voyage_form.html', form=form, title='New Voyage',
-                           stops_json='[]')
+    import json as _json
+    stops_json = '[]'
+    clone_source = None
+    if request.method == 'GET':
+        clone_id = request.args.get('clone_id', type=int)
+        if clone_id:
+            src = Voyage.query.get(clone_id)
+            if src:
+                clone_source = src
+                form.origin.data = src.origin
+                form.destination.data = src.destination
+                # departure/arrival intentionally blank — admin must pick new dates
+                form.bus_id.data = src.bus_id
+                form.driver_id.data = src.driver_id or 0
+                form.base_fare.data = src.base_fare
+                form.notes.data = src.notes
+                stops_json = _json.dumps([
+                    {'name': s.stop_name, 'type': s.stop_type,
+                     'time': s.stop_time or '', 'order': s.stop_order,
+                     'fare_override': float(s.fare_override) if s.fare_override is not None else None}
+                    for s in sorted(src.stops, key=lambda s: s.stop_order)
+                ])
 
+    title = 'Clone Voyage' if clone_source else 'New Voyage'
+    return render_template('admin/voyage_form.html', form=form, title=title,
+                           stops_json=stops_json, clone_source=clone_source)
 
 @admin_bp.route('/voyages/<int:voyage_id>/edit', methods=['GET', 'POST'])
 def voyage_edit(voyage_id):
@@ -680,7 +703,8 @@ def voyage_edit(voyage_id):
     return render_template('admin/voyage_form.html', form=form,
                            title='Edit Voyage', voyage=voyage,
                            stops_json=json.dumps(existing),
-                           has_future_siblings=has_future_siblings)
+                           has_future_siblings=has_future_siblings,
+                           clone_source=None)
 
 
 @admin_bp.route('/voyages/cancel-recurrence/<group>', methods=['POST'])

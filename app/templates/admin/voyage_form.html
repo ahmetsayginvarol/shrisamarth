@@ -7,6 +7,15 @@
     <a href="{{ url_for('admin.voyages') }}" class="btn btn-ghost">← Back</a>
 </div>
 
+{% if clone_source %}
+<div style="background:rgba(200,118,26,0.08); border:1px solid rgba(200,118,26,0.25); border-radius:8px; padding:12px 18px; margin-bottom:20px; font-size:13px; color:var(--marigold); display:flex; align-items:center; gap:10px;">
+    <span style="font-size:18px;">⎘</span>
+    <span>Cloning from <strong>{{ clone_source.origin }} → {{ clone_source.destination }}</strong>
+    ({{ clone_source.departure_at.strftime('%d %b %Y · %H:%M') }}) — all fields pre-filled except dates.
+    Set a new departure date below.</span>
+</div>
+{% endif %}
+
 <form method="POST" class="admin-form">
     {{ form.hidden_tag() }}
 

@@ -72,6 +72,9 @@
                 </form>
                 {% endif %}
                 {% endif %}
+                <a href="{{ url_for('admin.voyage_new', clone_id=v.id) }}"
+                   class="btn btn-ghost" style="padding:6px 12px; font-size:12px;"
+                   title="Clone this voyage with a new date">⎘ Clone</a>
             </td>
         </tr>
         {% endfor %}

@@ -166,3 +166,17 @@ Admin-only destructive operations at `/admin/danger-zone`. All actions require a
 - **Password helper**: `_dz_check_password(data)` calls `current_user.check_password(password)` → 403 on failure.
 - **Sidebar**: "Danger Zone" link at the bottom in red, below Security.
 - **Reset-DB deletion order**: Notifications → SeatLocks → Bookings → RouteStops → Voyages → Buses → FinancialEntries → ActivityLogs → AbuseLogs → IpBans → Newsletters → Customer users.
+
+## Admin Layout — Full Width
+
+`.admin-content` has no `max-width`. All admin pages fill the full available width (browser width minus 240px sidebar). Responsive padding: 40px desktop, 32px/28px at ≤1024px, 16px/14px at ≤768px.
+
+## Clone Voyage
+
+Each row in the Voyages list has a **⎘ Clone** button (visible for all voyage statuses — useful for re-running past trips).
+
+- Clicking Clone opens the New Voyage form at `/admin/voyages/new?clone_id=<id>` with all fields pre-filled from the source voyage: origin, destination, bus, driver, base fare, notes, and all route stops (with fare overrides).
+- **Departure and arrival dates are intentionally left blank** — the admin must choose new dates.
+- A marigold banner at the top of the form identifies the source voyage.
+- Recurrence and return voyage options remain available as on any new voyage.
+- Implementation: `voyage_new()` reads `clone_id` on GET, loads source `Voyage`, copies fields into `VoyageForm`, and serialises stops into `stops_json` for the JS stop-builder.
