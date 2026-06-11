@@ -463,7 +463,6 @@
 {% block scripts %}
 {{ super() }}
 <script>
-const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content || '';
 const EXPENSE_CATS = {{ expense_categories | tojson }};
 const INCOME_CATS = {{ income_categories | tojson }};
 

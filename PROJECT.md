@@ -138,9 +138,11 @@ Booked seats display a small white silhouette icon (18×18 px) inside the colour
 
 **CSS**: `.seat.booked-m`, `.seat.booked-f`, `.seat.checked-in-m`, `.seat.checked-in-f` switch from `grid` to `flex column` layout so icon and seat-number stack vertically. `.seat-gender-icon` (18×18) and `.seat-num` (8 px font) added. `.legend-swatch-icon` added for legend use.
 
-### Finance edit button
+### Finance edit and delete buttons
 
-The ✏️ edit button on the finances table uses `data-*` attributes (auto HTML-escaped by Jinja2) instead of inline `onclick` string parameters. This avoids JS parse errors when entry descriptions contain `"` or `'` characters.
+The ✏️ edit button uses `data-*` attributes (auto HTML-escaped by Jinja2) instead of inline `onclick` string parameters — avoids JS parse errors when descriptions contain `"` or `'`.
+
+`base_admin.html` already declares `const CSRF_TOKEN` at global scope. `finances.html` must NOT redeclare it — multiple `<script>` tags share the browser's global scope, and a second `const CSRF_TOKEN` throws `Identifier 'CSRF_TOKEN' has already been declared`, silently killing the entire finances script block (all functions undefined). The fix is to remove the duplicate declaration from `finances.html` and rely on the one already set by `{{ super() }}`.
 
 ## Danger Zone
 
