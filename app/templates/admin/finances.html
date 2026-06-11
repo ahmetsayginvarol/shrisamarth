@@ -314,7 +314,14 @@
             <td style="font-size:12px; color:var(--muted);">{{ e.created_by or '—' }}</td>
             <td style="text-align:right;">
                 {% if not e.is_auto %}
-                <button class="fin-edit-btn" onclick="openEdit({{ e.id }}, '{{ e.entry_type }}', '{{ e.category }}', {{ e.amount }}, '{{ e.description or '' | replace("'", "\\'") }}', '{{ e.entry_date.isoformat() }}')">✏️</button>
+                <button class="fin-edit-btn"
+                    data-id="{{ e.id }}"
+                    data-type="{{ e.entry_type }}"
+                    data-category="{{ e.category }}"
+                    data-amount="{{ e.amount }}"
+                    data-description="{{ e.description or '' }}"
+                    data-date="{{ e.entry_date.isoformat() }}"
+                    onclick="openEdit(this)">✏️</button>
                 <button class="fin-del-btn" onclick="deleteEntry({{ e.id }})">🗑</button>
                 {% endif %}
             </td>
@@ -490,7 +497,13 @@ function toggleMonth(key) {
 
 // ===== Edit modal =====
 let _editType = 'expense';
-function openEdit(id, type, category, amount, description, date) {
+function openEdit(btn) {
+    const id          = btn.dataset.id;
+    const type        = btn.dataset.type;
+    const category    = btn.dataset.category;
+    const amount      = btn.dataset.amount;
+    const description = btn.dataset.description;
+    const date        = btn.dataset.date;
     _editType = type;
     document.getElementById('editEntryId').value = id;
     document.getElementById('editAmount').value = amount;
