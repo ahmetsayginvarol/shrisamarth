@@ -793,6 +793,13 @@ function showBookingDetails(booking, readonly) {
         row.style.display = (readonly && i >= 2) ? 'none' : '';
     });
 
+    // For driver (read-only), use an overlay modal instead of switching panels
+    // so the manifest + cash section buttons stay accessible
+    if (readonly && typeof window.showDriverPassModal === 'function') {
+        window.showDriverPassModal(booking);
+        return;
+    }
+
     showPanel('details');
 }
 

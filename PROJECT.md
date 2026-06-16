@@ -213,10 +213,13 @@ End-of-trip cash reconciliation workflow for drivers.
 
 ### Driver Workflow (Staff Dashboard)
 
-1. Manifest list shows "₹X" amber button next to passengers with `balance_due > 0`
-2. Clicking Collect → `POST /staff/cash/collect` → creates `CashCollection`, button turns green "✓ Collected"
-3. **Add Walk-in** button → modal form (name, phone, seat, boarding/dropping, cash amount) → `POST /staff/cash/walkin` → creates `Booking(booking_type='walkin')` + `CashCollection`
-4. **Submit Trip Report** → modal summary (count, walk-ins, total) → `POST /staff/trip-report/submit` → creates `TripReport`, notifies all admins via `notify_staff()`
+1. Tapping a manifest item opens a **Passenger Modal overlay** (does NOT switch panels, so the manifest + cash section buttons stay visible underneath)
+   - Modal shows name, phone, boarding/dropping, check-in status, balance due
+   - **✓ Check In** button → `POST /staff/booking/<id>/checkin`
+   - **Collect Cash** button (shown when `balance_due > 0` and not yet collected) → `POST /staff/cash/collect`
+2. Each manifest item also has a per-row **₹X** amber collect button (stops event propagation so the modal doesn't also open)
+3. **Add Walk-in** button (always visible in cash section) → modal form → `POST /staff/cash/walkin` → creates `Booking(booking_type='walkin')` + `CashCollection`
+4. **Submit Trip Report** button → modal summary → `POST /staff/trip-report/submit` → creates `TripReport`, notifies admins
 
 ### Admin Trip Reports (`/admin/trip-reports`)
 

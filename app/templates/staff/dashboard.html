@@ -333,7 +333,7 @@
                                     data-booking-id="{{ b.id }}"
                                     data-amount="{{ b.balance_due|int }}"
                                     data-name="{{ b.passenger_name }}"
-                                    onclick="collectCash(this)"
+                                    onclick="event.stopPropagation(); collectCash(this)"
                                     data-i18n="dash.collect_cash">
                                 ₹{{ b.balance_due|int }}
                             </button>
@@ -624,6 +624,36 @@
 {% endif %}
 
 {% if role == 'driver' and voyage %}
+<!-- Driver: Passenger Detail Modal (overlay so manifest panel stays visible) -->
+<div id="driverPassModal" class="dz-modal-backdrop hidden" onclick="if(event.target===this)closeDriverPassModal()">
+    <div class="dz-modal" style="max-width:360px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div>
+                <div style="font-size:17px; font-weight:600; color:var(--ink); font-family:'Instrument Serif',serif;" id="dpmName">—</div>
+                <div style="font-size:13px; color:var(--muted); margin-top:2px;" id="dpmPhone">—</div>
+            </div>
+            <span style="font-family:'JetBrains Mono',monospace; background:var(--ink); color:var(--cream); padding:4px 10px; border-radius:4px; font-size:13px; font-weight:600;" id="dpmSeat">—</span>
+        </div>
+        <div style="display:grid; grid-template-columns:auto 1fr; gap:5px 16px; font-size:13px; margin-bottom:14px;">
+            <span style="color:var(--muted);">Boarding</span><span id="dpmBoarding">—</span>
+            <span style="color:var(--muted);">Dropping</span><span id="dpmDropping">—</span>
+        </div>
+        <div id="dpmCheckinStatus" style="margin-bottom:10px;"></div>
+        <div id="dpmBalanceRow" style="display:none; background:rgba(200,118,26,0.08); border:1px solid rgba(200,118,26,0.3); border-radius:8px; padding:10px 14px; margin-bottom:14px; justify-content:space-between; align-items:center;">
+            <span style="font-size:13px; color:#c8761a; font-weight:600;">Balance Due</span>
+            <strong style="font-size:16px; color:#c8761a;" id="dpmBalanceAmt">₹0</strong>
+        </div>
+        <div id="dpmCollectedRow" style="display:none; background:rgba(122,154,90,0.08); border:1px solid rgba(122,154,90,0.3); border-radius:8px; padding:10px 14px; margin-bottom:14px;">
+            <span style="font-size:13px; color:var(--sage); font-weight:600;">✓ Cash Collected</span>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-ghost" onclick="closeDriverPassModal()" style="flex:1;">Close</button>
+            <button id="dpmCheckinBtn" class="btn btn-primary" style="flex:1; display:none;" onclick="dpmCheckIn()">✓ Check In</button>
+            <button id="dpmCashBtn" class="btn" style="background:var(--marigold); color:#fff; border:none; flex:1; display:none;" onclick="dpmCollectCash()">Collect Cash</button>
+        </div>
+    </div>
+</div>
+
 <!-- Walk-in Passenger Modal -->
 <div id="walkinModal" class="dz-modal-backdrop hidden">
     <div class="dz-modal" style="max-width:480px;">
@@ -987,8 +1017,129 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
         closeWalkinModal();
         closeReportModal();
+        closeDriverPassModal();
     }
 });
+
+// ── Driver Passenger Modal ─────────────────────────────
+let _dpmBooking = null;
+
+window.showDriverPassModal = function(booking) {
+    _dpmBooking = booking;
+    document.getElementById('dpmName').textContent = booking.name;
+    document.getElementById('dpmSeat').textContent = 'Seat ' + (booking.seat || (booking.group_seats && booking.group_seats.join(', ')) || '—');
+    document.getElementById('dpmPhone').textContent = booking.phone || '—';
+    document.getElementById('dpmBoarding').textContent = booking.boarding || '—';
+    document.getElementById('dpmDropping').textContent = booking.dropping || '—';
+
+    const statusEl = document.getElementById('dpmCheckinStatus');
+    const checkinBtn = document.getElementById('dpmCheckinBtn');
+    if (booking.boarded_at) {
+        statusEl.innerHTML = `<div style="color:var(--sage);font-size:13px;font-weight:600;">✓ Checked In at ${booking.boarded_at}${booking.boarded_by ? ' · ' + booking.boarded_by : ''}</div>`;
+        checkinBtn.style.display = 'none';
+    } else {
+        statusEl.innerHTML = '';
+        checkinBtn.style.display = '';
+        checkinBtn.disabled = false;
+        checkinBtn.textContent = '✓ Check In';
+    }
+
+    const balance = parseFloat(booking.balance) || 0;
+    const collected = isCollected(booking.id);
+    const balRow = document.getElementById('dpmBalanceRow');
+    const collRow = document.getElementById('dpmCollectedRow');
+    const cashBtn = document.getElementById('dpmCashBtn');
+
+    if (balance > 0 && !collected) {
+        balRow.style.display = 'flex';
+        collRow.style.display = 'none';
+        document.getElementById('dpmBalanceAmt').textContent = '₹' + Math.round(balance);
+        cashBtn.style.display = '';
+        cashBtn.disabled = false;
+        cashBtn.textContent = 'Collect Cash';
+        cashBtn.style.background = 'var(--marigold)';
+    } else if (balance > 0 && collected) {
+        balRow.style.display = 'none';
+        collRow.style.display = '';
+        cashBtn.style.display = 'none';
+    } else {
+        balRow.style.display = 'none';
+        collRow.style.display = 'none';
+        cashBtn.style.display = 'none';
+    }
+
+    document.getElementById('driverPassModal').classList.remove('hidden');
+};
+
+function closeDriverPassModal() {
+    const el = document.getElementById('driverPassModal');
+    if (el) el.classList.add('hidden');
+    _dpmBooking = null;
+}
+
+async function dpmCheckIn() {
+    if (!_dpmBooking) return;
+    const btn = document.getElementById('dpmCheckinBtn');
+    btn.disabled = true;
+    btn.textContent = '…';
+    try {
+        const res = await fetch(`/staff/booking/${_dpmBooking.id}/checkin`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_DASH }
+        });
+        const data = await res.json();
+        if (data.status === 'ok' || data.status === 'already_checked_in') {
+            closeDriverPassModal();
+            window.location.reload();
+        } else {
+            alert(data.message || 'Check-in failed.');
+            btn.disabled = false;
+            btn.textContent = '✓ Check In';
+        }
+    } catch(e) {
+        alert('Network error.');
+        btn.disabled = false;
+        btn.textContent = '✓ Check In';
+    }
+}
+
+async function dpmCollectCash() {
+    if (!_dpmBooking) return;
+    const amount = Math.round(parseFloat(_dpmBooking.balance) || 0);
+    if (!amount) return;
+    if (!confirm(`Collect ₹${amount} from ${_dpmBooking.name}?`)) return;
+
+    const btn = document.getElementById('dpmCashBtn');
+    btn.disabled = true;
+    btn.textContent = '…';
+
+    try {
+        const res = await fetch('/staff/cash/collect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_DASH },
+            body: JSON.stringify({ booking_id: _dpmBooking.id, amount }),
+        });
+        const data = await res.json();
+        if (res.ok && data.status === 'ok') {
+            document.getElementById('dpmBalanceRow').style.display = 'none';
+            document.getElementById('dpmCollectedRow').style.display = '';
+            btn.style.display = 'none';
+            const mainBtn = document.getElementById(`collect-btn-${_dpmBooking.id}`);
+            if (mainBtn) { mainBtn.textContent = '✓'; mainBtn.classList.add('collected'); mainBtn.disabled = true; }
+            const balEl = document.getElementById(`bal-${_dpmBooking.id}`);
+            if (balEl) { balEl.style.textDecoration = 'line-through'; balEl.style.color = 'var(--muted)'; }
+            await loadCollections();
+        } else {
+            alert(data.message || 'Error collecting cash.');
+            btn.disabled = false;
+            btn.textContent = 'Collect Cash';
+        }
+    } catch(e) {
+        alert('Network error.');
+        btn.disabled = false;
+        btn.textContent = 'Collect Cash';
+    }
+}
 
 // Load collections on page load
 loadCollections();
