@@ -129,6 +129,14 @@ def dashboard():
             if s.fare_override is not None:
                 stop_fares[s.stop_name] = float(s.fare_override)
 
+    # POC summary for driver manifest
+    poc_count = 0
+    poc_total = 0
+    for b in bookings:
+        if b.payment_on_checkin:
+            poc_count += 1
+            poc_total += float(b.payment_on_checkin_amount or b.fare)
+
     return render_template(
         'staff/dashboard.html',
         voyage=voyage,
@@ -144,6 +152,8 @@ def dashboard():
         boarding_stops=boarding_stops,
         dropping_stops=dropping_stops,
         stop_fares=stop_fares,
+        poc_count=poc_count,
+        poc_total=int(poc_total),
     )
 
 
@@ -181,6 +191,8 @@ def seat_info(voyage_id, seat_id):
                     'departure_time': voyage.departure_at.strftime('%H:%M'),
                     'boarded_at': booking.boarded_at.strftime('%H:%M') if booking.boarded_at else None,
                     'boarded_by': booking.boarded_by.full_name if booking.boarded_by else None,
+                    'payment_on_checkin': bool(booking.payment_on_checkin),
+                    'poc_amount': float(booking.payment_on_checkin_amount) if booking.payment_on_checkin_amount else float(booking.fare),
                 }
             })
         else:
@@ -221,6 +233,8 @@ def seat_info(voyage_id, seat_id):
                 'departure_time': voyage.departure_at.strftime('%H:%M'),
                 'boarded_at': booking.boarded_at.strftime('%H:%M') if booking.boarded_at else None,
                 'boarded_by': booking.boarded_by.full_name if booking.boarded_by else None,
+                'payment_on_checkin': bool(booking.payment_on_checkin),
+                'poc_amount': float(booking.payment_on_checkin_amount) if booking.payment_on_checkin_amount else float(booking.fare),
             }
         })
 
@@ -282,6 +296,12 @@ def create_booking():
     # Server-side fare: ignore form value, look up correct stop fare
     fare = _get_stop_fare(voyage, form.boarding_point.data)
     advance = float(form.advance_paid.data or 0)
+    # Payment on Check-in
+    payment_on_checkin = request.form.get('payment_on_checkin') == '1'
+    poc_amount_raw = request.form.get('payment_on_checkin_amount')
+    payment_on_checkin_amount = float(poc_amount_raw) if poc_amount_raw else None
+    if payment_on_checkin:
+        advance = 0
     balance = fare - advance
     code = f"SHRI-{voyage.departure_at.strftime('%Y%m%d')}-{seat_id}-{secrets.token_hex(3).upper()}"
     booking = Booking(
@@ -298,6 +318,8 @@ def create_booking():
         booking_code=code,
         created_by_id=current_user.id,
         status='confirmed',
+        payment_on_checkin=payment_on_checkin,
+        payment_on_checkin_amount=payment_on_checkin_amount,
     )
 
     try:
@@ -760,6 +782,9 @@ def cash_collect():
         notes=data.get('notes', '').strip() or None,
     )
     db.session.add(cc)
+    # Clear payment_on_checkin flag once cash is collected
+    if booking.payment_on_checkin:
+        booking.payment_on_checkin = False
     db.session.commit()
 
     log_activity('cash_collected',
@@ -949,3 +974,19 @@ def submit_trip_report():
                  'voyage', voyage_id)
 
     return jsonify({'status': 'ok', 'report_id': report.id, 'total_collected': total_collected})
+
+
+@staff_bp.route('/cash/poc-clear/<int:booking_id>', methods=['POST'])
+@login_required
+def poc_clear(booking_id):
+    """Clear payment_on_checkin flag after driver collects cash."""
+    if not current_user.has_role('driver', 'admin', 'reservation'):
+        abort(403)
+    booking = Booking.query.get_or_404(booking_id)
+    booking.payment_on_checkin = False
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': 'Database error.'}), 500
+    return jsonify({'status': 'ok'})

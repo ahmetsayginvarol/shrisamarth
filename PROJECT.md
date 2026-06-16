@@ -240,3 +240,60 @@ End-of-trip cash reconciliation workflow for drivers.
 | `admin.trip_reports` | GET | List all trip reports |
 | `admin.trip_report_approve` | POST | Approve report + update bookings + create FinancialEntry |
 | `admin.trip_report_flag` | POST | Flag report for follow-up |
+
+## Payment on Check-in
+
+Allows staff to flag a booking so the driver collects cash at the boarding point (instead of a pre-paid advance).
+
+### Database
+
+Two new columns on `bookings`:
+- `payment_on_checkin` (BOOLEAN, default FALSE) — whether cash is due at boarding
+- `payment_on_checkin_amount` (NUMERIC 10,2, nullable) — agreed collection amount; falls back to `fare` if NULL
+
+Added idempotently in `_run_schema_migrations()` for both PostgreSQL (`IF NOT EXISTS`) and SQLite (try/except).
+
+### Staff Booking Form (dashboard.html)
+
+Below the Fare/Advance fields in `#bookingForm`:
+- **Payment on Check-in** checkbox (`name="payment_on_checkin"`, value `"1"`)
+- When checked: shows "Amount to collect (₹)" field, greys out Advance Paid, pre-fills with current fare
+- When fare changes while POC is checked: amount updates automatically
+
+Backend (`staff.create_booking`): reads `payment_on_checkin` and `payment_on_checkin_amount` from form; forces `advance=0` when POC is set.
+
+### Driver Dashboard
+
+**Seat map**: POC seats get class `payment-checkin` (marigold gradient, `₹` glyph in corner).
+
+**Manifest**: POC rows get class `poc-item` (amber left border) + `₹ COLLECT X` badge below passenger info.
+
+**Summary banner**: If any POC bookings exist, shows `💰 N passengers — collect ₹X at boarding` above manifest list.
+
+**Filter button**: `💰 Payment Due` button in manifest stop-filter bar — toggles `_pocFilter` to show only POC passengers.
+
+**Passenger modal** (`showDriverPassModal`): shows "💰 Payment on Check-in" panel with agreed amount; Collect button reads `poc_amount`; on success removes `payment-checkin` CSS class from seat and `poc-item` from manifest row.
+
+### Cash Collection
+
+`POST /staff/cash/collect` now also clears `payment_on_checkin = False` when set.
+
+Dedicated endpoint `POST /staff/cash/poc-clear/<booking_id>` also available.
+
+### Admin API
+
+`POST /admin/bookings/<booking_id>/poc` — JSON `{payment_on_checkin: bool, amount: float|null}` to mark/unmark any booking. Logs to ActivityLog.
+
+### Customer Confirmation
+
+`confirmation.html`: if `booking.payment_on_checkin`, shows a yellow warning box ("Payment due at boarding — please have ₹X ready at boarding point").
+
+### Routes
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `staff.create_booking` | POST | Reads `payment_on_checkin` + `payment_on_checkin_amount` from form |
+| `staff.seat_info` | GET | Returns `payment_on_checkin` + `poc_amount` in JSON response |
+| `staff.cash_collect` | POST | Clears `payment_on_checkin` on collection |
+| `staff.poc_clear` | POST | Dedicated POC flag clear endpoint |
+| `admin.booking_poc` | POST | Admin mark/unmark POC on any booking |

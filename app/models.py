@@ -181,6 +181,8 @@ class Booking(db.Model):
     booking_code = db.Column(db.String(30), unique=True, index=True)
     group_booking_code = db.Column(db.String(30), nullable=True, index=True)
     booking_type = db.Column(db.String(20), default='staff', nullable=True)
+    payment_on_checkin = db.Column(db.Boolean, default=False, nullable=True)
+    payment_on_checkin_amount = db.Column(db.Numeric(10, 2), nullable=True)
     # booking_type: 'staff' (staff-created), 'customer' (online), 'walkin' (driver walk-in)
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

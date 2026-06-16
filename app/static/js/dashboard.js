@@ -1730,6 +1730,23 @@ function initDepartureCountdown() {
 }
 
 // ============================================================
+// POC FILTER (driver view only)
+// ============================================================
+var _pocFilter = false;
+
+function togglePocFilter(btn) {
+    _pocFilter = !_pocFilter;
+    btn.classList.toggle('active', _pocFilter);
+    document.querySelectorAll('.manifest-item').forEach(function(item) {
+        if (_pocFilter) {
+            item.style.display = item.classList.contains('poc-item') ? '' : 'none';
+        } else {
+            item.style.display = '';
+        }
+    });
+}
+
+// ============================================================
 // STOP FILTER (driver view only)
 // ============================================================
 var _stopFilter = { boarding: 'ALL', dropping: 'ALL' };

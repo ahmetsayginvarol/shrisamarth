@@ -2345,3 +2345,46 @@ def trip_report_flag(report_id):
                  'trip_report', report.id)
 
     return jsonify({'status': 'ok'})
+
+
+# ============================================================
+# PAYMENT ON CHECK-IN: Admin mark/unmark
+# ============================================================
+
+@admin_bp.route('/bookings/<int:booking_id>/poc', methods=['POST'])
+@login_required
+def booking_poc(booking_id):
+    """Admin sets or clears Payment-on-Check-in for a booking."""
+    if not current_user.has_role('admin', 'reservation'):
+        abort(403)
+    booking = Booking.query.get_or_404(booking_id)
+    data = request.get_json() or {}
+    poc = bool(data.get('payment_on_checkin', False))
+    amount = data.get('amount')
+    if amount is not None:
+        try:
+            amount = float(amount)
+        except (TypeError, ValueError):
+            amount = None
+    booking.payment_on_checkin = poc
+    booking.payment_on_checkin_amount = amount if poc else None
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': 'Database error.'}), 500
+    if poc:
+        desc = f"Marked Seat {booking.seat_id} as Payment on Check-in — ₹{int(amount or float(booking.fare))}"
+    else:
+        desc = f"Removed Payment on Check-in marker from Seat {booking.seat_id}"
+    log_activity('booking_poc_updated', desc, 'booking', booking_id)
+    from app.models import ActivityLog
+    db.session.add(ActivityLog(
+        user_id=current_user.id,
+        action='booking_poc_updated',
+        description=desc,
+        target_type='booking',
+        target_id=booking_id,
+    ))
+    db.session.commit()
+    return jsonify({'status': 'ok', 'payment_on_checkin': poc, 'amount': amount})

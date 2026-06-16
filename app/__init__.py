@@ -68,6 +68,8 @@ def _run_schema_migrations(db):
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS newsletter_unsubscribed BOOLEAN DEFAULT FALSE",
             "ALTER TABLE route_stops ADD COLUMN IF NOT EXISTS fare_override NUMERIC(10,2) DEFAULT NULL",
             "ALTER TABLE bookings ADD COLUMN IF NOT EXISTS booking_type VARCHAR(20) DEFAULT 'staff'",
+            "ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_on_checkin BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_on_checkin_amount NUMERIC(10,2) DEFAULT NULL",
         ]
     else:
         # SQLite: no IF NOT EXISTS for ALTER TABLE — catch duplicate-column errors
@@ -78,6 +80,8 @@ def _run_schema_migrations(db):
             "ALTER TABLE users ADD COLUMN newsletter_unsubscribed BOOLEAN DEFAULT 0",
             "ALTER TABLE route_stops ADD COLUMN fare_override NUMERIC(10,2) DEFAULT NULL",
             "ALTER TABLE bookings ADD COLUMN booking_type VARCHAR(20) DEFAULT 'staff'",
+            "ALTER TABLE bookings ADD COLUMN payment_on_checkin BOOLEAN DEFAULT 0",
+            "ALTER TABLE bookings ADD COLUMN payment_on_checkin_amount NUMERIC(10,2) DEFAULT NULL",
         ]
 
     for sql in alter_stmts:

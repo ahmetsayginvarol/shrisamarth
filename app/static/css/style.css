@@ -1832,3 +1832,18 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
 .c-faq-answer-inner {
   padding: 0 4px 20px; font-size: 14px; color: var(--ink-2); line-height: 1.75;
 }
+
+/* ===== Payment on Check-in ===== */
+.seat.payment-checkin { background: linear-gradient(135deg, var(--marigold) 0%, #c8620a 100%) !important; border-color: #c8620a !important; color: #fff !important; position: relative; }
+.seat.payment-checkin::after { content: '₹'; position: absolute; top: 2px; right: 3px; font-size: 9px; color: white; font-weight: bold; opacity: 0.9; pointer-events: none; }
+/* Override gender-specific colors for payment-checkin seats */
+.seat.payment-checkin.booked-m, .seat.payment-checkin.booked-f,
+.seat.payment-checkin.checked-in-m, .seat.payment-checkin.checked-in-f { background: linear-gradient(135deg, var(--marigold) 0%, #c8620a 100%) !important; border-color: #c8620a !important; }
+/* Manifest POC items */
+.manifest-item.poc-item { border-left: 3px solid var(--marigold); }
+.poc-collect-badge { background: var(--marigold); color: #fff; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 4px; white-space: nowrap; display: inline-block; margin-top: 3px; }
+/* POC summary bar for driver */
+.poc-summary { display: flex; align-items: center; gap: 8px; background: rgba(200,118,26,0.10); border: 1px solid rgba(200,118,26,0.35); border-radius: 8px; padding: 10px 14px; margin: 8px 0 4px; font-size: 13px; font-weight: 600; color: var(--marigold); }
+/* Customer confirmation POC warning */
+.poc-warning { display: flex; align-items: flex-start; gap: 10px; background: rgba(200,118,26,0.10); border-left: 4px solid var(--marigold); border-radius: 6px; padding: 14px 16px; margin-top: 16px; font-size: 13px; }
+.poc-warning strong { color: var(--marigold); display: block; margin-bottom: 4px; }

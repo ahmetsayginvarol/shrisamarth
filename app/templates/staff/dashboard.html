@@ -208,11 +208,12 @@
                     {% set b = seat_map.get(seat_id) %}
                     <div class="seat
                         {% if seat_id in window_seats %}window{% endif %}
-                        {% if b %}{% if b.boarded_at %}checked-in-{{ b.gender|lower if b.gender else 'g' }}{% else %}booked-{{ b.gender|lower if b.gender else 'g' }}{% endif %}{% if b.group_booking_code %} group-seat{% endif %}{% elif seat_id in locked_seats %}locked{% endif %}"
+                        {% if b %}{% if b.boarded_at %}checked-in-{{ b.gender|lower if b.gender else 'g' }}{% else %}booked-{{ b.gender|lower if b.gender else 'g' }}{% endif %}{% if b.group_booking_code %} group-seat{% endif %}{% if b.payment_on_checkin %} payment-checkin{% endif %}{% elif seat_id in locked_seats %}locked{% endif %}"
                         data-seat="{{ seat_id }}"
                         {% if b %}data-boarding="{{ b.boarding_point or '' }}" data-dropping="{{ b.dropping_point or '' }}"{% endif %}
                         {% if b and b.group_booking_code %}data-group="{{ b.group_booking_code }}"{% endif %}
-                        title="{% if b %}{{ b.passenger_name }}{% if b.boarding_point %} | Boards: {{ b.boarding_point }}{% endif %}{% if b.dropping_point %} | Drops: {{ b.dropping_point }}{% endif %}{% if b.group_booking_code %} (group){% endif %}{% elif seat_id in locked_seats %}Being reserved by a customer{% else %}Seat {{ seat_id }}{% endif %}">
+                        {% if b and b.payment_on_checkin %}data-poc-amount="{{ (b.payment_on_checkin_amount|int) if b.payment_on_checkin_amount else (b.fare|int) }}"{% endif %}
+                        title="{% if b %}{{ b.passenger_name }}{% if b.boarding_point %} | Boards: {{ b.boarding_point }}{% endif %}{% if b.dropping_point %} | Drops: {{ b.dropping_point }}{% endif %}{% if b.payment_on_checkin %} | 💰 Collect ₹{{ (b.payment_on_checkin_amount|int) if b.payment_on_checkin_amount else (b.fare|int) }}{% endif %}{% if b.group_booking_code %} (group){% endif %}{% elif seat_id in locked_seats %}Being reserved by a customer{% else %}Seat {{ seat_id }}{% endif %}">
                         {% if b and b.gender in ('M', 'F') %}<img src="/static/icons/{{ 'male' if b.gender == 'M' else 'female' }}.png" class="seat-gender-icon" alt="{{ b.gender }}"><span class="seat-num">{{ seat_id }}</span>{% else %}{{ seat_id }}{% endif %}
                     </div>
                     {% if loop.index == 2 %}<div class="aisle"></div>{% endif %}
@@ -225,11 +226,12 @@
                     {% set b = seat_map.get(seat_id) %}
                     <div class="seat
                         {% if seat_id in window_seats %}window{% endif %}
-                        {% if b %}{% if b.boarded_at %}checked-in-{{ b.gender|lower if b.gender else 'g' }}{% else %}booked-{{ b.gender|lower if b.gender else 'g' }}{% endif %}{% if b.group_booking_code %} group-seat{% endif %}{% elif seat_id in locked_seats %}locked{% endif %}"
+                        {% if b %}{% if b.boarded_at %}checked-in-{{ b.gender|lower if b.gender else 'g' }}{% else %}booked-{{ b.gender|lower if b.gender else 'g' }}{% endif %}{% if b.group_booking_code %} group-seat{% endif %}{% if b.payment_on_checkin %} payment-checkin{% endif %}{% elif seat_id in locked_seats %}locked{% endif %}"
                         data-seat="{{ seat_id }}"
                         {% if b %}data-boarding="{{ b.boarding_point or '' }}" data-dropping="{{ b.dropping_point or '' }}"{% endif %}
                         {% if b and b.group_booking_code %}data-group="{{ b.group_booking_code }}"{% endif %}
-                        title="{% if b %}{{ b.passenger_name }}{% if b.boarding_point %} | Boards: {{ b.boarding_point }}{% endif %}{% if b.dropping_point %} | Drops: {{ b.dropping_point }}{% endif %}{% if b.group_booking_code %} (group){% endif %}{% elif seat_id in locked_seats %}Being reserved by a customer{% else %}Seat {{ seat_id }}{% endif %}">
+                        {% if b and b.payment_on_checkin %}data-poc-amount="{{ (b.payment_on_checkin_amount|int) if b.payment_on_checkin_amount else (b.fare|int) }}"{% endif %}
+                        title="{% if b %}{{ b.passenger_name }}{% if b.boarding_point %} | Boards: {{ b.boarding_point }}{% endif %}{% if b.dropping_point %} | Drops: {{ b.dropping_point }}{% endif %}{% if b.payment_on_checkin %} | 💰 Collect ₹{{ (b.payment_on_checkin_amount|int) if b.payment_on_checkin_amount else (b.fare|int) }}{% endif %}{% if b.group_booking_code %} (group){% endif %}{% elif seat_id in locked_seats %}Being reserved by a customer{% else %}Seat {{ seat_id }}{% endif %}">
                         {% if b and b.gender in ('M', 'F') %}<img src="/static/icons/{{ 'male' if b.gender == 'M' else 'female' }}.png" class="seat-gender-icon" alt="{{ b.gender }}"><span class="seat-num">{{ seat_id }}</span>{% else %}{{ seat_id }}{% endif %}
                     </div>
                 {% endfor %}
@@ -273,7 +275,18 @@
                     {% endfor %}
                 </select>
                 {% endif %}
+                {% if role == 'driver' and poc_count %}
+                <button type="button" class="stop-filter-select" id="pocFilterBtn" onclick="togglePocFilter(this)" style="background:var(--marigold);color:#fff;border:none;cursor:pointer;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;">
+                    💰 Payment Due
+                </button>
+                {% endif %}
                 <div id="manifestFilterCount" class="hidden" style="font-size:11px;color:var(--marigold);font-weight:600;align-self:center;"></div>
+            </div>
+            {% endif %}
+            {% if role == 'driver' and poc_count %}
+            <div class="poc-summary" id="pocSummary">
+                <span>💰</span>
+                <span id="pocSummaryText">{{ poc_count }} passenger{{ 's' if poc_count != 1 else '' }} — collect ₹{{ poc_total }} at boarding</span>
             </div>
             {% endif %}
             {% set boarded_count = seat_map.values()|selectattr('boarded_at')|list|length %}
@@ -289,10 +302,11 @@
             {% if seat_map %}
             <div class="manifest-list">
                 {% for seat_id, b in seat_map.items()|sort %}
-                <div class="manifest-item{% if b.boarded_at %} checked-in{% endif %}" data-seat="{{ seat_id }}" data-booking-id="{{ b.id }}"
+                <div class="manifest-item{% if b.boarded_at %} checked-in{% endif %}{% if b.payment_on_checkin %} poc-item{% endif %}" data-seat="{{ seat_id }}" data-booking-id="{{ b.id }}"
                      data-boarding="{{ b.boarding_point or '' }}" data-dropping="{{ b.dropping_point or '' }}"
                      style="cursor: pointer;"
-                     onclick="manifestClick('{{ seat_id }}')">
+                     onclick="manifestClick('{{ seat_id }}')"
+                     data-poc="{{ '1' if b.payment_on_checkin else '0' }}">
                     <div class="manifest-item-inner">
                         <div class="manifest-seat"
                              style="background: {{ '#3f6da8' if b.gender == 'M' else '#b85685' }};">
@@ -310,6 +324,9 @@
                             {% endif %}
                             {% if b.boarded_at %}
                             <div class="boarding-badge" data-i18n-prefix="dash.checkedin_at">✓ {{ b.boarded_at.strftime('%H:%M') }}</div>
+                            {% endif %}
+                            {% if role == 'driver' and b.payment_on_checkin %}
+                            <div class="poc-collect-badge">₹ COLLECT {{ (b.payment_on_checkin_amount or b.fare)|int }}</div>
                             {% endif %}
                         </div>
                         <div style="display:flex;flex-direction:column;align-items:center;gap:4px;margin-left:auto;">
@@ -485,13 +502,28 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label class="form-label" data-i18n="dash.fare">Fare (₹)</label>
-                        <input type="number" name="fare" class="form-input"
-                               value="{{ voyage.base_fare }}" min="0" step="1" required>
+                        <input type="number" name="fare" id="bookingFare" class="form-input"
+                               value="{{ voyage.base_fare }}" min="0" step="1" required
+                               onchange="if(document.getElementById('pocCheck') && document.getElementById('pocCheck').checked){ document.getElementById('pocAmount').value = this.value; }">
                     </div>
                     <div class="form-group">
                         <label class="form-label" data-i18n="dash.advance">Advance (₹)</label>
-                        <input type="number" name="advance_paid" class="form-input"
+                        <input type="number" name="advance_paid" id="bookingAdvance" class="form-input"
                                value="0" min="0" step="1">
+                    </div>
+                </div>
+
+                <div class="form-group" id="pocToggleGroup">
+                    <label class="poc-toggle-label">
+                        <input type="checkbox" id="pocCheck" name="payment_on_checkin" value="1"
+                               onchange="togglePocField(this)">
+                        <span data-i18n="dash.poc_label">Payment on Check-in</span>
+                    </label>
+                    <div class="form-hint" data-i18n="dash.poc_hint">Driver will collect cash at boarding</div>
+                    <div id="pocAmountRow" class="hidden" style="margin-top:8px;">
+                        <label class="form-label" data-i18n="dash.poc_amount">Amount to collect (₹)</label>
+                        <input type="number" id="pocAmount" name="payment_on_checkin_amount" class="form-input"
+                               min="0" step="1" style="max-width:160px;">
                     </div>
                 </div>
 
@@ -639,6 +671,13 @@
             <span style="color:var(--muted);">Dropping</span><span id="dpmDropping">—</span>
         </div>
         <div id="dpmCheckinStatus" style="margin-bottom:10px;"></div>
+        <div id="dpmPocRow" style="display:none; background:rgba(200,118,26,0.12); border:1px solid rgba(200,118,26,0.5); border-radius:8px; padding:10px 14px; margin-bottom:14px;">
+            <div style="font-size:12px; color:#c8761a; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:4px;">💰 Payment on Check-in</div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:13px; color:#c8761a;">Agreed amount</span>
+                <strong style="font-size:16px; color:#c8761a;" id="dpmPocAmt">₹0</strong>
+            </div>
+        </div>
         <div id="dpmBalanceRow" style="display:none; background:rgba(200,118,26,0.08); border:1px solid rgba(200,118,26,0.3); border-radius:8px; padding:10px 14px; margin-bottom:14px; justify-content:space-between; align-items:center;">
             <span style="font-size:13px; color:#c8761a; font-weight:600;">Balance Due</span>
             <strong style="font-size:16px; color:#c8761a;" id="dpmBalanceAmt">₹0</strong>
@@ -774,6 +813,30 @@
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+
+<style>
+/* Payment on Check-in toggle */
+.poc-toggle-label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: 500; }
+.poc-toggle-label input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--marigold); cursor: pointer; }
+.form-hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+</style>
+
+<script>
+function togglePocField(cb) {
+    var row = document.getElementById('pocAmountRow');
+    var advanceField = document.querySelector('[name="advance_paid"]');
+    if (cb.checked) {
+        row.classList.remove('hidden');
+        var fareEl = document.querySelector('[name="fare"]');
+        var fare = parseFloat((fareEl || {}).value) || 0;
+        document.getElementById('pocAmount').value = fare;
+        if (advanceField) { advanceField.value = 0; advanceField.disabled = true; }
+    } else {
+        row.classList.add('hidden');
+        if (advanceField) { advanceField.disabled = false; }
+    }
+}
+</script>
 
 {% if role == 'driver' and voyage %}
 <style>
@@ -1046,11 +1109,30 @@ window.showDriverPassModal = function(booking) {
 
     const balance = parseFloat(booking.balance) || 0;
     const collected = isCollected(booking.id);
+    const pocEnabled = booking.payment_on_checkin && !collected;
+    const pocAmount = booking.poc_amount || booking.fare || 0;
     const balRow = document.getElementById('dpmBalanceRow');
     const collRow = document.getElementById('dpmCollectedRow');
     const cashBtn = document.getElementById('dpmCashBtn');
+    const pocRow = document.getElementById('dpmPocRow');
 
-    if (balance > 0 && !collected) {
+    // Hide POC row by default
+    if (pocRow) pocRow.style.display = 'none';
+
+    if (pocEnabled) {
+        // Payment on check-in: show POC panel and collect button
+        if (pocRow) {
+            pocRow.style.display = '';
+            var pocAmtEl = document.getElementById('dpmPocAmt');
+            if (pocAmtEl) pocAmtEl.textContent = '₹' + Math.round(pocAmount);
+        }
+        balRow.style.display = 'none';
+        collRow.style.display = 'none';
+        cashBtn.style.display = '';
+        cashBtn.disabled = false;
+        cashBtn.textContent = 'Collect ₹' + Math.round(pocAmount);
+        cashBtn.style.background = 'var(--marigold)';
+    } else if (balance > 0 && !collected) {
         balRow.style.display = 'flex';
         collRow.style.display = 'none';
         document.getElementById('dpmBalanceAmt').textContent = '₹' + Math.round(balance);
@@ -1058,7 +1140,7 @@ window.showDriverPassModal = function(booking) {
         cashBtn.disabled = false;
         cashBtn.textContent = 'Collect Cash';
         cashBtn.style.background = 'var(--marigold)';
-    } else if (balance > 0 && collected) {
+    } else if ((balance > 0 || pocAmount > 0) && collected) {
         balRow.style.display = 'none';
         collRow.style.display = '';
         cashBtn.style.display = 'none';
@@ -1105,9 +1187,12 @@ async function dpmCheckIn() {
 
 async function dpmCollectCash() {
     if (!_dpmBooking) return;
-    const amount = Math.round(parseFloat(_dpmBooking.balance) || 0);
+    var isPoc = _dpmBooking.payment_on_checkin;
+    var amount = isPoc
+        ? Math.round(_dpmBooking.poc_amount || _dpmBooking.fare || 0)
+        : Math.round(parseFloat(_dpmBooking.balance) || 0);
     if (!amount) return;
-    if (!confirm(`Collect ₹${amount} from ${_dpmBooking.name}?`)) return;
+    if (!confirm('Collect ₹' + amount + ' from ' + _dpmBooking.name + '?')) return;
 
     const btn = document.getElementById('dpmCashBtn');
     btn.disabled = true;
@@ -1117,27 +1202,43 @@ async function dpmCollectCash() {
         const res = await fetch('/staff/cash/collect', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_DASH },
-            body: JSON.stringify({ booking_id: _dpmBooking.id, amount }),
+            body: JSON.stringify({ booking_id: _dpmBooking.id, amount: amount }),
         });
         const data = await res.json();
         if (res.ok && data.status === 'ok') {
+            var pocRowEl = document.getElementById('dpmPocRow');
+            if (pocRowEl) pocRowEl.style.display = 'none';
             document.getElementById('dpmBalanceRow').style.display = 'none';
             document.getElementById('dpmCollectedRow').style.display = '';
             btn.style.display = 'none';
-            const mainBtn = document.getElementById(`collect-btn-${_dpmBooking.id}`);
+            const mainBtn = document.getElementById('collect-btn-' + _dpmBooking.id);
             if (mainBtn) { mainBtn.textContent = '✓'; mainBtn.classList.add('collected'); mainBtn.disabled = true; }
-            const balEl = document.getElementById(`bal-${_dpmBooking.id}`);
+            const balEl = document.getElementById('bal-' + _dpmBooking.id);
             if (balEl) { balEl.style.textDecoration = 'line-through'; balEl.style.color = 'var(--muted)'; }
+            // Remove payment-checkin class from seat
+            if (isPoc) {
+                var seatEl = document.querySelector('#seatMap .seat[data-seat="' + _dpmBooking.seat + '"]');
+                if (seatEl) {
+                    seatEl.classList.remove('payment-checkin');
+                }
+                // Remove poc-collect-badge and poc-item from manifest row
+                var manifestRow = document.querySelector('.manifest-item[data-booking-id="' + _dpmBooking.id + '"]');
+                if (manifestRow) {
+                    manifestRow.classList.remove('poc-item');
+                    var pocBadge = manifestRow.querySelector('.poc-collect-badge');
+                    if (pocBadge) pocBadge.remove();
+                }
+            }
             await loadCollections();
         } else {
             alert(data.message || 'Error collecting cash.');
             btn.disabled = false;
-            btn.textContent = 'Collect Cash';
+            btn.textContent = isPoc ? ('Collect ₹' + amount) : 'Collect Cash';
         }
     } catch(e) {
         alert('Network error.');
         btn.disabled = false;
-        btn.textContent = 'Collect Cash';
+        btn.textContent = isPoc ? ('Collect ₹' + amount) : 'Collect Cash';
     }
 }
 
