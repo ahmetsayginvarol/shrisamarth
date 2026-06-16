@@ -1727,13 +1727,8 @@ function initDepartureCountdown() {
 // ============================================================
 var _stopFilter = { boarding: 'ALL', dropping: 'ALL' };
 
-function setStopFilter(type, stop, btn) {
+function setStopFilter(type, stop) {
     _stopFilter[type] = stop;
-
-    // Update active pill in that row
-    var pills = document.querySelectorAll('.stop-pill[data-type="' + type + '"]');
-    pills.forEach(function(p) { p.classList.toggle('active', p.dataset.stop === stop); });
-
     applyStopFilter();
 }
 

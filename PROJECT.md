@@ -204,6 +204,13 @@ End-of-trip cash reconciliation workflow for drivers.
 | `TripReport` | `voyage_id`, `driver_id`, `status` (pending/approved/flagged), `total_collected`, `walkin_count`, `notes`, `submitted_at`, `reviewed_by_id`, `reviewed_at`, `review_notes` |
 | `Booking.booking_type` | `'staff'` (default), `'customer'` (online), `'walkin'` (driver walk-in) |
 
+### Driver Dashboard Layout
+
+- Voyage bar shows: Today's date, Switch Voyage (if multiple), Departure + countdown, Bus registration, Occupancy — **Base Fare is hidden** (not needed by drivers)
+- Stop filters appear as compact `<select>` dropdowns (Boarding / Dropping) inside the manifest panel header — replaces old pill-button bar above the seat map
+- Filtering dims non-matching seats on the seat map and hides non-matching manifest items; a count label shows "X / Y shown" when active
+- Walk-in bookings and cash collection buttons remain in the manifest panel below
+
 ### Driver Workflow (Staff Dashboard)
 
 1. Manifest list shows "₹X" amber button next to passengers with `balance_due > 0`

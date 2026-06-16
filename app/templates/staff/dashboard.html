@@ -125,10 +125,6 @@
             </div>
         </div>
         <div class="meta-item">
-            <div class="meta-label" data-i18n="dash.fare.base">Base Fare</div>
-            <div class="meta-value">₹ {{ voyage.base_fare }}</div>
-        </div>
-        <div class="meta-item">
             <a href="{{ url_for('staff.download_manifest', voyage_id=voyage.id) }}?lang={{ request.cookies.get('lang', 'en') }}"
                class="btn btn-ghost" style="margin-top: 14px; font-size: 12px;"
                id="manifestLink">
@@ -190,33 +186,6 @@
             {% endif %}
         </div>
 
-        {% if role == 'driver' and (boarding_stops or dropping_stops) %}
-        <div class="stop-filter-bar" id="stopFilterBar">
-            {% if boarding_stops %}
-            <div class="stop-filter-row">
-                <span class="stop-filter-label" data-i18n="dash.filter_boarding">Filter by boarding:</span>
-                <div class="stop-pills" id="boardingPills">
-                    <button class="stop-pill active" data-type="boarding" data-stop="ALL" onclick="setStopFilter('boarding','ALL',this)" data-i18n="dash.filter_all">All</button>
-                    {% for s in boarding_stops %}
-                    <button class="stop-pill" data-type="boarding" data-stop="{{ s.stop_name }}" onclick="setStopFilter('boarding','{{ s.stop_name }}',this)">{{ s.stop_name }}</button>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
-            {% if dropping_stops %}
-            <div class="stop-filter-row">
-                <span class="stop-filter-label" data-i18n="dash.filter_dropping">Filter by dropping:</span>
-                <div class="stop-pills" id="droppingPills">
-                    <button class="stop-pill active" data-type="dropping" data-stop="ALL" onclick="setStopFilter('dropping','ALL',this)" data-i18n="dash.filter_all">All</button>
-                    {% for s in dropping_stops %}
-                    <button class="stop-pill" data-type="dropping" data-stop="{{ s.stop_name }}" onclick="setStopFilter('dropping','{{ s.stop_name }}',this)">{{ s.stop_name }}</button>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endif %}
-            <div class="stop-filter-count hidden" id="stopFilterCount"></div>
-        </div>
-        {% endif %}
 
         <div class="bus" id="seatMap">
             <div class="bus-front">
@@ -287,7 +256,25 @@
                 <span class="seat-badge" id="manifestBadge">{{ seat_map|length }} / {{ voyage.bus.total_seats }}</span>
             </div>
             {% if role == 'driver' and (boarding_stops or dropping_stops) %}
-            <div id="manifestFilterCount" class="hidden" style="font-size:12px;color:var(--marigold);margin-bottom:6px;font-weight:600;"></div>
+            <div class="manifest-stop-filter">
+                {% if boarding_stops %}
+                <select class="stop-filter-select" onchange="setStopFilter('boarding', this.value)">
+                    <option value="ALL" data-i18n="dash.filter_boarding">Boarding: All</option>
+                    {% for s in boarding_stops %}
+                    <option value="{{ s.stop_name }}">{{ s.stop_name }}</option>
+                    {% endfor %}
+                </select>
+                {% endif %}
+                {% if dropping_stops %}
+                <select class="stop-filter-select" onchange="setStopFilter('dropping', this.value)">
+                    <option value="ALL" data-i18n="dash.filter_dropping">Dropping: All</option>
+                    {% for s in dropping_stops %}
+                    <option value="{{ s.stop_name }}">{{ s.stop_name }}</option>
+                    {% endfor %}
+                </select>
+                {% endif %}
+                <div id="manifestFilterCount" class="hidden" style="font-size:11px;color:var(--marigold);font-weight:600;align-self:center;"></div>
+            </div>
             {% endif %}
             {% set boarded_count = seat_map.values()|selectattr('boarded_at')|list|length %}
             <div class="checkin-count{% if role == 'driver' %} checkin-count-large{% endif %}">
