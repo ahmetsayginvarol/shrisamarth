@@ -241,7 +241,7 @@ End-of-trip cash reconciliation workflow for drivers.
 | `admin.trip_report_approve` | POST | Approve report + update bookings + create FinancialEntry |
 | `admin.trip_report_flag` | POST | Flag report for follow-up |
 
-## Payment on Check-in
+## Payment on Boarding
 
 Allows staff to flag a booking so the driver collects cash at the boarding point (instead of a pre-paid advance).
 
@@ -256,11 +256,20 @@ Added idempotently in `_run_schema_migrations()` for both PostgreSQL (`IF NOT EX
 ### Staff Booking Form (dashboard.html)
 
 Below the Fare/Advance fields in `#bookingForm`:
-- **Payment on Check-in** checkbox (`name="payment_on_checkin"`, value `"1"`)
+- **Payment on boarding** checkbox (`name="payment_on_checkin"`, value `"1"`)
 - When checked: shows "Amount to collect (₹)" field, greys out Advance Paid, pre-fills with current fare
 - When fare changes while POC is checked: amount updates automatically
 
 Backend (`staff.create_booking`): reads `payment_on_checkin` and `payment_on_checkin_amount` from form; forces `advance=0` when POC is set.
+
+### Passenger Details Panel (dashboard.html)
+
+In `panel-details` (booked passenger view), staff/admin see a "Payment on boarding" toggle:
+- Checkbox + optional amount field, visible for all booked passengers
+- Calls `POST /admin/bookings/<id>/poc` via `toggleDetailsPoc()` in `dashboard.js`
+- Amount update debounced 600ms via `updateDetailsPocAmount()`
+- Hidden for drivers (read-only view uses the driver passenger modal instead)
+- On save: updates seat map class (`payment-checkin`) and manifest row class (`poc-item`) live
 
 ### Driver Dashboard
 
@@ -272,7 +281,7 @@ Backend (`staff.create_booking`): reads `payment_on_checkin` and `payment_on_che
 
 **Filter button**: `💰 Payment Due` button in manifest stop-filter bar — toggles `_pocFilter` to show only POC passengers.
 
-**Passenger modal** (`showDriverPassModal`): shows "💰 Payment on Check-in" panel with agreed amount; Collect button reads `poc_amount`; on success removes `payment-checkin` CSS class from seat and `poc-item` from manifest row.
+**Passenger modal** (`showDriverPassModal`): shows "💰 Payment on boarding" panel with agreed amount; Collect button reads `poc_amount`; on success removes `payment-checkin` CSS class from seat and `poc-item` from manifest row.
 
 ### Cash Collection
 

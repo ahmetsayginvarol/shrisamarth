@@ -793,6 +793,24 @@ function showBookingDetails(booking, readonly) {
         row.style.display = (readonly && i >= 2) ? 'none' : '';
     });
 
+    // Payment on boarding toggle (staff/admin only — hidden for drivers)
+    const pocSection = document.getElementById('pocDetailsSection');
+    if (pocSection) {
+        if (readonly) {
+            pocSection.style.display = 'none';
+        } else {
+            pocSection.style.display = '';
+            const pocCheck = document.getElementById('detailsPocCheck');
+            const pocAmountRow = document.getElementById('detailsPocAmountRow');
+            const pocAmountInput = document.getElementById('detailsPocAmount');
+            const pocStatus = document.getElementById('detailsPocStatus');
+            if (pocCheck) pocCheck.checked = !!booking.payment_on_checkin;
+            if (pocAmountRow) pocAmountRow.classList.toggle('hidden', !booking.payment_on_checkin);
+            if (pocAmountInput && booking.poc_amount) pocAmountInput.value = booking.poc_amount;
+            if (pocStatus) pocStatus.textContent = '';
+        }
+    }
+
     // For driver (read-only), use an overlay modal instead of switching panels
     // so the manifest + cash section buttons stay accessible
     if (readonly && typeof window.showDriverPassModal === 'function') {
@@ -1744,6 +1762,73 @@ function togglePocFilter(btn) {
             item.style.display = '';
         }
     });
+}
+
+// ============================================================
+// PAYMENT ON BOARDING — details panel toggle (staff/admin only)
+// ============================================================
+
+function toggleDetailsPoc(cb) {
+    const amountRow = document.getElementById('detailsPocAmountRow');
+    const amountInput = document.getElementById('detailsPocAmount');
+    const statusEl = document.getElementById('detailsPocStatus');
+    if (!currentBookingId) return;
+
+    if (amountRow) amountRow.classList.toggle('hidden', !cb.checked);
+
+    const payload = { payment_on_checkin: cb.checked, amount: null };
+    if (cb.checked && amountInput && amountInput.value) {
+        payload.amount = parseFloat(amountInput.value) || null;
+    }
+
+    if (statusEl) statusEl.textContent = '…';
+    fetch('/admin/bookings/' + currentBookingId + '/poc', {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: JSON.stringify(payload),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (statusEl) statusEl.textContent = data.status === 'ok' ? '✓ Saved' : (data.message || 'Error');
+        if (data.status === 'ok') {
+            // Update seat map
+            const seatEl = document.querySelector('.seat[data-seat="' + currentSeatId + '"]');
+            if (seatEl) {
+                if (cb.checked) seatEl.classList.add('payment-checkin');
+                else seatEl.classList.remove('payment-checkin');
+            }
+            // Update manifest row
+            const manifestRow = document.querySelector('.manifest-item[data-seat="' + currentSeatId + '"]');
+            if (manifestRow) {
+                if (cb.checked) manifestRow.classList.add('poc-item');
+                else manifestRow.classList.remove('poc-item');
+            }
+            setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2000);
+        }
+    })
+    .catch(() => { if (statusEl) statusEl.textContent = 'Error'; });
+}
+
+var _pocAmountTimer = null;
+function updateDetailsPocAmount(input) {
+    if (!currentBookingId) return;
+    clearTimeout(_pocAmountTimer);
+    const statusEl = document.getElementById('detailsPocStatus');
+    _pocAmountTimer = setTimeout(function() {
+        const amount = parseFloat(input.value) || null;
+        if (statusEl) statusEl.textContent = '…';
+        fetch('/admin/bookings/' + currentBookingId + '/poc', {
+            method: 'POST',
+            headers: csrfHeaders(),
+            body: JSON.stringify({ payment_on_checkin: true, amount: amount }),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (statusEl) statusEl.textContent = data.status === 'ok' ? '✓ Saved' : (data.message || 'Error');
+            setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2000);
+        })
+        .catch(() => { if (statusEl) statusEl.textContent = 'Error'; });
+    }, 600);
 }
 
 // ============================================================

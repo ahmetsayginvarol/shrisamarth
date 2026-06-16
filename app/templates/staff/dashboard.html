@@ -517,7 +517,7 @@
                     <label class="poc-toggle-label">
                         <input type="checkbox" id="pocCheck" name="payment_on_checkin" value="1"
                                onchange="togglePocField(this)">
-                        <span data-i18n="dash.poc_label">Payment on Check-in</span>
+                        <span data-i18n="dash.poc_label">Payment on boarding</span>
                     </label>
                     <div class="form-hint" data-i18n="dash.poc_hint">Driver will collect cash at boarding</div>
                     <div id="pocAmountRow" class="hidden" style="margin-top:8px;">
@@ -604,6 +604,25 @@
                         ✓ Check In Passenger
                     </button>
                 </div>
+                <!-- Payment on boarding toggle (staff/admin only) -->
+                <div id="pocDetailsSection" style="border-top:1px solid var(--line); padding-top:14px; margin-top:14px;">
+                    <label style="display:flex; align-items:center; gap:10px; cursor:pointer; user-select:none;">
+                        <input type="checkbox" id="detailsPocCheck"
+                               onchange="toggleDetailsPoc(this)"
+                               style="width:16px;height:16px;accent-color:var(--marigold);cursor:pointer;">
+                        <div>
+                            <div style="font-size:13px;font-weight:600;" data-i18n="dash.poc_label">Payment on boarding</div>
+                            <div style="font-size:11px;color:var(--muted);" data-i18n="dash.poc_hint">Driver will collect cash at boarding</div>
+                        </div>
+                    </label>
+                    <div id="detailsPocAmountRow" class="hidden" style="margin-top:10px; display:flex; align-items:center; gap:8px;">
+                        <label style="font-size:12px;color:var(--muted);white-space:nowrap;" data-i18n="dash.poc_amount">Amount (₹)</label>
+                        <input type="number" id="detailsPocAmount" class="form-input" min="0" step="1"
+                               style="max-width:120px; padding:6px 10px;"
+                               onchange="updateDetailsPocAmount(this)">
+                    </div>
+                    <div id="detailsPocStatus" style="font-size:11px;margin-top:6px;"></div>
+                </div>
                 <div class="form-actions" style="flex-wrap: wrap; gap: 8px;">
                     <button type="button" class="btn btn-ghost"
                             onclick="closePanel()"
@@ -672,7 +691,7 @@
         </div>
         <div id="dpmCheckinStatus" style="margin-bottom:10px;"></div>
         <div id="dpmPocRow" style="display:none; background:rgba(200,118,26,0.12); border:1px solid rgba(200,118,26,0.5); border-radius:8px; padding:10px 14px; margin-bottom:14px;">
-            <div style="font-size:12px; color:#c8761a; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:4px;">💰 Payment on Check-in</div>
+            <div style="font-size:12px; color:#c8761a; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:4px;">💰 Payment on boarding</div>
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <span style="font-size:13px; color:#c8761a;">Agreed amount</span>
                 <strong style="font-size:16px; color:#c8761a;" id="dpmPocAmt">₹0</strong>
