@@ -64,6 +64,14 @@
             <span class="nav-icon">🛡️</span>
             <span>Security</span>
         </a>
+        <a href="{{ url_for('admin.trip_reports') }}"
+           class="nav-item {% if 'trip_report' in request.endpoint %}active{% endif %}">
+            <span class="nav-icon">📋</span>
+            <span data-i18n="nav.trip_reports">Trip Reports</span>
+            {% if pending_trip_reports_count and pending_trip_reports_count > 0 %}
+            <span style="margin-left:auto; background:var(--ruby); color:#fff; font-size:10px; font-weight:700; padding:2px 6px; border-radius:10px;">{{ pending_trip_reports_count }}</span>
+            {% endif %}
+        </a>
         <a href="{{ url_for('admin.danger_zone') }}"
            class="nav-item {% if 'danger' in request.endpoint %}active{% endif %}"
            style="color:var(--ruby); margin-top:8px;">

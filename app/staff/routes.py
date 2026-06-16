@@ -4,7 +4,7 @@ from flask_login import login_required, current_user
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db, socketio, limiter
-from app.models import Voyage, Booking, RouteStop, SEAT_ADJACENCY, WINDOW_SEATS
+from app.models import Voyage, Booking, RouteStop, SEAT_ADJACENCY, WINDOW_SEATS, CashCollection, TripReport
 from app.staff.forms import BookingForm
 from flask import send_file
 from app.staff.ticket import generate_ticket, generate_group_ticket
@@ -717,3 +717,235 @@ def download_manifest(voyage_id):
         as_attachment=True,
         download_name=filename,
     )
+
+
+# ============================================================
+# CASH COLLECTION API (driver)
+# ============================================================
+
+@staff_bp.route('/cash/collect', methods=['POST'])
+@login_required
+def cash_collect():
+    """Driver records cash collected for an existing booking's balance."""
+    if not current_user.has_role('driver', 'admin', 'reservation'):
+        abort(403)
+
+    data = request.get_json() or {}
+    booking_id = data.get('booking_id')
+    if not booking_id:
+        return jsonify({'status': 'error', 'message': 'booking_id required'}), 400
+
+    booking = Booking.query.get_or_404(booking_id)
+
+    # Check if already collected
+    existing = CashCollection.query.filter_by(booking_id=booking_id).first()
+    if existing:
+        return jsonify({'status': 'error', 'message': 'Cash already recorded for this booking.'}), 409
+
+    amount = float(data.get('amount', float(booking.balance_due or 0)))
+    if amount <= 0:
+        return jsonify({'status': 'error', 'message': 'Amount must be positive.'}), 400
+
+    cc = CashCollection(
+        voyage_id=booking.voyage_id,
+        booking_id=booking.id,
+        driver_id=current_user.id,
+        passenger_name=booking.passenger_name,
+        passenger_phone=booking.passenger_phone,
+        seat_id=booking.seat_id,
+        boarding_point=booking.boarding_point,
+        dropping_point=booking.dropping_point,
+        amount=amount,
+        is_walkin=False,
+        notes=data.get('notes', '').strip() or None,
+    )
+    db.session.add(cc)
+    db.session.commit()
+
+    log_activity('cash_collected',
+                 f'{current_user.full_name} collected ₹{int(amount)} from {booking.passenger_name} (seat {booking.seat_id})',
+                 'booking', booking.id)
+
+    return jsonify({'status': 'ok', 'collection_id': cc.id, 'amount': amount})
+
+
+@staff_bp.route('/cash/walkin', methods=['POST'])
+@login_required
+def cash_walkin():
+    """Driver adds a walk-in passenger not pre-booked online."""
+    if not current_user.has_role('driver', 'admin', 'reservation'):
+        abort(403)
+
+    data = request.get_json() or {}
+    voyage_id = data.get('voyage_id')
+    if not voyage_id:
+        return jsonify({'status': 'error', 'message': 'voyage_id required'}), 400
+
+    voyage = Voyage.query.get_or_404(int(voyage_id))
+
+    if current_user.role == 'driver' and voyage.driver_id != current_user.id:
+        abort(403)
+
+    seat_id = str(data.get('seat_id', '')).strip()
+    if not seat_id:
+        return jsonify({'status': 'error', 'message': 'Seat ID required'}), 400
+
+    existing = Booking.query.filter_by(voyage_id=voyage.id, seat_id=seat_id, status='confirmed').first()
+    if existing:
+        return jsonify({'status': 'error', 'message': f'Seat {seat_id} is already booked.'}), 409
+
+    name = data.get('passenger_name', '').strip()
+    phone = data.get('passenger_phone', '').strip()
+    gender = data.get('gender', '') or None
+    boarding = data.get('boarding_point', '').strip()
+    dropping = data.get('dropping_point', '').strip()
+    amount = float(data.get('amount', 0))
+
+    if not name or not phone:
+        return jsonify({'status': 'error', 'message': 'Name and phone are required.'}), 400
+
+    code = f"WALK-{voyage.departure_at.strftime('%Y%m%d')}-{seat_id}-{secrets.token_hex(3).upper()}"
+    booking = Booking(
+        voyage_id=voyage.id,
+        seat_id=seat_id,
+        passenger_name=name,
+        passenger_phone=phone,
+        gender=gender,
+        boarding_point=boarding,
+        dropping_point=dropping,
+        fare=amount,
+        advance_paid=amount,
+        balance_due=0,
+        booking_code=code,
+        booking_type='walkin',
+        created_by_id=current_user.id,
+        status='confirmed',
+    )
+
+    cc = CashCollection(
+        voyage_id=voyage.id,
+        driver_id=current_user.id,
+        passenger_name=name,
+        passenger_phone=phone,
+        seat_id=seat_id,
+        boarding_point=boarding,
+        dropping_point=dropping,
+        amount=amount,
+        is_walkin=True,
+    )
+
+    try:
+        db.session.add(booking)
+        db.session.flush()
+        cc.booking_id = booking.id
+        db.session.add(cc)
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': f'Seat {seat_id} was just taken. Please refresh.'}), 409
+
+    log_activity('booking_created',
+                 f'Walk-in booking {code}: seat {seat_id} for {name} on {voyage.origin}→{voyage.destination}',
+                 'booking', booking.id)
+
+    socketio.emit('seat_booked', {
+        'voyage_id': voyage.id,
+        'seat_id': seat_id,
+        'gender': gender or 'g',
+        'name': name,
+    })
+
+    return jsonify({
+        'status': 'ok',
+        'booking_code': code,
+        'seat_id': seat_id,
+        'booking_id': booking.id,
+    })
+
+
+@staff_bp.route('/cash/voyage/<int:voyage_id>/collections')
+@login_required
+def voyage_collections(voyage_id):
+    """Get all cash collections for a voyage."""
+    voyage = Voyage.query.get_or_404(voyage_id)
+
+    if current_user.role == 'driver' and voyage.driver_id != current_user.id:
+        abort(403)
+
+    driver_id = current_user.id if current_user.role == 'driver' else None
+    q = CashCollection.query.filter_by(voyage_id=voyage_id)
+    if driver_id:
+        q = q.filter_by(driver_id=driver_id)
+    collections = q.order_by(CashCollection.collected_at).all()
+
+    total = sum(float(c.amount) for c in collections)
+
+    existing_report = TripReport.query.filter_by(voyage_id=voyage_id, driver_id=current_user.id).first()
+
+    return jsonify({
+        'collections': [{
+            'id': c.id,
+            'passenger_name': c.passenger_name,
+            'seat_id': c.seat_id,
+            'amount': float(c.amount),
+            'is_walkin': c.is_walkin,
+            'collected_at': c.collected_at.strftime('%H:%M'),
+            'booking_id': c.booking_id,
+        } for c in collections],
+        'total': total,
+        'count': len(collections),
+        'report_submitted': existing_report is not None,
+        'report_status': existing_report.status if existing_report else None,
+    })
+
+
+@staff_bp.route('/trip-report/submit', methods=['POST'])
+@login_required
+def submit_trip_report():
+    """Driver submits trip report at end of voyage."""
+    if not current_user.has_role('driver', 'admin', 'reservation'):
+        abort(403)
+
+    data = request.get_json() or {}
+    voyage_id = data.get('voyage_id')
+    if not voyage_id:
+        return jsonify({'status': 'error', 'message': 'voyage_id required'}), 400
+
+    voyage = Voyage.query.get_or_404(int(voyage_id))
+
+    if current_user.role == 'driver' and voyage.driver_id != current_user.id:
+        abort(403)
+
+    existing = TripReport.query.filter_by(voyage_id=voyage_id, driver_id=current_user.id).first()
+    if existing:
+        return jsonify({'status': 'error', 'message': 'Trip report already submitted.'}), 400
+
+    collections = CashCollection.query.filter_by(
+        voyage_id=voyage_id, driver_id=current_user.id
+    ).all()
+    total_collected = sum(float(c.amount) for c in collections)
+    walkin_count = sum(1 for c in collections if c.is_walkin)
+
+    report = TripReport(
+        voyage_id=voyage_id,
+        driver_id=current_user.id,
+        status='pending',
+        total_collected=total_collected,
+        walkin_count=walkin_count,
+        notes=data.get('notes', '').strip() or None,
+    )
+    db.session.add(report)
+    db.session.commit()
+
+    notify_staff(
+        title='Trip Report Submitted',
+        message=(f"{current_user.full_name} — {voyage.origin}→{voyage.destination} "
+                 f"{voyage.departure_at.strftime('%d %b %Y')} — "
+                 f"₹{int(total_collected)} collected ({len(collections)} entries)"),
+        link=url_for('admin.trip_reports'),
+    )
+    log_activity('trip_report_submitted',
+                 f'Driver {current_user.full_name} submitted trip report for voyage {voyage_id}',
+                 'voyage', voyage_id)
+
+    return jsonify({'status': 'ok', 'report_id': report.id, 'total_collected': total_collected})

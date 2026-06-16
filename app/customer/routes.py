@@ -14,6 +14,7 @@ from app.captcha import generate_captcha, verify_captcha
 from app.models import Voyage, Booking, RouteStop, SeatLock, User, WINDOW_SEATS, SEAT_ADJACENCY, SiteContent, PasswordResetToken, EmailVerificationToken
 from app.customer.forms import CustomerLoginForm, CustomerRegisterForm, CustomerProfileForm, ForgotPasswordForm, ResetPasswordForm
 from app.logging import log_activity, notify_staff
+from app.user_activity import log_user_activity
 from app.staff.ticket import generate_ticket, generate_group_ticket, generate_qr
 
 customer_bp = Blueprint('customer', __name__, template_folder='../templates/customer')
@@ -425,6 +426,7 @@ def customer_book():
                 balance_due=fare,
                 booking_code=code,
                 group_booking_code=group_code,
+                booking_type='customer',
                 created_by_id=current_user.id if current_user.is_authenticated else None,
                 status='confirmed',
             )
@@ -457,6 +459,16 @@ def customer_book():
             'booking', bookings_created[0].id,
         )
     db.session.commit()
+
+    # Log to user activity timeline (only for registered customers)
+    if current_user.is_authenticated and current_user.role == 'customer':
+        _primary = bookings_created[0] if bookings_created else None
+        if _primary:
+            _desc = (f"Booked {len(bookings_created)} seat{'s' if is_group else ''} on "
+                     f"{voyage.origin}→{voyage.destination} "
+                     f"({voyage.departure_at.strftime('%d %b %Y')})")
+            log_user_activity(current_user.id, 'booking_created', _desc,
+                              metadata={'voyage_id': voyage.id, 'seats': seat_ids})
 
     # Log booking to abuse tracker
     log_abuse_event(_ip, 'booking_created',
@@ -568,6 +580,7 @@ def login():
         if user and user.check_password(form.password.data):
             login_user(user)
             log_activity('user_login', f'Customer login: {user.email}', 'user', user.id)
+            log_user_activity(user.id, 'login', 'Logged in', performed_by_id=user.id)
             return redirect(request.args.get('next') or url_for('customer.my_bookings'))
         flash('Invalid email or password.', 'error')
 
@@ -607,6 +620,7 @@ def register():
             return render_template('customer/register.html', form=form)
 
         log_activity('user_created', f'New customer account: {email}', 'user', user.id)
+        log_user_activity(user.id, 'register', 'Created account', performed_by_id=user.id)
         _send_verification_email(user)
         login_user(user)
         return redirect(url_for('customer.verify_pending'))
@@ -629,7 +643,8 @@ def profile():
     form = CustomerProfileForm(obj=current_user)
 
     if form.validate_on_submit():
-        if form.new_password.data:
+        password_changed = bool(form.new_password.data)
+        if password_changed:
             if not current_user.check_password(form.current_password.data):
                 flash('Current password is incorrect.', 'error')
                 return render_template('customer/profile.html', form=form)
@@ -643,20 +658,33 @@ def profile():
             db.session.rollback()
             flash('Update failed. Please try again.', 'error')
             return render_template('customer/profile.html', form=form)
+        if password_changed:
+            log_user_activity(current_user.id, 'password_changed', 'Changed password')
+        else:
+            log_user_activity(current_user.id, 'profile_updated', 'Updated profile')
         flash('Profile updated.', 'success')
         return redirect(url_for('customer.profile'))
 
     from collections import Counter
+    from app.models import UserActivityLog
+    from app.user_activity import EVENT_ICONS
     bookings = Booking.query.filter_by(created_by_id=current_user.id, status='confirmed').all()
     total_trips = len(bookings)
     routes = Counter(f"{b.voyage.origin}→{b.voyage.destination}" for b in bookings)
     fav_route = routes.most_common(1)[0][0] if routes else '—'
 
+    activity_log = (UserActivityLog.query
+                    .filter_by(user_id=current_user.id)
+                    .order_by(UserActivityLog.created_at.desc())
+                    .limit(21).all())
+    has_more = len(activity_log) > 20
+    activity_log = activity_log[:20]
+
     return render_template('customer/profile.html', form=form, stats={
         'total_trips': total_trips,
         'fav_route': fav_route,
         'member_since': current_user.created_at.strftime('%B %Y') if current_user.created_at else '—',
-    })
+    }, activity_log=activity_log, has_more=has_more, event_icons=EVENT_ICONS)
 
 
 @customer_bp.route('/profile/delete', methods=['POST'])

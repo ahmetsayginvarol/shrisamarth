@@ -100,5 +100,40 @@
         </form>
     </div>
 
+    <!-- Activity Timeline -->
+    <div style="margin-top:36px;">
+        <h2 class="serif" style="font-size:20px; margin-bottom:18px;" data-i18n="c.activity_timeline">Activity</h2>
+        {% if activity_log %}
+        <div class="c-timeline">
+            {% for event in activity_log %}
+            <div class="c-tl-item">
+                <div class="c-tl-icon">{{ event_icons.get(event.event_type, '•') }}</div>
+                <div class="c-tl-body">
+                    <div class="c-tl-desc">{{ event.description }}</div>
+                    <div class="c-tl-time">{{ event.created_at.strftime('%d %b %Y · %H:%M') }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% if has_more %}
+        <div style="text-align:center; margin-top:12px;">
+            <p style="font-size:12px; color:var(--muted);" data-i18n="c.activity_showing_last">Showing last 20 events</p>
+        </div>
+        {% endif %}
+        {% else %}
+        <div style="color:var(--muted); font-size:13px; text-align:center; padding:24px 0;" data-i18n="c.no_activity">No activity recorded yet.</div>
+        {% endif %}
+    </div>
+
 </div>
+
+<style>
+.c-timeline { position: relative; padding-left: 28px; }
+.c-timeline::before { content: ''; position: absolute; left: 10px; top: 4px; bottom: 4px; width: 1px; background: var(--line); }
+.c-tl-item { position: relative; margin-bottom: 18px; display: flex; align-items: flex-start; gap: 12px; }
+.c-tl-icon { position: absolute; left: -28px; width: 20px; height: 20px; background: var(--cream); border: 1px solid var(--line); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; }
+.c-tl-body { flex: 1; }
+.c-tl-desc { font-size: 13px; color: var(--ink); line-height: 1.4; }
+.c-tl-time { font-size: 11px; color: var(--muted); margin-top: 2px; }
+</style>
 {% endblock %}

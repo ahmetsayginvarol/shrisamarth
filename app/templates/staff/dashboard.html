@@ -318,14 +318,14 @@
                             </div>
                             <div class="manifest-sub">{{ b.passenger_phone }}</div>
                             <div class="manifest-sub">{{ b.boarding_point }} → {{ b.dropping_point }}</div>
-                            {% if b.balance_due and b.balance_due > 0 and not b.boarded_at %}
-                            <div class="manifest-balance-due">₹{{ b.balance_due|int }} due</div>
+                            {% if b.balance_due and b.balance_due > 0 %}
+                            <div class="manifest-balance-due" id="bal-{{ b.id }}">₹{{ b.balance_due|int }} due</div>
                             {% endif %}
                             {% if b.boarded_at %}
                             <div class="boarding-badge" data-i18n-prefix="dash.checkedin_at">✓ {{ b.boarded_at.strftime('%H:%M') }}</div>
                             {% endif %}
                         </div>
-                        <div style="display:flex;flex-direction:column;align-items:center;gap:2px;margin-left:auto;">
+                        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;margin-left:auto;">
                             <button type="button"
                                     class="checkin-btn{% if b.boarded_at %} checked{% endif %}"
                                     data-booking-id="{{ b.id }}"
@@ -338,6 +338,18 @@
                             </button>
                             {% if b.boarded_at %}
                             <div class="manifest-checkin-time">{{ b.boarded_at.strftime('%H:%M') }}</div>
+                            {% endif %}
+                            {% if role == 'driver' and b.balance_due and b.balance_due > 0 %}
+                            <button type="button"
+                                    class="collect-cash-btn"
+                                    id="collect-btn-{{ b.id }}"
+                                    data-booking-id="{{ b.id }}"
+                                    data-amount="{{ b.balance_due|int }}"
+                                    data-name="{{ b.passenger_name }}"
+                                    onclick="collectCash(this)"
+                                    data-i18n="dash.collect_cash">
+                                ₹{{ b.balance_due|int }}
+                            </button>
                             {% endif %}
                         </div>
                     </div>
@@ -364,6 +376,31 @@
             {% else %}
             <div class="empty-state" style="padding: 40px 0;">
                 <span class="serif" style="font-size:20px;">No bookings yet</span>
+            </div>
+            {% endif %}
+
+            {% if role == 'driver' and voyage %}
+            <!-- Cash Collection Summary (driver only) -->
+            <div class="driver-cash-section" id="driverCashSection">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <div style="font-size:12px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em;" data-i18n="dash.cash_collected">Cash Collected</div>
+                    <div id="cashTotal" style="font-size:18px; font-weight:700; color:var(--sage); font-family:'Instrument Serif',serif;">₹0</div>
+                </div>
+                <div id="cashList" style="font-size:12px; color:var(--muted); margin-bottom:12px;"></div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button class="btn btn-ghost" style="font-size:12px; width:auto; flex:1;"
+                            onclick="openWalkinModal()"
+                            data-i18n="dash.add_walkin">
+                        + Add Walk-in
+                    </button>
+                    <button class="btn" id="submitReportBtn"
+                            style="font-size:12px; width:auto; flex:1; background:var(--sage); color:#fff;"
+                            onclick="openSubmitReportModal()"
+                            data-i18n="dash.submit_report">
+                        Submit Trip Report
+                    </button>
+                </div>
+                <div id="reportStatus" style="display:none; margin-top:10px; font-size:12px; font-weight:600; text-align:center;"></div>
             </div>
             {% endif %}
         </div>
@@ -599,6 +636,93 @@
 </div>
 {% endif %}
 
+{% if role == 'driver' and voyage %}
+<!-- Walk-in Passenger Modal -->
+<div id="walkinModal" class="dz-modal-backdrop hidden">
+    <div class="dz-modal" style="max-width:480px;">
+        <div style="font-size:16px; font-weight:600; margin-bottom:16px; color:var(--ink);" data-i18n="dash.walkin_title">Add Walk-in Passenger</div>
+        <input type="hidden" id="walkinVoyageId" value="{{ voyage.id }}">
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label" data-i18n="dash.name">Passenger Name</label>
+                <input type="text" id="walkinName" class="form-input" placeholder="Full name">
+            </div>
+            <div class="form-group">
+                <label class="form-label" data-i18n="dash.contact">Phone</label>
+                <input type="text" id="walkinPhone" class="form-input" placeholder="+91 XXXXX XXXXX">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label" data-i18n="dash.seat">Seat No.</label>
+                <input type="text" id="walkinSeat" class="form-input" placeholder="e.g. 12">
+            </div>
+            <div class="form-group">
+                <label class="form-label" data-i18n="dash.gender">Gender</label>
+                <select id="walkinGender" class="form-select">
+                    <option value="">Select</option>
+                    <option value="M" data-i18n="dash.male">Male</option>
+                    <option value="F" data-i18n="dash.female">Female</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label" data-i18n="dash.boarding">Boarding</label>
+                {% if boarding_stops %}
+                <select id="walkinBoarding" class="form-select">
+                    {% for s in boarding_stops %}
+                    <option value="{{ s.stop_name }}">{{ s.stop_name }}</option>
+                    {% endfor %}
+                </select>
+                {% else %}
+                <input type="text" id="walkinBoarding" class="form-input" placeholder="Boarding stop">
+                {% endif %}
+            </div>
+            <div class="form-group">
+                <label class="form-label" data-i18n="dash.dropping">Dropping</label>
+                {% if dropping_stops %}
+                <select id="walkinDropping" class="form-select">
+                    {% for s in dropping_stops %}
+                    <option value="{{ s.stop_name }}">{{ s.stop_name }}</option>
+                    {% endfor %}
+                </select>
+                {% else %}
+                <input type="text" id="walkinDropping" class="form-input" placeholder="Dropping stop">
+                {% endif %}
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label" data-i18n="dash.fare">Cash Collected (₹)</label>
+            <input type="number" id="walkinAmount" class="form-input" placeholder="{{ voyage.base_fare|int }}" value="{{ voyage.base_fare|int }}" min="0" step="1">
+        </div>
+        <div id="walkinError" style="color:var(--ruby); font-size:12px; margin-bottom:10px; display:none;"></div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
+            <button class="btn btn-ghost" onclick="closeWalkinModal()" data-i18n="dash.cancel">Cancel</button>
+            <button id="walkinSubmitBtn" class="btn btn-primary" style="width:auto;" onclick="submitWalkin()" data-i18n="dash.confirm">Add Passenger</button>
+        </div>
+    </div>
+</div>
+
+<!-- Submit Trip Report Modal -->
+<div id="reportModal" class="dz-modal-backdrop hidden">
+    <div class="dz-modal" style="max-width:420px;">
+        <div style="font-size:16px; font-weight:600; margin-bottom:8px; color:var(--ink);" data-i18n="dash.submit_report_title">Submit Trip Report</div>
+        <p style="font-size:13px; color:var(--muted); margin-bottom:16px;" data-i18n="dash.submit_report_desc">Signing off confirms all cash collected for this voyage. This cannot be undone.</p>
+        <div id="reportSummary" style="background:var(--cream-2); border-radius:8px; padding:14px; margin-bottom:16px; font-size:13px;"></div>
+        <div class="form-group">
+            <label class="form-label" style="font-size:12px;" data-i18n="dash.driver_notes">Notes (optional)</label>
+            <textarea id="reportNotes" class="form-input" rows="2" style="resize:vertical; font-size:13px;" placeholder="Any notes for the admin…"></textarea>
+        </div>
+        <div id="reportError" style="color:var(--ruby); font-size:12px; margin-bottom:10px; display:none;"></div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
+            <button class="btn btn-ghost" onclick="closeReportModal()" data-i18n="dash.cancel">Cancel</button>
+            <button id="reportSubmitBtn" class="btn" style="background:var(--sage); color:#fff; width:auto;" onclick="submitReport()" data-i18n="dash.submit_and_signoff">Submit & Sign Off</button>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- QR Scanner Modal -->
 <div id="scannerModal" class="scanner-modal hidden">
     <div class="scanner-backdrop" onclick="closeScanner()"></div>
@@ -633,4 +757,259 @@
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+
+{% if role == 'driver' and voyage %}
+<style>
+.collect-cash-btn {
+    background: var(--marigold);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: opacity 0.2s;
+}
+.collect-cash-btn:hover { opacity: 0.85; }
+.collect-cash-btn.collected { background: var(--sage); }
+.driver-cash-section {
+    border-top: 1px solid var(--line);
+    margin-top: 16px;
+    padding-top: 14px;
+}
+.cash-entry { display: flex; justify-content: space-between; font-size: 12px; padding: 3px 0; }
+.cash-entry-walkin { color: var(--marigold); }
+</style>
+
+<script>
+const VOYAGE_ID = {{ voyage.id }};
+const CSRF_DASH = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+// ── Cash collection state ──────────────────────────────
+let _collections = [];
+let _reportSubmitted = false;
+
+async function loadCollections() {
+    try {
+        const res = await fetch(`/staff/cash/voyage/${VOYAGE_ID}/collections`);
+        const data = await res.json();
+        _collections = data.collections || [];
+        _reportSubmitted = data.report_submitted;
+        renderCashSection(data);
+    } catch(e) {}
+}
+
+function renderCashSection(data) {
+    const listEl = document.getElementById('cashList');
+    const totalEl = document.getElementById('cashTotal');
+    const submitBtn = document.getElementById('submitReportBtn');
+    const statusEl = document.getElementById('reportStatus');
+
+    if (!listEl) return;
+
+    totalEl.textContent = `₹${Math.round(data.total || 0)}`;
+
+    if (_collections.length === 0) {
+        listEl.textContent = 'No cash collected yet.';
+    } else {
+        listEl.innerHTML = _collections.map(c =>
+            `<div class="cash-entry${c.is_walkin ? ' cash-entry-walkin' : ''}">
+                <span>${c.is_walkin ? '🚶 ' : ''}${c.passenger_name} (Seat ${c.seat_id || '?'})</span>
+                <strong>₹${c.amount}</strong>
+            </div>`
+        ).join('');
+    }
+
+    if (_reportSubmitted) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = '✓ Report Submitted';
+        submitBtn.style.opacity = '0.6';
+        statusEl.style.display = 'block';
+        statusEl.style.color = 'var(--sage)';
+        statusEl.textContent = 'Trip report has been submitted. Awaiting admin review.';
+    }
+}
+
+// Check if a booking has already been collected
+function isCollected(bookingId) {
+    return _collections.some(c => c.booking_id === bookingId);
+}
+
+// ── Collect cash for existing booking ─────────────────
+async function collectCash(btn) {
+    const bookingId = parseInt(btn.dataset.bookingId);
+    const amount = parseInt(btn.dataset.amount);
+    const name = btn.dataset.name;
+
+    if (isCollected(bookingId)) {
+        alert('Cash already recorded for this passenger.');
+        return;
+    }
+
+    if (!confirm(`Collect ₹${amount} from ${name}?`)) return;
+
+    btn.disabled = true;
+    btn.textContent = '…';
+
+    try {
+        const res = await fetch('/staff/cash/collect', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_DASH },
+            body: JSON.stringify({ booking_id: bookingId, amount: amount }),
+        });
+        const data = await res.json();
+        if (res.ok && data.status === 'ok') {
+            btn.textContent = '✓ Collected';
+            btn.classList.add('collected');
+            btn.disabled = true;
+            // Hide the balance due indicator
+            const balEl = document.getElementById(`bal-${bookingId}`);
+            if (balEl) { balEl.style.textDecoration = 'line-through'; balEl.style.color = 'var(--muted)'; }
+            await loadCollections();
+        } else {
+            alert(data.message || 'Error collecting cash.');
+            btn.disabled = false;
+            btn.textContent = `₹${amount}`;
+        }
+    } catch(e) {
+        alert('Network error. Please try again.');
+        btn.disabled = false;
+        btn.textContent = `₹${amount}`;
+    }
+}
+
+// ── Walk-in modal ──────────────────────────────────────
+function openWalkinModal() {
+    document.getElementById('walkinModal').classList.remove('hidden');
+    document.getElementById('walkinName').focus();
+}
+function closeWalkinModal() {
+    document.getElementById('walkinModal').classList.add('hidden');
+}
+
+async function submitWalkin() {
+    const name = document.getElementById('walkinName').value.trim();
+    const phone = document.getElementById('walkinPhone').value.trim();
+    const seat = document.getElementById('walkinSeat').value.trim();
+    const gender = document.getElementById('walkinGender').value;
+    const boarding = document.getElementById('walkinBoarding').value;
+    const dropping = document.getElementById('walkinDropping').value;
+    const amount = parseFloat(document.getElementById('walkinAmount').value) || 0;
+    const errEl = document.getElementById('walkinError');
+    const btn = document.getElementById('walkinSubmitBtn');
+
+    errEl.style.display = 'none';
+    if (!name || !phone || !seat) {
+        errEl.textContent = 'Name, phone, and seat are required.';
+        errEl.style.display = 'block';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Adding…';
+
+    try {
+        const res = await fetch('/staff/cash/walkin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_DASH },
+            body: JSON.stringify({
+                voyage_id: VOYAGE_ID,
+                passenger_name: name,
+                passenger_phone: phone,
+                seat_id: seat,
+                gender: gender,
+                boarding_point: boarding,
+                dropping_point: dropping,
+                amount: amount,
+            }),
+        });
+        const data = await res.json();
+        if (res.ok && data.status === 'ok') {
+            closeWalkinModal();
+            window.location.reload();
+        } else {
+            errEl.textContent = data.message || 'Error adding walk-in passenger.';
+            errEl.style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = 'Add Passenger';
+        }
+    } catch(e) {
+        errEl.textContent = 'Network error. Please try again.';
+        errEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Add Passenger';
+    }
+}
+
+// ── Submit trip report ─────────────────────────────────
+async function openSubmitReportModal() {
+    await loadCollections();
+    const total = _collections.reduce((s, c) => s + c.amount, 0);
+    const walkin = _collections.filter(c => c.is_walkin).length;
+    document.getElementById('reportSummary').innerHTML =
+        `<div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>Cash collections</span><strong>${_collections.length}</strong></div>` +
+        `<div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>Walk-in passengers</span><strong>${walkin}</strong></div>` +
+        `<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;color:var(--sage);"><span>Total Collected</span><span>₹${Math.round(total)}</span></div>`;
+    document.getElementById('reportError').style.display = 'none';
+    document.getElementById('reportNotes').value = '';
+    const btn = document.getElementById('reportSubmitBtn');
+    btn.disabled = false;
+    btn.textContent = 'Submit & Sign Off';
+    document.getElementById('reportModal').classList.remove('hidden');
+}
+function closeReportModal() {
+    document.getElementById('reportModal').classList.add('hidden');
+}
+
+async function submitReport() {
+    const notes = document.getElementById('reportNotes').value.trim();
+    const errEl = document.getElementById('reportError');
+    const btn = document.getElementById('reportSubmitBtn');
+    errEl.style.display = 'none';
+    btn.disabled = true;
+    btn.textContent = 'Submitting…';
+
+    try {
+        const res = await fetch('/staff/trip-report/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_DASH },
+            body: JSON.stringify({ voyage_id: VOYAGE_ID, notes: notes }),
+        });
+        const data = await res.json();
+        if (res.ok && data.status === 'ok') {
+            closeReportModal();
+            _reportSubmitted = true;
+            renderCashSection({ total: data.total_collected, collections: _collections });
+        } else {
+            errEl.textContent = data.message || 'Error submitting report.';
+            errEl.style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = 'Submit & Sign Off';
+        }
+    } catch(e) {
+        errEl.textContent = 'Network error. Please try again.';
+        errEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Submit & Sign Off';
+    }
+}
+
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        closeWalkinModal();
+        closeReportModal();
+    }
+});
+
+// Load collections on page load
+loadCollections();
+
+// Mark already-collected buttons
+document.addEventListener('DOMContentLoaded', function() {
+    // Will be updated by loadCollections
+});
+</script>
+{% endif %}
 {% endblock %}

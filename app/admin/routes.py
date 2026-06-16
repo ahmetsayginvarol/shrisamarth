@@ -8,13 +8,23 @@ from flask_login import login_required, current_user
 from app.extensions import db
 from app.models import (Bus, Voyage, Booking, User, ActivityLog, RouteStop, SiteContent,
                         PasswordResetToken, AbuseLog, IpBan, Newsletter, SeatLock, Notification,
-                        FinancialEntry, EXPENSE_CATEGORIES, INCOME_CATEGORIES)
+                        FinancialEntry, EXPENSE_CATEGORIES, INCOME_CATEGORIES,
+                        UserActivityLog, CashCollection, TripReport)
 from datetime import datetime, timedelta, date as date_type
 from sqlalchemy import func, and_
 from app.admin.forms import BusForm, VoyageForm, UserForm, UserEditForm
 from app.logging import log_activity
 
 admin_bp = Blueprint('admin', __name__, template_folder='../templates/admin')
+
+
+@admin_bp.context_processor
+def inject_pending_trip_reports():
+    try:
+        count = TripReport.query.filter_by(status='pending').count()
+    except Exception:
+        count = 0
+    return {'pending_trip_reports_count': count}
 
 
 def _save_stops(voyage_id):
@@ -906,6 +916,7 @@ def passengers():
 @admin_bp.route('/passengers/<int:customer_id>')
 @login_required
 def passenger_detail(customer_id):
+    from app.user_activity import EVENT_ICONS
     customer = User.query.filter_by(id=customer_id, role='customer').first_or_404()
 
     bookings = (Booking.query
@@ -921,8 +932,17 @@ def passenger_detail(customer_id):
         'balance':  sum(float(b.balance_due or 0) for b in confirmed),
     }
 
+    # Activity timeline with optional filters
+    event_type_filter = request.args.get('event_type', '')
+    aq = UserActivityLog.query.filter_by(user_id=customer_id)
+    if event_type_filter:
+        aq = aq.filter_by(event_type=event_type_filter)
+    activity_log = aq.order_by(UserActivityLog.created_at.desc()).limit(50).all()
+
     return render_template('admin/passenger_detail.html',
-                           customer=customer, bookings=bookings, stats=stats)
+                           customer=customer, bookings=bookings, stats=stats,
+                           activity_log=activity_log, event_icons=EVENT_ICONS,
+                           event_type_filter=event_type_filter)
 
 
 @admin_bp.route('/passengers/<int:customer_id>/add-credit', methods=['POST'])
@@ -2236,3 +2256,92 @@ def danger_backup():
         as_attachment=True,
         download_name=filename,
     )
+
+
+# ============================================================
+# TRIP REPORTS
+# ============================================================
+
+@admin_bp.route('/trip-reports')
+@login_required
+def trip_reports():
+    status_filter = request.args.get('status', 'pending')
+    q = TripReport.query
+    if status_filter != 'all':
+        q = q.filter_by(status=status_filter)
+    reports = q.order_by(TripReport.submitted_at.desc()).all()
+    pending_count = TripReport.query.filter_by(status='pending').count()
+
+    # Attach collections to each report for display
+    for r in reports:
+        r._collections = CashCollection.query.filter_by(
+            voyage_id=r.voyage_id, driver_id=r.driver_id
+        ).order_by(CashCollection.collected_at).all()
+
+    return render_template('admin/trip_reports.html',
+                           reports=reports,
+                           status_filter=status_filter,
+                           pending_count=pending_count)
+
+
+@admin_bp.route('/trip-reports/<int:report_id>/approve', methods=['POST'])
+@login_required
+def trip_report_approve(report_id):
+    report = TripReport.query.get_or_404(report_id)
+    data = request.get_json() or {}
+
+    collections = CashCollection.query.filter_by(
+        voyage_id=report.voyage_id, driver_id=report.driver_id
+    ).all()
+
+    # Zero out balance_due on all linked bookings
+    for cc in collections:
+        if cc.booking_id:
+            booking = Booking.query.get(cc.booking_id)
+            if booking:
+                booking.balance_due = 0
+
+    # Create FinancialEntry for total collected
+    if float(report.total_collected or 0) > 0:
+        entry = FinancialEntry(
+            entry_type='income',
+            category='Ticket Sales',
+            amount=report.total_collected,
+            description=(f"Trip report #{report.id}: {report.voyage.origin}→{report.voyage.destination} "
+                         f"{report.voyage.departure_at.strftime('%d %b %Y')} · "
+                         f"Driver: {report.driver.full_name}"),
+            entry_date=report.voyage.departure_at.date(),
+            created_by_id=current_user.id,
+        )
+        db.session.add(entry)
+
+    report.status = 'approved'
+    report.reviewed_by_id = current_user.id
+    report.reviewed_at = datetime.utcnow()
+    report.review_notes = data.get('notes', '').strip() or None
+    db.session.commit()
+
+    log_activity('trip_report_approved',
+                 f'Approved trip report #{report.id} from {report.driver.full_name}',
+                 'trip_report', report.id)
+
+    return jsonify({'status': 'ok'})
+
+
+@admin_bp.route('/trip-reports/<int:report_id>/flag', methods=['POST'])
+@login_required
+def trip_report_flag(report_id):
+    report = TripReport.query.get_or_404(report_id)
+    data = request.get_json() or {}
+
+    report.status = 'flagged'
+    report.reviewed_by_id = current_user.id
+    report.reviewed_at = datetime.utcnow()
+    report.review_notes = data.get('notes', '').strip() or None
+    db.session.commit()
+
+    log_activity('trip_report_flagged',
+                 f'Flagged trip report #{report.id} from {report.driver.full_name}',
+                 'trip_report', report.id)
+
+    return jsonify({'status': 'ok'})

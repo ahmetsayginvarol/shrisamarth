@@ -174,4 +174,58 @@
 </div>
 {% endif %}
 
+<!-- Activity Timeline -->
+<div style="margin-top:36px; max-width:740px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+        <div style="font-size:12px; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); font-weight:600;">Activity Timeline</div>
+        <form method="GET" action="{{ url_for('admin.passenger_detail', customer_id=customer.id) }}" style="display:flex; gap:8px; align-items:center;">
+            <select name="event_type" class="form-select" style="font-size:12px; padding:4px 8px; width:auto;" onchange="this.form.submit()">
+                <option value="" {% if not event_type_filter %}selected{% endif %}>All events</option>
+                <option value="login" {% if event_type_filter == 'login' %}selected{% endif %}>Login</option>
+                <option value="register" {% if event_type_filter == 'register' %}selected{% endif %}>Registration</option>
+                <option value="booking_created" {% if event_type_filter == 'booking_created' %}selected{% endif %}>Booking</option>
+                <option value="booking_cancelled" {% if event_type_filter == 'booking_cancelled' %}selected{% endif %}>Cancellation</option>
+                <option value="profile_updated" {% if event_type_filter == 'profile_updated' %}selected{% endif %}>Profile update</option>
+                <option value="password_changed" {% if event_type_filter == 'password_changed' %}selected{% endif %}>Password change</option>
+            </select>
+        </form>
+    </div>
+
+    {% if activity_log %}
+    <div class="adm-timeline">
+        {% for event in activity_log %}
+        <div class="adm-tl-item">
+            <div class="adm-tl-dot">{{ event_icons.get(event.event_type, '•') }}</div>
+            <div class="adm-tl-body">
+                <div class="adm-tl-desc">{{ event.description }}</div>
+                <div class="adm-tl-meta">
+                    {{ event.created_at.strftime('%d %b %Y · %H:%M') }}
+                    {% if event.ip_address %}&nbsp;·&nbsp; IP {{ event.ip_address }}{% endif %}
+                    {% if event.performed_by and event.performed_by.id != customer.id %}
+                    &nbsp;·&nbsp; by {{ event.performed_by.full_name }}
+                    {% endif %}
+                </div>
+            </div>
+            <div class="adm-tl-badge">
+                <span class="badge" style="font-size:10px; background:var(--cream-2); color:var(--muted);">{{ event.event_type|replace('_',' ') }}</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div style="color:var(--muted); font-size:13px; padding:20px 0;">No activity recorded yet for this passenger.</div>
+    {% endif %}
+</div>
+
+<style>
+.adm-timeline { position: relative; padding-left: 30px; }
+.adm-timeline::before { content: ''; position: absolute; left: 11px; top: 4px; bottom: 4px; width: 1px; background: var(--line); }
+.adm-tl-item { position: relative; margin-bottom: 16px; display: flex; align-items: flex-start; gap: 14px; }
+.adm-tl-dot { position: absolute; left: -30px; width: 22px; height: 22px; background: var(--cream); border: 1px solid var(--line); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; }
+.adm-tl-body { flex: 1; min-width: 0; }
+.adm-tl-desc { font-size: 13px; color: var(--ink); line-height: 1.4; }
+.adm-tl-meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.adm-tl-badge { flex-shrink: 0; }
+</style>
+
 {% endblock %}

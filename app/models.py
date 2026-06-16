@@ -180,6 +180,8 @@ class Booking(db.Model):
     status = db.Column(db.String(20), default='confirmed')  # confirmed, cancelled
     booking_code = db.Column(db.String(30), unique=True, index=True)
     group_booking_code = db.Column(db.String(30), nullable=True, index=True)
+    booking_type = db.Column(db.String(20), default='staff', nullable=True)
+    # booking_type: 'staff' (staff-created), 'customer' (online), 'walkin' (driver walk-in)
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     boarded_at = db.Column(db.DateTime, nullable=True)
@@ -430,6 +432,85 @@ class FinancialEntry(db.Model):
 
     def __repr__(self):
         return f'<FinancialEntry {self.entry_type} {self.category} {self.amount}>'
+
+
+# ============================================================
+# USER ACTIVITY LOG
+# ============================================================
+
+class UserActivityLog(db.Model):
+    __tablename__ = 'user_activity_log'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    event_type = db.Column(db.String(50), nullable=False, index=True)
+    description = db.Column(db.Text, nullable=False)
+    metadata_json = db.Column(db.Text, nullable=True)
+    ip_address = db.Column(db.String(45), nullable=True)
+    performed_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    user = db.relationship('User', foreign_keys=[user_id])
+    performed_by = db.relationship('User', foreign_keys=[performed_by_id])
+
+    def __repr__(self):
+        return f'<UserActivityLog {self.event_type} user={self.user_id}>'
+
+
+# ============================================================
+# CASH COLLECTIONS (driver trip cash)
+# ============================================================
+
+class CashCollection(db.Model):
+    __tablename__ = 'cash_collections'
+
+    id = db.Column(db.Integer, primary_key=True)
+    voyage_id = db.Column(db.Integer, db.ForeignKey('voyages.id'), nullable=False, index=True)
+    booking_id = db.Column(db.Integer, db.ForeignKey('bookings.id'), nullable=True)
+    driver_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    passenger_name = db.Column(db.String(120), nullable=False)
+    passenger_phone = db.Column(db.String(20), nullable=True)
+    seat_id = db.Column(db.String(8), nullable=True)
+    boarding_point = db.Column(db.String(80), nullable=True)
+    dropping_point = db.Column(db.String(80), nullable=True)
+    amount = db.Column(db.Numeric(10, 2), nullable=False)
+    is_walkin = db.Column(db.Boolean, default=False, nullable=False)
+    collected_at = db.Column(db.DateTime, default=datetime.utcnow)
+    notes = db.Column(db.Text, nullable=True)
+
+    driver = db.relationship('User', foreign_keys=[driver_id])
+    booking = db.relationship('Booking', foreign_keys=[booking_id])
+
+    def __repr__(self):
+        return f'<CashCollection voyage={self.voyage_id} ₹{self.amount}>'
+
+
+# ============================================================
+# TRIP REPORTS (driver end-of-trip sign-off)
+# ============================================================
+
+class TripReport(db.Model):
+    __tablename__ = 'trip_reports'
+
+    id = db.Column(db.Integer, primary_key=True)
+    voyage_id = db.Column(db.Integer, db.ForeignKey('voyages.id'), nullable=False, index=True)
+    driver_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    status = db.Column(db.String(20), default='pending', nullable=False, index=True)
+    # status: pending, approved, flagged
+    total_collected = db.Column(db.Numeric(10, 2), default=0)
+    walkin_count = db.Column(db.Integer, default=0)
+    notes = db.Column(db.Text, nullable=True)
+    submitted_at = db.Column(db.DateTime, default=datetime.utcnow)
+    reviewed_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+    review_notes = db.Column(db.Text, nullable=True)
+
+    driver = db.relationship('User', foreign_keys=[driver_id])
+    reviewed_by = db.relationship('User', foreign_keys=[reviewed_by_id])
+    voyage = db.relationship('Voyage', foreign_keys=[voyage_id])
+
+    def __repr__(self):
+        return f'<TripReport voyage={self.voyage_id} status={self.status}>'
 
 
 # ============================================================

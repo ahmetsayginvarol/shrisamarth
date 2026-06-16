@@ -1,0 +1,246 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}Trip Reports · SHRISAMARTH Admin{% endblock %}
+
+{% block admin_content %}
+<div class="page-header">
+    <div>
+        <div class="page-title serif" data-i18n="admin.trip_reports.title">Trip Reports</div>
+        <div class="page-subtitle">Driver cash collection & sign-off records</div>
+    </div>
+</div>
+
+<!-- Status filter tabs -->
+<div class="filter-tabs" style="margin-bottom:20px;">
+    {% for s in ['pending', 'approved', 'flagged', 'all'] %}
+    <a href="{{ url_for('admin.trip_reports', status=s) }}"
+       class="filter-tab {% if status_filter == s %}active{% endif %}">
+        {{ s|capitalize }}
+        {% if s == 'pending' and pending_count > 0 %}
+        <span style="background:var(--ruby); color:#fff; border-radius:10px; font-size:10px; padding:1px 5px; margin-left:4px; font-weight:700;">{{ pending_count }}</span>
+        {% endif %}
+    </a>
+    {% endfor %}
+</div>
+
+{% if reports %}
+{% for report in reports %}
+<div class="tr-card {% if report.status == 'pending' %}tr-card-pending{% elif report.status == 'flagged' %}tr-card-flagged{% else %}tr-card-approved{% endif %}" id="report-{{ report.id }}">
+    <!-- Report header -->
+    <div class="tr-card-header">
+        <div>
+            <div class="tr-route">
+                <strong>{{ report.voyage.origin }}</strong> → {{ report.voyage.destination }}
+                <span class="muted" style="font-weight:400; font-size:13px;"> · {{ report.voyage.departure_at.strftime('%d %b %Y · %H:%M') }}</span>
+            </div>
+            <div class="tr-meta">
+                Driver: <strong>{{ report.driver.full_name }}</strong>
+                · Submitted {{ report.submitted_at.strftime('%d %b %Y · %H:%M') }}
+                {% if report.walkin_count > 0 %}
+                · <span style="color:var(--marigold);">{{ report.walkin_count }} walk-in{{ 's' if report.walkin_count != 1 }}</span>
+                {% endif %}
+            </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
+            <div style="text-align:right;">
+                <div style="font-size:22px; font-weight:700; font-family:'Instrument Serif',serif; color:var(--sage);">₹{{ report.total_collected|int }}</div>
+                <div style="font-size:11px; color:var(--muted);">total collected</div>
+            </div>
+            <span class="tr-badge tr-badge-{{ report.status }}">{{ report.status|upper }}</span>
+        </div>
+    </div>
+
+    <!-- Collections table -->
+    {% if report._collections %}
+    <div class="tr-collections">
+        <table class="tr-table">
+            <thead>
+                <tr>
+                    <th>Seat</th>
+                    <th>Passenger</th>
+                    <th>Boarding → Dropping</th>
+                    <th style="text-align:right;">Amount</th>
+                    <th>Type</th>
+                    <th>Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cc in report._collections %}
+                <tr>
+                    <td class="mono" style="font-weight:600;">{{ cc.seat_id or '—' }}</td>
+                    <td>
+                        <div>{{ cc.passenger_name }}</div>
+                        {% if cc.passenger_phone %}<div style="font-size:11px; color:var(--muted);">{{ cc.passenger_phone }}</div>{% endif %}
+                    </td>
+                    <td style="font-size:12px; color:var(--muted);">{{ cc.boarding_point or '—' }} → {{ cc.dropping_point or '—' }}</td>
+                    <td style="text-align:right; font-weight:600;">₹{{ cc.amount|int }}</td>
+                    <td>
+                        {% if cc.is_walkin %}
+                        <span class="badge" style="background:rgba(200,118,26,0.15); color:var(--marigold); font-size:10px;">Walk-in</span>
+                        {% else %}
+                        <span class="badge badge-scheduled" style="font-size:10px;">Balance</span>
+                        {% endif %}
+                    </td>
+                    <td style="font-size:12px; color:var(--muted);">{{ cc.collected_at.strftime('%H:%M') }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="font-size:13px; color:var(--muted); padding:10px 0;">No individual collection records.</div>
+    {% endif %}
+
+    {% if report.notes %}
+    <div style="margin-top:12px; font-size:13px; color:var(--muted); background:var(--cream-2); border-radius:6px; padding:10px 14px;">
+        <strong>Driver notes:</strong> {{ report.notes }}
+    </div>
+    {% endif %}
+
+    {% if report.review_notes %}
+    <div style="margin-top:8px; font-size:13px; color:{% if report.status == 'flagged' %}var(--ruby){% else %}var(--sage){% endif %}; background:var(--cream-2); border-radius:6px; padding:10px 14px;">
+        <strong>Review note:</strong> {{ report.review_notes }}
+        {% if report.reviewed_by %} · by {{ report.reviewed_by.full_name }}{% endif %}
+        {% if report.reviewed_at %} · {{ report.reviewed_at.strftime('%d %b %Y') }}{% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Actions -->
+    {% if report.status == 'pending' %}
+    <div class="tr-actions">
+        <button class="btn" style="background:var(--sage); color:#fff; width:auto;"
+                onclick="trAction('approve', {{ report.id }})">
+            ✓ Approve
+        </button>
+        <button class="btn btn-ghost" style="color:var(--ruby); width:auto;"
+                onclick="trAction('flag', {{ report.id }})">
+            ⚑ Flag
+        </button>
+    </div>
+    {% elif report.status == 'flagged' %}
+    <div class="tr-actions">
+        <button class="btn" style="background:var(--sage); color:#fff; width:auto;"
+                onclick="trAction('approve', {{ report.id }})">
+            ✓ Approve anyway
+        </button>
+    </div>
+    {% endif %}
+</div>
+{% endfor %}
+
+{% else %}
+<div class="empty-state">
+    <span class="serif">No trip reports</span>
+    <p>No {{ status_filter if status_filter != 'all' else '' }} reports found.</p>
+</div>
+{% endif %}
+
+<!-- Review Modal -->
+<div id="trModal" class="dz-modal-backdrop hidden">
+    <div class="dz-modal">
+        <div id="trModalTitle" style="font-size:16px; font-weight:600; margin-bottom:12px; color:var(--ink);"></div>
+        <div style="margin-bottom:16px;">
+            <label class="form-label" style="font-size:12px;">Review notes (optional)</label>
+            <textarea id="trReviewNotes" class="form-input" rows="2" style="resize:vertical; font-size:13px;" placeholder="Optional note for this review action…"></textarea>
+        </div>
+        <div id="trModalError" style="color:var(--ruby); font-size:12px; margin-bottom:10px; display:none;"></div>
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+            <button class="btn btn-ghost" onclick="closeTrModal()">Cancel</button>
+            <button id="trConfirmBtn" class="btn" style="background:var(--sage); color:#fff; width:auto;" onclick="submitTrAction()">Confirm</button>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<style>
+.tr-card {
+    background: var(--cream);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+}
+.tr-card-pending  { border-left: 3px solid var(--marigold); }
+.tr-card-approved { border-left: 3px solid var(--sage); }
+.tr-card-flagged  { border-left: 3px solid var(--ruby); }
+.tr-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+.tr-route   { font-size: 16px; font-weight: 600; font-family: 'Instrument Serif', serif; }
+.tr-meta    { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.tr-badge   { font-size: 10px; font-weight: 700; letter-spacing: 0.07em; padding: 3px 8px; border-radius: 4px; white-space: nowrap; }
+.tr-badge-pending  { background: rgba(200,118,26,0.15); color: var(--marigold); }
+.tr-badge-approved { background: rgba(40,160,80,0.15); color: #1a7a3a; }
+.tr-badge-flagged  { background: rgba(180,30,30,0.15); color: var(--ruby); }
+.tr-collections { margin-top: 8px; overflow-x: auto; }
+.tr-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tr-table th { text-align: left; font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.tr-table td { padding: 8px 8px; border-bottom: 1px solid rgba(0,0,0,0.04); }
+.tr-actions { margin-top: 16px; display: flex; gap: 10px; }
+</style>
+
+<script>
+const CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
+let _trAction = '';
+let _trReportId = null;
+
+function trAction(action, reportId) {
+    _trAction = action;
+    _trReportId = reportId;
+    const title = action === 'approve' ? '✓ Approve trip report' : '⚑ Flag trip report';
+    document.getElementById('trModalTitle').textContent = title;
+    document.getElementById('trReviewNotes').value = '';
+    document.getElementById('trModalError').style.display = 'none';
+    const btn = document.getElementById('trConfirmBtn');
+    btn.style.background = action === 'approve' ? 'var(--sage)' : 'var(--ruby)';
+    btn.disabled = false;
+    btn.textContent = 'Confirm';
+    document.getElementById('trModal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('trReviewNotes').focus(), 80);
+}
+
+function closeTrModal() {
+    document.getElementById('trModal').classList.add('hidden');
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeTrModal(); });
+
+async function submitTrAction() {
+    const notes = document.getElementById('trReviewNotes').value.trim();
+    const errEl = document.getElementById('trModalError');
+    const btn = document.getElementById('trConfirmBtn');
+    errEl.style.display = 'none';
+    btn.disabled = true;
+    btn.textContent = 'Working…';
+
+    try {
+        const res = await fetch(`/admin/trip-reports/${_trReportId}/${_trAction}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+            body: JSON.stringify({ notes }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            errEl.textContent = data.message || 'Error. Please try again.';
+            errEl.style.display = 'block';
+            btn.disabled = false;
+            btn.textContent = 'Confirm';
+            return;
+        }
+        closeTrModal();
+        window.location.reload();
+    } catch (e) {
+        errEl.textContent = 'Network error. Please try again.';
+        errEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Confirm';
+    }
+}
+</script>
+{% endblock %}

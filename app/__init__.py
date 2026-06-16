@@ -67,6 +67,7 @@ def _run_schema_migrations(db):
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS unsubscribe_token VARCHAR(64)",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS newsletter_unsubscribed BOOLEAN DEFAULT FALSE",
             "ALTER TABLE route_stops ADD COLUMN IF NOT EXISTS fare_override NUMERIC(10,2) DEFAULT NULL",
+            "ALTER TABLE bookings ADD COLUMN IF NOT EXISTS booking_type VARCHAR(20) DEFAULT 'staff'",
         ]
     else:
         # SQLite: no IF NOT EXISTS for ALTER TABLE — catch duplicate-column errors
@@ -76,6 +77,7 @@ def _run_schema_migrations(db):
             "ALTER TABLE users ADD COLUMN unsubscribe_token VARCHAR(64)",
             "ALTER TABLE users ADD COLUMN newsletter_unsubscribed BOOLEAN DEFAULT 0",
             "ALTER TABLE route_stops ADD COLUMN fare_override NUMERIC(10,2) DEFAULT NULL",
+            "ALTER TABLE bookings ADD COLUMN booking_type VARCHAR(20) DEFAULT 'staff'",
         ]
 
     for sql in alter_stmts:
@@ -138,6 +140,54 @@ def _run_schema_migrations(db):
             )""",
             "CREATE INDEX IF NOT EXISTS ix_financial_entries_date ON financial_entries(entry_date)",
             "CREATE INDEX IF NOT EXISTS ix_financial_entries_type ON financial_entries(entry_type)",
+            # user_activity_log
+            """CREATE TABLE IF NOT EXISTS user_activity_log (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                event_type VARCHAR(50) NOT NULL,
+                description TEXT NOT NULL,
+                metadata_json TEXT,
+                ip_address VARCHAR(45),
+                performed_by_id INTEGER REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT NOW()
+            )""",
+            "CREATE INDEX IF NOT EXISTS ix_user_activity_log_user ON user_activity_log(user_id)",
+            "CREATE INDEX IF NOT EXISTS ix_user_activity_log_type ON user_activity_log(event_type)",
+            "CREATE INDEX IF NOT EXISTS ix_user_activity_log_created ON user_activity_log(created_at)",
+            # cash_collections
+            """CREATE TABLE IF NOT EXISTS cash_collections (
+                id SERIAL PRIMARY KEY,
+                voyage_id INTEGER NOT NULL REFERENCES voyages(id),
+                booking_id INTEGER REFERENCES bookings(id),
+                driver_id INTEGER NOT NULL REFERENCES users(id),
+                passenger_name VARCHAR(120) NOT NULL,
+                passenger_phone VARCHAR(20),
+                seat_id VARCHAR(8),
+                boarding_point VARCHAR(80),
+                dropping_point VARCHAR(80),
+                amount NUMERIC(10,2) NOT NULL,
+                is_walkin BOOLEAN NOT NULL DEFAULT FALSE,
+                collected_at TIMESTAMP DEFAULT NOW(),
+                notes TEXT
+            )""",
+            "CREATE INDEX IF NOT EXISTS ix_cash_collections_voyage ON cash_collections(voyage_id)",
+            "CREATE INDEX IF NOT EXISTS ix_cash_collections_driver ON cash_collections(driver_id)",
+            # trip_reports
+            """CREATE TABLE IF NOT EXISTS trip_reports (
+                id SERIAL PRIMARY KEY,
+                voyage_id INTEGER NOT NULL REFERENCES voyages(id),
+                driver_id INTEGER NOT NULL REFERENCES users(id),
+                status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                total_collected NUMERIC(10,2) DEFAULT 0,
+                walkin_count INTEGER DEFAULT 0,
+                notes TEXT,
+                submitted_at TIMESTAMP DEFAULT NOW(),
+                reviewed_by_id INTEGER REFERENCES users(id),
+                reviewed_at TIMESTAMP,
+                review_notes TEXT
+            )""",
+            "CREATE INDEX IF NOT EXISTS ix_trip_reports_voyage ON trip_reports(voyage_id)",
+            "CREATE INDEX IF NOT EXISTS ix_trip_reports_status ON trip_reports(status)",
         ]
         for sql in pg_stmts:
             try:

@@ -180,3 +180,53 @@ Each row in the Voyages list has a **⎘ Clone** button (visible for all voyage 
 - A marigold banner at the top of the form identifies the source voyage.
 - Recurrence and return voyage options remain available as on any new voyage.
 - Implementation: `voyage_new()` reads `clone_id` on GET, loads source `Voyage`, copies fields into `VoyageForm`, and serialises stops into `stops_json` for the JS stop-builder.
+
+## User Activity History
+
+Customer-facing event timeline stored in `UserActivityLog` table. Wired into: registration, login, profile update, password change, online booking creation.
+
+- **Model**: `UserActivityLog` — `user_id`, `event_type`, `description`, `metadata_json`, `ip_address`, `performed_by_id`, `created_at`
+- **Helper**: `app/user_activity.py` — `log_user_activity(user_id, event_type, description, ...)` and `EVENT_ICONS` dict
+- **Customer profile** (`/profile`): Activity timeline at the bottom, last 20 events, newest first
+- **Admin passenger detail** (`/admin/passengers/<id>`): Rich timeline with event type filter dropdown and IP + performed_by metadata
+- **Event types**: register, login, logout, booking_created, booking_cancelled, profile_updated, password_changed, email_verified, password_reset, account_deactivated
+- **Schema migration**: `CREATE TABLE IF NOT EXISTS user_activity_log` in `_run_schema_migrations()` with indexes on `user_id`, `event_type`, `created_at`
+
+## Driver Cash Collection & Trip Reports
+
+End-of-trip cash reconciliation workflow for drivers.
+
+### Models
+
+| Model | Key fields |
+|---|---|
+| `CashCollection` | `voyage_id`, `booking_id` (nullable), `driver_id`, `passenger_name`, `seat_id`, `amount`, `is_walkin`, `collected_at` |
+| `TripReport` | `voyage_id`, `driver_id`, `status` (pending/approved/flagged), `total_collected`, `walkin_count`, `notes`, `submitted_at`, `reviewed_by_id`, `reviewed_at`, `review_notes` |
+| `Booking.booking_type` | `'staff'` (default), `'customer'` (online), `'walkin'` (driver walk-in) |
+
+### Driver Workflow (Staff Dashboard)
+
+1. Manifest list shows "₹X" amber button next to passengers with `balance_due > 0`
+2. Clicking Collect → `POST /staff/cash/collect` → creates `CashCollection`, button turns green "✓ Collected"
+3. **Add Walk-in** button → modal form (name, phone, seat, boarding/dropping, cash amount) → `POST /staff/cash/walkin` → creates `Booking(booking_type='walkin')` + `CashCollection`
+4. **Submit Trip Report** → modal summary (count, walk-ins, total) → `POST /staff/trip-report/submit` → creates `TripReport`, notifies all admins via `notify_staff()`
+
+### Admin Trip Reports (`/admin/trip-reports`)
+
+- Filter tabs: Pending / Approved / Flagged / All
+- Red badge on sidebar "Trip Reports" link shows pending count (injected via `@admin_bp.context_processor`)
+- Each report card shows: route, driver, submission time, total collected, walk-in count, itemised collections table
+- **Approve** → `POST /admin/trip-reports/<id>/approve` → zeros `balance_due` on linked bookings, creates `FinancialEntry(category='Ticket Sales')`
+- **Flag** → `POST /admin/trip-reports/<id>/flag` → marks for follow-up
+
+### Routes
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `staff.cash_collect` | POST | Record cash for existing booking |
+| `staff.cash_walkin` | POST | Create walk-in booking + cash record |
+| `staff.voyage_collections` | GET | Fetch all collections for a voyage |
+| `staff.submit_trip_report` | POST | Submit driver trip report |
+| `admin.trip_reports` | GET | List all trip reports |
+| `admin.trip_report_approve` | POST | Approve report + update bookings + create FinancialEntry |
+| `admin.trip_report_flag` | POST | Flag report for follow-up |
