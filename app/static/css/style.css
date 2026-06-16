@@ -189,6 +189,11 @@ h1.serif { font-size: 36px; line-height: 1.1; margin-bottom: 6px; }
 .btn-undo-checkin { background: none; border: none; color: var(--muted); font-size: 12px; cursor: pointer; padding: 4px 0; text-decoration: underline; margin-top: 4px; display: block; }
 .manifest-group-tag { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; color: var(--gold); margin-left: 4px; font-weight: 600; letter-spacing: 0.04em; vertical-align: middle; }
 
+/* ===== Modal backdrop (shared by danger zone, driver walk-in, trip report, etc.) ===== */
+.dz-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 1000; }
+.dz-modal-backdrop.hidden { display: none; }
+.dz-modal { background: var(--cream); border: 1px solid var(--line); border-radius: 14px; padding: 28px; width: 100%; max-width: 520px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); }
+
 /* ===== Scanner modal ===== */
 .scanner-modal { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; }
 .scanner-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 0; }
