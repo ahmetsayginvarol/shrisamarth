@@ -1412,7 +1412,6 @@ document.addEventListener('DOMContentLoaded', function() {
 function openSubmitCashModal() {
     const btn = document.getElementById('submitCashTriggerBtn');
     if (btn && btn.disabled) return;
-    if (_cashSubmissionStatus === 'submitted') return;
     if (_cashUnsubmittedAmount <= 0) return;
 
     const total = _cashUnsubmittedAmount;
@@ -1424,10 +1423,15 @@ function openSubmitCashModal() {
     document.getElementById('submitCashNotes').value = '';
     document.getElementById('submitCashError').style.display = 'none';
     document.getElementById('submitCashModal').dataset.total = total;
+    // Always reset the confirm button so it's usable after a previous submission
+    const submitBtn = document.getElementById('submitCashBtn');
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = window.__i18n?.['dash.submit_cash_btn'] || 'Submit Cash'; }
     document.getElementById('submitCashModal').classList.remove('hidden');
 }
 function closeSubmitCashModal() {
     document.getElementById('submitCashModal').classList.add('hidden');
+    const submitBtn = document.getElementById('submitCashBtn');
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = window.__i18n?.['dash.submit_cash_btn'] || 'Submit Cash'; }
 }
 function toggleSubmitAmount() {
     const custom = document.getElementById('submitModeCustom').checked;
