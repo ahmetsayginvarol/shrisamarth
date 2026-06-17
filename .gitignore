@@ -7,4 +7,5 @@ instance/
 *.db
 *.sqlite
 .idea/
-.DS_Store.claude/
+.DS_Store
+.claude/
