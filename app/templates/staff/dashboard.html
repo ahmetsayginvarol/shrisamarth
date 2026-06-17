@@ -1449,8 +1449,7 @@ async function doSubmitCash() {
         const data = await res.json();
         if (data.status === 'ok') {
             closeSubmitCashModal();
-            // Reload to reflect updated state
-            window.location.reload();
+            await loadCollections();
         } else {
             errEl.textContent = data.error || 'Submission failed.';
             errEl.style.display = 'block';

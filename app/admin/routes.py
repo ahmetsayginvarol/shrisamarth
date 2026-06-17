@@ -5,7 +5,7 @@ import calendar as cal_module
 from flask import Blueprint, render_template, redirect, url_for, flash, abort, request, jsonify, send_file
 from flask_login import login_required, current_user
 
-from app.extensions import db
+from app.extensions import db, socketio
 from app.models import (Bus, Voyage, Booking, User, ActivityLog, RouteStop, SiteContent,
                         PasswordResetToken, AbuseLog, IpBan, Newsletter, SeatLock, Notification,
                         FinancialEntry, EXPENSE_CATEGORIES, INCOME_CATEGORIES,
@@ -2559,6 +2559,14 @@ def driver_cash_receive(sub_id):
                  f'for voyage {sub.voyage.origin}→{sub.voyage.destination} '
                  f'{sub.voyage.departure_at.strftime("%d %b %Y")}',
                  'driver_cash_submission', sub.id)
+
+    socketio.emit('driver_cash_verified', {
+        'sub_id': sub.id,
+        'driver_id': sub.driver_id,
+        'voyage_id': sub.voyage_id,
+        'status': sub.submission_status,
+        'amount': received,
+    })
 
     return jsonify({'status': 'ok', 'submission_status': sub.submission_status, 'discrepancy': discrepancy})
 

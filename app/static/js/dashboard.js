@@ -1594,6 +1594,24 @@ socket.on('passenger_uncheckin', (data) => {
     }
 });
 
+socket.on('driver_cash_verified', (data) => {
+    // Only refresh if this verification is for our driver's current voyage
+    if (typeof loadCollections === 'function') {
+        if (!VOYAGE_ID || parseInt(data.voyage_id) === parseInt(VOYAGE_ID)) {
+            loadCollections();
+        }
+    }
+});
+
+socket.on('cash_collected', (data) => {
+    // Refresh cash section if another agent collected cash on our voyage
+    if (typeof loadCollections === 'function') {
+        if (VOYAGE_ID && parseInt(data.voyage_id) === parseInt(VOYAGE_ID)) {
+            loadCollections();
+        }
+    }
+});
+
 // ============================================================
 // DATE PICKER + VOYAGE PICKER
 // ============================================================

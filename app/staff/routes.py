@@ -816,6 +816,12 @@ def cash_collect():
                  f'{current_user.full_name} collected ₹{int(amount)} from {booking.passenger_name} (seat {booking.seat_id})',
                  'booking', booking.id)
 
+    socketio.emit('cash_collected', {
+        'driver_id': current_user.id,
+        'voyage_id': booking.voyage_id,
+        'amount': amount,
+    })
+
     return jsonify({'status': 'ok', 'collection_id': cc.id, 'amount': amount})
 
 
@@ -903,6 +909,12 @@ def cash_walkin():
         'seat_id': seat_id,
         'gender': gender or 'g',
         'name': name,
+    })
+
+    socketio.emit('cash_collected', {
+        'driver_id': current_user.id,
+        'voyage_id': voyage.id,
+        'amount': amount,
     })
 
     return jsonify({
@@ -1155,5 +1167,12 @@ def submit_cash_to_admin():
                  f'— {created} voyage(s) awaiting your verification.'),
         link=url_for('admin.driver_cash'),
     )
+
+    socketio.emit('driver_cash_submitted', {
+        'driver_id': current_user.id,
+        'driver_name': current_user.full_name,
+        'amount': submit_total,
+        'voyages': created,
+    })
 
     return jsonify({'status': 'ok', 'total': submit_total, 'voyages': created})

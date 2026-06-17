@@ -249,6 +249,17 @@ function confirmResolve() {
         else alert(data.message || 'Error');
     });
 }
+
+// Real-time: reload when submission status changes
+try {
+    const _detailSocket = io();
+    _detailSocket.on('driver_cash_verified', () => {
+        if (!_receiveSubId && !_resolveSubId) location.reload();
+    });
+    _detailSocket.on('driver_cash_submitted', () => {
+        if (!_receiveSubId && !_resolveSubId) location.reload();
+    });
+} catch(e) {}
 </script>
 {% endblock %}
 {% endblock %}

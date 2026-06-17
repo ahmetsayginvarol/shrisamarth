@@ -216,6 +216,20 @@ async function confirmDcsReceive() {
     }
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDcsReceiveModal(); });
+
+// Real-time: reload page when a driver submits cash or admin verifies
+try {
+    const _adminSocket = io();
+    _adminSocket.on('driver_cash_submitted', () => {
+        location.reload();
+    });
+    _adminSocket.on('driver_cash_verified', () => {
+        location.reload();
+    });
+    _adminSocket.on('cash_collected', () => {
+        location.reload();
+    });
+} catch(e) {}
 </script>
 {% endblock %}
 {% endblock %}
