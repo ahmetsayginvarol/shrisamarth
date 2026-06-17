@@ -1121,4 +1121,11 @@ def submit_cash_to_admin():
         'user', current_user.id,
     )
 
+    notify_staff(
+        title='Cash Submitted — Action Required',
+        message=(f'{current_user.full_name} handed ₹{submit_total:.0f} to {admin.full_name} '
+                 f'— {created} voyage(s) awaiting your verification.'),
+        link=url_for('admin.driver_cash'),
+    )
+
     return jsonify({'status': 'ok', 'total': submit_total, 'voyages': created})

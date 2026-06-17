@@ -19,6 +19,9 @@
 .dcs-pos-row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--line); font-size:14px; }
 .dcs-pos-row:last-child { border-bottom:none; font-weight:700; }
 .dcs-empty { text-align:center; padding:60px 20px; color:var(--muted); }
+.dcs-await-panel { background:rgba(60,100,200,0.06); border:1px solid rgba(60,100,200,0.2); border-radius:10px; padding:20px; margin-bottom:24px; }
+.dcs-await-row { display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid rgba(60,100,200,0.12); flex-wrap:wrap; gap:10px; }
+.dcs-await-row:last-child { border-bottom:none; padding-bottom:0; }
 </style>
 
 <div class="page-header">
@@ -28,6 +31,44 @@
     </div>
     <a href="{{ url_for('admin.finances') }}" class="btn btn-ghost">← Finances</a>
 </div>
+
+<!-- Awaiting Verification Panel -->
+{% set submitted_total = [] %}
+{% for d in driver_data %}{% for sub in d.submitted_subs %}{% set _ = submitted_total.append(sub) %}{% endfor %}{% endfor %}
+{% if submitted_total %}
+<div class="dcs-await-panel">
+    <div style="font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#3c64c8; margin-bottom:16px;">
+        ⟳ Awaiting Verification — {{ submitted_total|length }} submission{{ 's' if submitted_total|length != 1 }}
+    </div>
+    {% for d in driver_data %}
+    {% for sub in d.submitted_subs %}
+    <div class="dcs-await-row">
+        <div>
+            <div style="font-weight:600; font-size:14px;">{{ d.driver.full_name }}</div>
+            <div style="font-size:12px; color:var(--muted); margin-top:2px;">
+                {{ sub.voyage.origin }}→{{ sub.voyage.destination }} · {{ sub.voyage.departure_at.strftime('%d %b %Y') }}
+                {% if sub.submitted_to_admin %} · handed to <strong>{{ sub.submitted_to_admin.full_name }}</strong>{% endif %}
+                {% if sub.submitted_at %} at {{ sub.submitted_at.strftime('%H:%M') }}{% endif %}
+            </div>
+            {% if sub.driver_notes %}
+            <div style="font-size:11px; color:var(--muted); margin-top:3px;">💬 {{ sub.driver_notes }}</div>
+            {% endif %}
+        </div>
+        <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
+            <div style="text-align:right;">
+                <div style="font-size:22px; font-weight:700; font-family:'Cormorant Garamond',serif; color:#3c64c8;">₹ {{ "%.0f"|format(sub.expected_amount) }}</div>
+                <div style="font-size:11px; color:var(--muted);">expected</div>
+            </div>
+            <button class="btn btn-primary" style="width:auto; font-size:12px;"
+                    onclick="openReceiveModal({{ sub.id }}, {{ sub.expected_amount }}, '{{ sub.voyage.origin }}→{{ sub.voyage.destination }}', '{{ sub.voyage.departure_at.strftime('%d %b') }}', '{{ d.driver.full_name }}')">
+                Mark Received
+            </button>
+        </div>
+    </div>
+    {% endfor %}
+    {% endfor %}
+</div>
+{% endif %}
 
 <!-- Today's Cash Position -->
 <div class="dcs-today-card">
@@ -59,7 +100,14 @@
             <div style="font-size:12px; color:var(--muted); margin-top:2px;">{{ d.driver.phone }}</div>
             {% endif %}
         </div>
-        <a href="{{ url_for('admin.driver_cash_detail', driver_id=d.driver.id) }}" class="btn btn-ghost" style="font-size:12px;" data-i18n="dcs.view_details">View Details</a>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            {% if d.submitted_subs %}
+            <span style="font-size:11px; background:rgba(60,100,200,0.1); color:#3c64c8; border:1px solid rgba(60,100,200,0.25); border-radius:20px; padding:3px 10px; font-weight:600;">
+                ⟳ {{ d.submitted_subs|length }} awaiting
+            </span>
+            {% endif %}
+            <a href="{{ url_for('admin.driver_cash_detail', driver_id=d.driver.id) }}" class="btn btn-ghost" style="font-size:12px;" data-i18n="dcs.view_details">View Details</a>
+        </div>
     </div>
     <div class="dcs-metrics">
         <div class="dcs-metric">
@@ -101,4 +149,73 @@
     <div style="font-size:13px;" data-i18n="dcs.no_cash_held_hint">Drivers will appear here once they collect cash on a voyage.</div>
 </div>
 {% endif %}
+
+<!-- Mark Received Modal -->
+<div class="dz-modal-backdrop hidden" id="dcsReceiveModal" onclick="if(event.target===this)closeDcsReceiveModal()">
+    <div class="dz-modal" style="max-width:420px;">
+        <div class="dz-modal-title" id="dcsReceiveTitle" style="font-size:16px; font-weight:700; margin-bottom:16px;">Mark Cash Received</div>
+        <div style="margin-bottom:16px;">
+            <div style="font-size:12px; color:var(--muted); margin-bottom:4px;">Expected from driver</div>
+            <div style="font-size:24px; font-weight:700; font-family:'Cormorant Garamond',serif;" id="dcsReceiveExpected">—</div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Amount actually counted (₹)</label>
+            <input type="number" class="form-input" id="dcsReceiveAmount" min="0" step="1" placeholder="0">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Notes (optional)</label>
+            <input type="text" class="form-input" id="dcsReceiveNotes" placeholder="Any notes…">
+        </div>
+        <div id="dcsReceiveError" style="color:var(--ruby); font-size:12px; margin-bottom:10px; display:none;"></div>
+        <div style="display:flex; gap:10px; margin-top:8px;">
+            <button class="btn btn-ghost" onclick="closeDcsReceiveModal()" style="flex:1;">Cancel</button>
+            <button class="btn btn-primary" onclick="confirmDcsReceive()" style="flex:1;">Confirm Receipt</button>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}{{ super() }}
+<script>
+let _dcsSubId = null;
+
+function openReceiveModal(subId, expected, route, date, driverName) {
+    _dcsSubId = subId;
+    document.getElementById('dcsReceiveTitle').textContent = 'Mark Received — ' + driverName;
+    document.getElementById('dcsReceiveExpected').textContent = '₹ ' + Math.round(expected) + ' (' + route + ' · ' + date + ')';
+    document.getElementById('dcsReceiveAmount').value = Math.round(expected);
+    document.getElementById('dcsReceiveNotes').value = '';
+    document.getElementById('dcsReceiveError').style.display = 'none';
+    document.getElementById('dcsReceiveModal').classList.remove('hidden');
+    document.getElementById('dcsReceiveAmount').focus();
+    document.getElementById('dcsReceiveAmount').select();
+}
+function closeDcsReceiveModal() {
+    document.getElementById('dcsReceiveModal').classList.add('hidden');
+    _dcsSubId = null;
+}
+async function confirmDcsReceive() {
+    if (!_dcsSubId) return;
+    const amount = parseFloat(document.getElementById('dcsReceiveAmount').value) || 0;
+    const notes = document.getElementById('dcsReceiveNotes').value;
+    const errEl = document.getElementById('dcsReceiveError');
+    errEl.style.display = 'none';
+    if (amount < 0) { errEl.textContent = 'Enter a valid amount.'; errEl.style.display = 'block'; return; }
+    try {
+        const res = await fetch('/admin/finances/drivers/submissions/' + _dcsSubId + '/receive', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+            body: JSON.stringify({ amount, notes }),
+        });
+        const data = await res.json();
+        closeDcsReceiveModal();
+        if (data.status === 'ok') location.reload();
+        else { alert(data.message || 'Error'); }
+    } catch(e) {
+        errEl.textContent = 'Network error.';
+        errEl.style.display = 'block';
+    }
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDcsReceiveModal(); });
+</script>
+{% endblock %}
 {% endblock %}

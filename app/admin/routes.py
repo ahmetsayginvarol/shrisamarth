@@ -22,9 +22,11 @@ admin_bp = Blueprint('admin', __name__, template_folder='../templates/admin')
 def inject_pending_trip_reports():
     try:
         count = TripReport.query.filter_by(status='pending').count()
+        cash_count = DriverCashSubmission.query.filter_by(submission_status='submitted').count()
     except Exception:
         count = 0
-    return {'pending_trip_reports_count': count}
+        cash_count = 0
+    return {'pending_trip_reports_count': count, 'pending_cash_submissions_count': cash_count}
 
 
 def _save_stops(voyage_id):
@@ -2451,7 +2453,12 @@ def driver_cash():
         today_total_live += today_live
         today_total_received += today_received_amt
 
-        if all_collections or pending_subs or discrepancy_subs:
+        # Submissions awaiting admin verification (driver has physically handed cash over)
+        submitted_subs = DriverCashSubmission.query.filter_by(
+            driver_id=driver.id, submission_status='submitted'
+        ).all()
+
+        if all_collections or pending_subs or discrepancy_subs or submitted_subs:
             driver_data.append({
                 'driver': driver,
                 'live_amount': live_amount,
@@ -2459,6 +2466,7 @@ def driver_cash():
                 'discrepancy_amount': discrepancy_amount,
                 'has_discrepancy': bool(discrepancy_subs),
                 'pending_subs': pending_subs,
+                'submitted_subs': submitted_subs,
                 'voyage_summaries': voyage_summaries,
                 'today_live': today_live,
                 'collection_count': len(live_collections),
