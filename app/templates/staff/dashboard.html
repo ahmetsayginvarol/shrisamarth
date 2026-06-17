@@ -966,24 +966,29 @@ function renderCashSection(data) {
         ).join('');
     }
 
-    // Update Submit Cash button — based on amounts, not just status
+    // Update Submit Cash button — based on amounts, not just status.
+    // Cash physically in hand ALWAYS takes priority: a driver who still holds
+    // cash must be able to submit it, even if an earlier partial submission is
+    // still awaiting admin verification.
     const status = data.submission_status;
     const unsubmitted = data.unsubmitted_amount || 0;
+    const inTransit = data.in_transit_amount || 0;
     if (submitBtn) {
-        if (status === 'submitted') {
-            // Driver has submitted, admin hasn't verified yet
-            submitBtn.disabled = true;
-            submitBtn.textContent = '⟳ Awaiting Verification';
-            submitBtn.style.opacity = '0.6';
-            submitBtn.style.background = '';
-            submitBtn.style.cursor = 'default';
-        } else if (unsubmitted > 0) {
-            // Has cash to hand over (fresh or new cash after a previous verification)
+        if (unsubmitted > 0) {
+            // Has cash to hand over (fresh, after a verification, or the
+            // remainder left over from a partial submission)
             submitBtn.disabled = false;
             submitBtn.textContent = 'Submit Cash';
             submitBtn.style.opacity = '';
             submitBtn.style.background = '';
             submitBtn.style.cursor = '';
+        } else if (inTransit > 0 || status === 'submitted') {
+            // Nothing left in hand, but cash is awaiting admin verification
+            submitBtn.disabled = true;
+            submitBtn.textContent = '⟳ Awaiting Verification';
+            submitBtn.style.opacity = '0.6';
+            submitBtn.style.background = '';
+            submitBtn.style.cursor = 'default';
         } else {
             // Nothing outstanding
             submitBtn.disabled = true;

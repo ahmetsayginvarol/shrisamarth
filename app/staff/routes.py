@@ -1018,6 +1018,7 @@ def voyage_collections(voyage_id):
         'submitted_to': sub.submitted_to_admin.full_name if sub and sub.submitted_to_admin else None,
         'submitted_at': sub.submitted_at.strftime('%d %b · %H:%M') if sub and sub.submitted_at else None,
         'verified_amount': verified_amount,
+        'in_transit_amount': in_transit_amount,
         'unsubmitted_amount': unsubmitted_amount,
         'driver_total_outstanding': driver_total_outstanding,
     })
