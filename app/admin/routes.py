@@ -2412,6 +2412,11 @@ def driver_cash():
         ).all()
         total_in_transit = sum(float(s.submitted_amount or 0) for s in in_transit_subs)
 
+        # Per-voyage in-transit amounts (for voyage_summaries)
+        in_transit_per_voyage = defaultdict(float)
+        for s in in_transit_subs:
+            in_transit_per_voyage[s.voyage_id] += float(s.submitted_amount or 0)
+
         # Discrepancy = outstanding short-payments from previous mismatches
         discrepancy_subs = DriverCashSubmission.query.filter_by(
             driver_id=driver.id, submission_status='discrepancy'
@@ -2436,7 +2441,7 @@ def driver_cash():
             if c.collected_at and c.collected_at.date() == today
         )
 
-        # Today's verified receipts
+        # Today's received/in-transit amounts (money no longer physically with driver)
         today_received_amt = sum(
             float(s.submitted_amount or 0)
             for s in DriverCashSubmission.query.filter(
@@ -2445,6 +2450,13 @@ def driver_cash():
                 db.func.date(DriverCashSubmission.verified_at) == today
             ).all()
         )
+        # Add in-transit (submitted today, pending admin count) — driver no longer holds this
+        today_in_transit_amt = sum(
+            float(s.submitted_amount or 0)
+            for s in in_transit_subs
+            if s.submitted_at and s.submitted_at.date() == today
+        )
+        today_received_amt += today_in_transit_amt
 
         # Voyage summaries — show voyages where driver still has outstanding cash
         by_voyage = defaultdict(list)
@@ -2456,7 +2468,8 @@ def driver_cash():
         for vid, cols in by_voyage.items():
             voyage_total = sum(float(c.amount) for c in cols)
             already_verified = verified_per_voyage.get(vid, 0)
-            outstanding_for_voyage = voyage_total - already_verified
+            already_in_transit = in_transit_per_voyage.get(vid, 0)
+            outstanding_for_voyage = voyage_total - already_verified - already_in_transit
             if outstanding_for_voyage > 0.01:
                 v = cols[0].booking.voyage if cols[0].booking and cols[0].booking.voyage else None
                 if not v:

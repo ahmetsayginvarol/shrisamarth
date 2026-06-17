@@ -137,21 +137,25 @@ def dashboard():
             poc_count += 1
             poc_total += float(b.payment_on_checkin_amount or b.fare)
 
-    # Driver outstanding cash balance
+    # Driver outstanding cash balance (total collected - verified - in_transit)
     driver_outstanding = 0
     if current_user.role == 'driver':
-        pending_subs = DriverCashSubmission.query.filter_by(
-            driver_id=current_user.id,
-            submission_status='pending'
-        ).all()
-        discrepancy_subs = DriverCashSubmission.query.filter_by(
-            driver_id=current_user.id,
-            submission_status='discrepancy'
-        ).all()
-        driver_outstanding = sum(
-            float(s.expected_amount or 0) - float(s.submitted_amount or 0)
-            for s in pending_subs + discrepancy_subs
+        all_driver_collections = CashCollection.query.filter_by(driver_id=current_user.id).all()
+        total_driver_collected = sum(float(c.amount) for c in all_driver_collections)
+        total_driver_verified = sum(
+            float(s.submitted_amount or 0)
+            for s in DriverCashSubmission.query.filter(
+                DriverCashSubmission.driver_id == current_user.id,
+                DriverCashSubmission.submission_status.in_(['verified', 'resolved'])
+            ).all()
         )
+        total_driver_in_transit = sum(
+            float(s.submitted_amount or 0)
+            for s in DriverCashSubmission.query.filter_by(
+                driver_id=current_user.id, submission_status='submitted'
+            ).all()
+        )
+        driver_outstanding = max(0.0, total_driver_collected - total_driver_verified - total_driver_in_transit)
 
     admin_users = (
         User.query.filter(User.role.in_(['admin', 'super_admin']),

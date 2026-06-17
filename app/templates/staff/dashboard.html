@@ -141,9 +141,9 @@
     </div>
 </div>
 
-{% if role == 'driver' and driver_outstanding and driver_outstanding > 0 %}
-<div style="background:rgba(200,118,26,0.12); border-left:4px solid var(--marigold); padding:12px 20px; margin:0 0 12px; border-radius:0 8px 8px 0; font-size:13px;">
-    <span data-i18n="dcs.driver_outstanding_banner">You have an outstanding balance of</span> <strong>₹{{ "%.0f"|format(driver_outstanding) }}</strong>
+{% if role == 'driver' %}
+<div id="driverOutstandingBanner" style="background:rgba(200,118,26,0.12); border-left:4px solid var(--marigold); padding:12px 20px; margin:0 0 12px; border-radius:0 8px 8px 0; font-size:13px;{% if not driver_outstanding or driver_outstanding <= 0 %} display:none;{% endif %}">
+    <span data-i18n="dcs.driver_outstanding_banner">You have an outstanding balance of</span> <strong id="driverOutstandingAmt">₹{{ "%.0f"|format(driver_outstanding or 0) }}</strong>
     <span data-i18n="dcs.driver_outstanding_hint">from your recent trip(s). Please hand over the cash to admin.</span>
 </div>
 {% endif %}
@@ -991,6 +991,18 @@ function renderCashSection(data) {
             submitBtn.style.background = data.total > 0 ? 'var(--sage)' : '';
             submitBtn.style.opacity = data.total > 0 ? '' : '0.4';
             submitBtn.style.cursor = 'default';
+        }
+    }
+
+    // Update driver outstanding balance banner
+    const outstandingBanner = document.getElementById('driverOutstandingBanner');
+    const outstandingAmt = document.getElementById('driverOutstandingAmt');
+    if (outstandingBanner) {
+        if (unsubmitted > 0 && status !== 'submitted') {
+            outstandingAmt.textContent = `₹${Math.round(unsubmitted)}`;
+            outstandingBanner.style.display = '';
+        } else {
+            outstandingBanner.style.display = 'none';
         }
     }
 
