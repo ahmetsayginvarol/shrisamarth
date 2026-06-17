@@ -1,0 +1,90 @@
+{% extends 'admin/base_admin.html' %}
+{% block admin_content %}
+<style>
+.dcs-driver-card { background:var(--cream-2); border:1px solid var(--line); border-radius:10px; padding:20px; margin-bottom:14px; border-left:4px solid var(--line); }
+.dcs-driver-card.all-clear { border-left-color: var(--sage); }
+.dcs-driver-card.outstanding { border-left-color: var(--marigold); }
+.dcs-driver-card.discrepancy { border-left-color: var(--ruby); }
+.dcs-driver-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; flex-wrap:wrap; gap:8px; }
+.dcs-driver-name { font-size:16px; font-weight:700; font-family:'Cormorant Garamond',serif; }
+.dcs-metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+.dcs-metric { }
+.dcs-metric-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin-bottom:3px; }
+.dcs-metric-value { font-size:18px; font-weight:700; font-family:'Cormorant Garamond',serif; }
+.dcs-metric-value.outstanding { color:var(--marigold); }
+.dcs-metric-value.clear { color:var(--sage); }
+.dcs-today-card { background:var(--cream-2); border:1px solid var(--line); border-radius:10px; padding:20px; margin-bottom:24px; }
+.dcs-pos-row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--line); font-size:14px; }
+.dcs-pos-row:last-child { border-bottom:none; font-weight:700; }
+.dcs-empty { text-align:center; padding:60px 20px; color:var(--muted); }
+</style>
+
+<div class="page-header">
+    <div>
+        <div class="page-title serif" data-i18n="nav.driver_cash">Driver Cash</div>
+        <div class="page-subtitle" data-i18n="dcs.subtitle">Cash accountability tracker</div>
+    </div>
+    <a href="{{ url_for('admin.finances') }}" class="btn btn-ghost">← Finances</a>
+</div>
+
+<!-- Today's Cash Position -->
+<div class="dcs-today-card">
+    <div style="font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:14px;" data-i18n="dcs.today_position">Today's Cash Position</div>
+    <div class="dcs-pos-row">
+        <span data-i18n="dcs.expected_today">Expected from drivers today</span>
+        <span style="font-weight:600;">₹ {{ "%.0f"|format(today_total_expected) }}</span>
+    </div>
+    <div class="dcs-pos-row">
+        <span data-i18n="dcs.received_today">Already received</span>
+        <span style="color:var(--sage); font-weight:600;">₹ {{ "%.0f"|format(today_total_received) }}</span>
+    </div>
+    <div class="dcs-pos-row">
+        <span data-i18n="dcs.outstanding_today">Still outstanding</span>
+        <span style="color:{% if today_outstanding > 0 %}var(--marigold){% else %}var(--sage){% endif %}; font-weight:700;">
+            ₹ {{ "%.0f"|format(today_outstanding) }}
+            {% if today_outstanding > 0 %} ⚠{% endif %}
+        </span>
+    </div>
+</div>
+
+{% if driver_data %}
+{% for d in driver_data %}
+{% set status_class = 'discrepancy' if d.has_discrepancy else ('outstanding' if d.outstanding > 0 else 'all-clear') %}
+<div class="dcs-driver-card {{ status_class }}">
+    <div class="dcs-driver-header">
+        <div>
+            <div class="dcs-driver-name">🚌 {{ d.driver.full_name }}</div>
+            {% if d.last_sub %}
+            <div style="font-size:12px; color:var(--muted); margin-top:3px;">Last submission: {{ d.last_sub.verified_at.strftime('%d %b, %H:%M') }}</div>
+            {% endif %}
+        </div>
+        <a href="{{ url_for('admin.driver_cash_detail', driver_id=d.driver.id) }}" class="btn btn-ghost" style="font-size:12px;" data-i18n="dcs.view_details">View Details</a>
+    </div>
+    <div class="dcs-metrics">
+        <div class="dcs-metric">
+            <div class="dcs-metric-label" data-i18n="dcs.total_expected">Total Expected</div>
+            <div class="dcs-metric-value">₹ {{ "%.0f"|format(d.total_expected) }}</div>
+        </div>
+        <div class="dcs-metric">
+            <div class="dcs-metric-label" data-i18n="dcs.submitted">Submitted</div>
+            <div class="dcs-metric-value">₹ {{ "%.0f"|format(d.total_verified) }}</div>
+        </div>
+        <div class="dcs-metric">
+            <div class="dcs-metric-label" data-i18n="dcs.outstanding">Outstanding</div>
+            <div class="dcs-metric-value {% if d.outstanding > 0 %}outstanding{% else %}clear{% endif %}">
+                ₹ {{ "%.0f"|format(d.outstanding) }}
+                {% if d.outstanding > 0 %} ⚠{% endif %}
+                {% if d.has_discrepancy %} — <span style="color:var(--ruby); font-size:14px;" data-i18n="dcs.discrepancy_flag">discrepancy flagged</span>{% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="dcs-empty">
+    <div style="font-size:32px; margin-bottom:12px;">📋</div>
+    <div style="font-size:16px; font-weight:600; margin-bottom:6px;" data-i18n="dcs.no_submissions">No submissions yet</div>
+    <div style="font-size:13px;" data-i18n="dcs.no_submissions_hint">Cash submissions appear here after trip reports are approved.</div>
+</div>
+{% endif %}
+{% endblock %}

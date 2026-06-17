@@ -410,11 +410,11 @@ class IpBan(db.Model):
 EXPENSE_CATEGORIES = [
     'Fuel', 'Driver Salary', 'Bus Maintenance', 'Toll & Permits',
     'Office Rent', 'Staff Salary', 'Insurance', 'Cleaning',
-    'Food & Refreshments', 'Marketing', 'Other Expense',
+    'Food & Refreshments', 'Marketing', 'Cash Discrepancy', 'Other Expense',
 ]
 
 INCOME_CATEGORIES = [
-    'Charter Booking', 'Parcel/Cargo', 'Advance Payment', 'Other Income',
+    'Charter Booking', 'Parcel/Cargo', 'Advance Payment', 'Ticket Sales (Cash)', 'Other Income',
 ]
 
 
@@ -513,6 +513,43 @@ class TripReport(db.Model):
 
     def __repr__(self):
         return f'<TripReport voyage={self.voyage_id} status={self.status}>'
+
+
+# ============================================================
+# DRIVER CASH SUBMISSIONS (physical cash handover accountability)
+# ============================================================
+
+class DriverCashSubmission(db.Model):
+    __tablename__ = 'driver_cash_submissions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    driver_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    voyage_id = db.Column(db.Integer, db.ForeignKey('voyages.id'), nullable=False, index=True)
+    trip_report_id = db.Column(db.Integer, db.ForeignKey('trip_reports.id'), nullable=True)
+    expected_amount = db.Column(db.Numeric(10, 2), nullable=False)
+    submitted_amount = db.Column(db.Numeric(10, 2), nullable=True)
+    discrepancy = db.Column(db.Numeric(10, 2), nullable=True)
+    submission_status = db.Column(db.String(20), default='pending', nullable=False, index=True)
+    # 'pending' = not yet handed over cash physically
+    # 'submitted' = driver handed cash to admin (being counted)
+    # 'verified' = admin counted and confirmed
+    # 'discrepancy' = amounts don't match
+    # 'resolved' = discrepancy resolved
+    admin_notes = db.Column(db.Text, nullable=True)
+    driver_notes = db.Column(db.Text, nullable=True)
+    resolution_type = db.Column(db.String(30), nullable=True)
+    # 'pay_later', 'write_off', 'adjusted'
+    verified_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    verified_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    driver = db.relationship('User', foreign_keys=[driver_id])
+    voyage = db.relationship('Voyage', foreign_keys=[voyage_id])
+    trip_report = db.relationship('TripReport', foreign_keys=[trip_report_id])
+    verified_by = db.relationship('User', foreign_keys=[verified_by_id])
+
+    def __repr__(self):
+        return f'<DriverCashSubmission voyage={self.voyage_id} driver={self.driver_id} status={self.submission_status}>'
 
 
 # ============================================================

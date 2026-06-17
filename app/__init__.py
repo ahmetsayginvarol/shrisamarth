@@ -192,6 +192,26 @@ def _run_schema_migrations(db):
             )""",
             "CREATE INDEX IF NOT EXISTS ix_trip_reports_voyage ON trip_reports(voyage_id)",
             "CREATE INDEX IF NOT EXISTS ix_trip_reports_status ON trip_reports(status)",
+            # driver_cash_submissions
+            """CREATE TABLE IF NOT EXISTS driver_cash_submissions (
+                id SERIAL PRIMARY KEY,
+                driver_id INTEGER NOT NULL REFERENCES users(id),
+                voyage_id INTEGER NOT NULL REFERENCES voyages(id),
+                trip_report_id INTEGER REFERENCES trip_reports(id),
+                expected_amount NUMERIC(10,2) NOT NULL,
+                submitted_amount NUMERIC(10,2),
+                discrepancy NUMERIC(10,2),
+                submission_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+                admin_notes TEXT,
+                driver_notes TEXT,
+                resolution_type VARCHAR(30),
+                verified_by_id INTEGER REFERENCES users(id),
+                verified_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )""",
+            "CREATE INDEX IF NOT EXISTS ix_dcs_driver ON driver_cash_submissions(driver_id)",
+            "CREATE INDEX IF NOT EXISTS ix_dcs_voyage ON driver_cash_submissions(voyage_id)",
+            "CREATE INDEX IF NOT EXISTS ix_dcs_status ON driver_cash_submissions(submission_status)",
         ]
         for sql in pg_stmts:
             try:

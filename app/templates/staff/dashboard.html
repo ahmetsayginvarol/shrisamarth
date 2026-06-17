@@ -141,6 +141,13 @@
     </div>
 </div>
 
+{% if role == 'driver' and driver_outstanding and driver_outstanding > 0 %}
+<div style="background:rgba(200,118,26,0.12); border-left:4px solid var(--marigold); padding:12px 20px; margin:0 0 12px; border-radius:0 8px 8px 0; font-size:13px;">
+    <span data-i18n="dcs.driver_outstanding_banner">You have an outstanding balance of</span> <strong>₹{{ "%.0f"|format(driver_outstanding) }}</strong>
+    <span data-i18n="dcs.driver_outstanding_hint">from your recent trip(s). Please hand over the cash to admin.</span>
+</div>
+{% endif %}
+
 {% if voyage %}
 <main class="staff-main{% if role == 'driver' %} driver-view{% endif %}" data-voyage-id="{{ voyage.id }}" data-base-fare="{{ voyage.base_fare }}" data-departure="{{ voyage.departure_at.isoformat() }}" data-stop-fares='{{ stop_fares | tojson }}'>
     <section class="seat-section">

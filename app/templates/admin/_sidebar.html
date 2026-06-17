@@ -24,9 +24,15 @@
             <span>Homepage</span>
         </a>
         <a href="{{ url_for('admin.finances') }}"
-           class="nav-item {% if 'finances' in request.endpoint %}active{% endif %}">
+           class="nav-item {% if 'finances' in request.endpoint and 'driver_cash' not in request.endpoint %}active{% endif %}">
             <span class="nav-icon">₹</span>
             <span data-i18n="nav.finances">Finances</span>
+        </a>
+        <a href="{{ url_for('admin.driver_cash') }}"
+           class="nav-item {% if 'driver_cash' in request.endpoint %}active{% endif %}"
+           style="padding-left:32px; font-size:12px;">
+            <span class="nav-icon">💵</span>
+            <span data-i18n="nav.driver_cash">Driver Cash</span>
         </a>
         <a href="{{ url_for('admin.voyages') }}"
            class="nav-item {% if 'voyage' in request.endpoint %}active{% endif %}">

@@ -4,7 +4,7 @@ from flask_login import login_required, current_user
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db, socketio, limiter
-from app.models import Voyage, Booking, RouteStop, SEAT_ADJACENCY, WINDOW_SEATS, CashCollection, TripReport
+from app.models import Voyage, Booking, RouteStop, SEAT_ADJACENCY, WINDOW_SEATS, CashCollection, TripReport, DriverCashSubmission
 from app.staff.forms import BookingForm
 from flask import send_file
 from app.staff.ticket import generate_ticket, generate_group_ticket
@@ -137,6 +137,22 @@ def dashboard():
             poc_count += 1
             poc_total += float(b.payment_on_checkin_amount or b.fare)
 
+    # Driver outstanding cash balance
+    driver_outstanding = 0
+    if current_user.role == 'driver':
+        pending_subs = DriverCashSubmission.query.filter_by(
+            driver_id=current_user.id,
+            submission_status='pending'
+        ).all()
+        discrepancy_subs = DriverCashSubmission.query.filter_by(
+            driver_id=current_user.id,
+            submission_status='discrepancy'
+        ).all()
+        driver_outstanding = sum(
+            float(s.expected_amount or 0) - float(s.submitted_amount or 0)
+            for s in pending_subs + discrepancy_subs
+        )
+
     return render_template(
         'staff/dashboard.html',
         voyage=voyage,
@@ -154,6 +170,7 @@ def dashboard():
         stop_fares=stop_fares,
         poc_count=poc_count,
         poc_total=int(poc_total),
+        driver_outstanding=driver_outstanding,
     )
 
 

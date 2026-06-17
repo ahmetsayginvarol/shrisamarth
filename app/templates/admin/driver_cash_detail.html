@@ -1,0 +1,240 @@
+{% extends 'admin/base_admin.html' %}
+{% block admin_content %}
+<style>
+.dcs-summary { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:28px; }
+.dcs-sum-card { background:var(--cream-2); border:1px solid var(--line); border-radius:10px; padding:18px; }
+.dcs-sum-card::before { content:''; display:block; height:3px; background:var(--accent-color,var(--marigold)); border-radius:2px; margin-bottom:12px; }
+.dcs-sum-label { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin-bottom:4px; }
+.dcs-sum-value { font-size:24px; font-weight:700; font-family:'Cormorant Garamond',serif; }
+.dcs-table { width:100%; border-collapse:collapse; font-size:13px; }
+.dcs-table th { padding:10px 12px; text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:600; border-bottom:2px solid var(--line); white-space:nowrap; }
+.dcs-table td { padding:12px 12px; border-bottom:1px solid var(--line); vertical-align:middle; }
+.dcs-table tr:last-child td { border-bottom:none; }
+.dcs-table tr:hover td { background:var(--cream-2); }
+.dcs-badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px; white-space:nowrap; }
+.dcs-badge.verified { background:rgba(122,154,90,0.12); color:var(--sage); }
+.dcs-badge.pending { background:rgba(0,0,0,0.06); color:var(--muted); }
+.dcs-badge.discrepancy { background:rgba(200,118,26,0.12); color:var(--marigold); }
+.dcs-badge.resolved { background:rgba(122,154,90,0.12); color:var(--sage); }
+.dcs-badge.discrepancy-red { background:rgba(168,50,50,0.1); color:var(--ruby); }
+.dcs-action-btn { border:1px solid var(--line); background:var(--cream); border-radius:6px; padding:5px 12px; font-size:12px; cursor:pointer; }
+.dcs-action-btn:hover { background:var(--cream-2); }
+.dcs-modal-form { display:flex; flex-direction:column; gap:14px; }
+
+@media(max-width:700px) { .dcs-summary { grid-template-columns:1fr 1fr; } }
+</style>
+
+<div class="page-header">
+    <div>
+        <div class="page-title serif">{{ driver.full_name }}</div>
+        <div class="page-subtitle" data-i18n="dcs.accountability">Cash Accountability</div>
+    </div>
+    <a href="{{ url_for('admin.driver_cash') }}" class="btn btn-ghost">← All Drivers</a>
+</div>
+
+<!-- Summary Cards -->
+<div class="dcs-summary">
+    <div class="dcs-sum-card" style="--accent-color:var(--sage);">
+        <div class="dcs-sum-label" data-i18n="dcs.total_expected">Total Expected</div>
+        <div class="dcs-sum-value">₹ {{ "%.0f"|format(total_expected) }}</div>
+    </div>
+    <div class="dcs-sum-card" style="--accent-color:var(--sage);">
+        <div class="dcs-sum-label" data-i18n="dcs.total_submitted">Total Submitted</div>
+        <div class="dcs-sum-value">₹ {{ "%.0f"|format(total_verified) }}</div>
+    </div>
+    <div class="dcs-sum-card" style="--accent-color:{% if outstanding > 0 %}var(--marigold){% else %}var(--sage){% endif %};">
+        <div class="dcs-sum-label" data-i18n="dcs.outstanding">Outstanding</div>
+        <div class="dcs-sum-value" style="color:{% if outstanding > 0 %}var(--marigold){% else %}var(--sage){% endif %};">₹ {{ "%.0f"|format(outstanding) }}</div>
+    </div>
+    <div class="dcs-sum-card" style="--accent-color:{% if discrepancy_count > 0 %}var(--ruby){% else %}var(--line){% endif %};">
+        <div class="dcs-sum-label" data-i18n="dcs.discrepancies">Discrepancies</div>
+        <div class="dcs-sum-value" style="color:{% if discrepancy_count > 0 %}var(--ruby){% else %}var(--muted){% endif %};">{{ discrepancy_count }}</div>
+    </div>
+</div>
+
+<!-- Submissions Table -->
+<div style="background:var(--cream-2); border:1px solid var(--line); border-radius:10px; overflow:hidden;">
+    <div style="padding:16px 20px; border-bottom:1px solid var(--line); font-weight:600; font-size:15px;" data-i18n="dcs.per_voyage">Per-Voyage Breakdown</div>
+    {% if submissions %}
+    <div style="overflow-x:auto;">
+    <table class="dcs-table">
+        <thead>
+            <tr>
+                <th data-i18n="dcs.date">Date</th>
+                <th data-i18n="dcs.route">Route</th>
+                <th data-i18n="dcs.expected">Expected</th>
+                <th data-i18n="dcs.submitted">Submitted</th>
+                <th data-i18n="dcs.status">Status</th>
+                <th data-i18n="dcs.actions">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for sub in submissions %}
+        <tr data-sub-id="{{ sub.id }}">
+            <td>{{ sub.voyage.departure_at.strftime('%d %b %Y') }}</td>
+            <td>{{ sub.voyage.origin }} → {{ sub.voyage.destination }}</td>
+            <td><strong>₹ {{ "%.0f"|format(sub.expected_amount) }}</strong></td>
+            <td>
+                {% if sub.submitted_amount is not none %}
+                    ₹ {{ "%.0f"|format(sub.submitted_amount) }}
+                {% else %}
+                    <span class="muted">—</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if sub.submission_status == 'verified' %}
+                    <span class="dcs-badge verified" data-i18n="dcs.status_verified">✓ Verified</span>
+                {% elif sub.submission_status == 'resolved' %}
+                    <span class="dcs-badge resolved" data-i18n="dcs.status_resolved">✓ Resolved</span>
+                {% elif sub.submission_status == 'discrepancy' %}
+                    <span class="dcs-badge discrepancy-red">⚠ Gap ₹{{ "%.0f"|format(sub.discrepancy|abs) }}</span>
+                {% else %}
+                    <span class="dcs-badge pending" data-i18n="dcs.status_pending">⏳ Pending</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if sub.submission_status == 'pending' %}
+                    <button class="dcs-action-btn" onclick="openReceiveModal({{ sub.id }}, {{ sub.expected_amount }}, '{{ sub.voyage.origin }}→{{ sub.voyage.destination }}', '{{ sub.voyage.departure_at.strftime('%d %b') }}')" data-i18n="dcs.mark_received">Mark Received</button>
+                {% elif sub.submission_status == 'discrepancy' %}
+                    <button class="dcs-action-btn" onclick="openResolveModal({{ sub.id }}, {{ sub.expected_amount }}, {{ sub.submitted_amount or 0 }}, {{ sub.discrepancy or 0 }})" data-i18n="dcs.resolve">Resolve</button>
+                {% elif sub.submission_status in ('verified', 'resolved') %}
+                    <span class="muted" style="font-size:12px;" data-i18n="dcs.done">Done</span>
+                {% endif %}
+                {% if sub.driver_notes %}
+                    <div style="font-size:11px; color:var(--muted); margin-top:4px;">💬 {{ sub.driver_notes }}</div>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div style="padding:40px; text-align:center; color:var(--muted);" data-i18n="dcs.no_submissions">No submissions yet.</div>
+    {% endif %}
+</div>
+
+<!-- Receive Modal -->
+<div class="dz-modal-backdrop hidden" id="receiveModal">
+    <div class="dz-modal" style="max-width:420px;">
+        <div class="dz-modal-title" id="receiveModalTitle">Cash Received</div>
+        <div class="dcs-modal-form">
+            <div>
+                <div style="font-size:12px; color:var(--muted); margin-bottom:4px;" data-i18n="dcs.expected_amount">Expected amount</div>
+                <div style="font-size:20px; font-weight:700;" id="receiveExpected">—</div>
+            </div>
+            <div class="form-group">
+                <label class="form-label" data-i18n="dcs.amount_received">Amount actually received (₹)</label>
+                <input type="number" class="form-input" id="receiveAmount" min="0" step="1" placeholder="0">
+            </div>
+            <div class="form-group">
+                <label class="form-label" data-i18n="dcs.notes_optional">Notes (optional)</label>
+                <input type="text" class="form-input" id="receiveNotes" placeholder="Any notes…">
+            </div>
+        </div>
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button class="btn btn-ghost" onclick="closeReceiveModal()" style="flex:1;" data-i18n="dcs.cancel">Cancel</button>
+            <button class="btn btn-primary" onclick="confirmReceive()" style="flex:1;" data-i18n="dcs.confirm_receipt">Confirm Receipt</button>
+        </div>
+    </div>
+</div>
+
+<!-- Resolve Modal -->
+<div class="dz-modal-backdrop hidden" id="resolveModal">
+    <div class="dz-modal" style="max-width:440px;">
+        <div class="dz-modal-title" data-i18n="dcs.resolve_discrepancy">Resolve Discrepancy</div>
+        <div id="resolveInfo" style="background:rgba(200,118,26,0.1); border-radius:8px; padding:12px; margin-bottom:16px; font-size:13px;"></div>
+        <div class="dcs-modal-form">
+            <div>
+                <div class="form-label" data-i18n="dcs.resolution_option">Resolution</div>
+                <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer; font-size:13px;">
+                    <input type="radio" name="resolution" value="pay_later" checked> <span data-i18n="dcs.pay_later">Driver will pay remaining amount later</span>
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px; cursor:pointer; font-size:13px;">
+                    <input type="radio" name="resolution" value="write_off"> <span data-i18n="dcs.write_off">Write off as error</span>
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px;">
+                    <input type="radio" name="resolution" value="adjusted"> <span data-i18n="dcs.adjusted">Adjust expected amount (data entry error)</span>
+                </label>
+            </div>
+            <div class="form-group">
+                <label class="form-label" data-i18n="dcs.resolution_notes">Notes <span style="color:var(--ruby);">*</span></label>
+                <textarea class="form-input" id="resolveNotes" rows="2" placeholder="Required for write-off or adjustment…" style="resize:vertical;"></textarea>
+            </div>
+        </div>
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button class="btn btn-ghost" onclick="closeResolveModal()" style="flex:1;" data-i18n="dcs.cancel">Cancel</button>
+            <button class="btn btn-primary" onclick="confirmResolve()" style="flex:1;" data-i18n="dcs.confirm_resolution">Confirm</button>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+{{ super() }}
+<script>
+const CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
+let _receiveSubId = null;
+let _resolveSubId = null;
+
+function openReceiveModal(subId, expected, route, date) {
+    _receiveSubId = subId;
+    document.getElementById('receiveModalTitle').textContent = 'Cash Received — ' + route + ' · ' + date;
+    document.getElementById('receiveExpected').textContent = '₹ ' + Math.round(expected);
+    document.getElementById('receiveAmount').value = Math.round(expected);
+    document.getElementById('receiveNotes').value = '';
+    document.getElementById('receiveModal').classList.remove('hidden');
+}
+function closeReceiveModal() {
+    document.getElementById('receiveModal').classList.add('hidden');
+    _receiveSubId = null;
+}
+function confirmReceive() {
+    if (!_receiveSubId) return;
+    const amount = parseFloat(document.getElementById('receiveAmount').value) || 0;
+    const notes = document.getElementById('receiveNotes').value;
+    fetch('/admin/finances/drivers/submissions/' + _receiveSubId + '/receive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ amount, notes }),
+    }).then(r => r.json()).then(data => {
+        closeReceiveModal();
+        if (data.status === 'ok') location.reload();
+        else alert(data.message || 'Error');
+    });
+}
+
+function openResolveModal(subId, expected, submitted, discrepancy) {
+    _resolveSubId = subId;
+    document.getElementById('resolveInfo').innerHTML =
+        '<strong>Expected:</strong> ₹' + Math.round(expected) +
+        ' &nbsp;|&nbsp; <strong>Received:</strong> ₹' + Math.round(submitted) +
+        ' &nbsp;|&nbsp; <strong>Gap:</strong> ₹' + Math.round(Math.abs(discrepancy));
+    document.getElementById('resolveNotes').value = '';
+    document.querySelector('input[name="resolution"][value="pay_later"]').checked = true;
+    document.getElementById('resolveModal').classList.remove('hidden');
+}
+function closeResolveModal() {
+    document.getElementById('resolveModal').classList.add('hidden');
+    _resolveSubId = null;
+}
+function confirmResolve() {
+    if (!_resolveSubId) return;
+    const resolution = document.querySelector('input[name="resolution"]:checked')?.value || 'pay_later';
+    const notes = document.getElementById('resolveNotes').value.trim();
+    if ((resolution === 'write_off' || resolution === 'adjusted') && !notes) {
+        alert('Notes are required for this resolution type.');
+        return;
+    }
+    fetch('/admin/finances/drivers/submissions/' + _resolveSubId + '/resolve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ resolution, notes }),
+    }).then(r => r.json()).then(data => {
+        closeResolveModal();
+        if (data.status === 'ok') location.reload();
+        else alert(data.message || 'Error');
+    });
+}
+</script>
+{% endblock %}
+{% endblock %}

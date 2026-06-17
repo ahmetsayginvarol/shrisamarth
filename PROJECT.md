@@ -306,3 +306,61 @@ Dedicated endpoint `POST /staff/cash/poc-clear/<booking_id>` also available.
 | `staff.cash_collect` | POST | Clears `payment_on_checkin` on collection |
 | `staff.poc_clear` | POST | Dedicated POC flag clear endpoint |
 | `admin.booking_poc` | POST | Admin mark/unmark POC on any booking |
+
+## Driver Cash Accountability Tracker
+
+Physical cash handover tracking after trip reports are approved. Ensures all cash collected by drivers is accounted for when handed to the admin.
+
+### Model
+
+`DriverCashSubmission` (`driver_cash_submissions` table):
+
+| Field | Description |
+|---|---|
+| `driver_id` | FK to users.id |
+| `voyage_id` | FK to voyages.id |
+| `trip_report_id` | FK to trip_reports.id (nullable) |
+| `expected_amount` | Total cash driver should hand over |
+| `submitted_amount` | Actual cash counted by admin |
+| `discrepancy` | expected - submitted |
+| `submission_status` | pending / verified / discrepancy / resolved |
+| `admin_notes` / `driver_notes` | Notes from each party |
+| `resolution_type` | pay_later / write_off / adjusted |
+| `verified_by_id` | Admin who counted the cash |
+| `verified_at` | When cash was counted |
+
+### Workflow
+
+1. Driver submits trip report → admin reviews
+2. Admin approves trip report → `DriverCashSubmission` auto-created with `status='pending'` and `expected_amount = total_collected`
+3. Driver physically hands cash to admin
+4. Admin opens Driver Cash detail page → clicks "Mark Received" → enters actual amount
+5. If amount matches: status = `verified`, `FinancialEntry(category='Ticket Sales (Cash)')` auto-created
+6. If amount differs: status = `discrepancy` — admin can resolve as:
+   - **pay_later**: stays open, driver owes the balance
+   - **write_off**: creates `FinancialEntry(category='Cash Discrepancy')` expense + income entry for received amount
+   - **adjusted**: expected adjusted to match actual (data entry error), income entry created
+
+### Routes
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `admin.driver_cash` | GET | List of all drivers with outstanding balances |
+| `admin.driver_cash_detail` | GET | Per-driver per-voyage breakdown |
+| `admin.driver_cash_receive` | POST | Admin records cash received, sets verified/discrepancy |
+| `admin.driver_cash_resolve` | POST | Resolve a discrepancy |
+| `admin.driver_cash_note` | POST | Driver adds a note to their submission |
+
+### Financial Integration
+
+- **On verify**: Auto-creates `FinancialEntry(income, 'Ticket Sales (Cash)')` — separate from the existing 'Ticket Sales' entry which records advance payments
+- **On write-off**: Creates expense entry for gap + income entry for received amount
+- **On adjust**: Creates income entry for the adjusted amount
+- Categories added: `'Cash Discrepancy'` to EXPENSE_CATEGORIES, `'Ticket Sales (Cash)'` to INCOME_CATEGORIES
+
+### UI
+
+- Admin sidebar: "Driver Cash" sub-link under Finances
+- Finances page: Quick link card to driver cash tracker
+- Driver dashboard: Orange warning banner if driver has outstanding cash to hand over
+- Bilingual (EN/HI) throughout

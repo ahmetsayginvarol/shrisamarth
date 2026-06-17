@@ -9,7 +9,7 @@ from app.extensions import db
 from app.models import (Bus, Voyage, Booking, User, ActivityLog, RouteStop, SiteContent,
                         PasswordResetToken, AbuseLog, IpBan, Newsletter, SeatLock, Notification,
                         FinancialEntry, EXPENSE_CATEGORIES, INCOME_CATEGORIES,
-                        UserActivityLog, CashCollection, TripReport)
+                        UserActivityLog, CashCollection, TripReport, DriverCashSubmission)
 from datetime import datetime, timedelta, date as date_type
 from sqlalchemy import func, and_
 from app.admin.forms import BusForm, VoyageForm, UserForm, UserEditForm
@@ -2319,6 +2319,24 @@ def trip_report_approve(report_id):
     report.reviewed_by_id = current_user.id
     report.reviewed_at = datetime.utcnow()
     report.review_notes = data.get('notes', '').strip() or None
+
+    # Auto-create DriverCashSubmission when trip report is approved
+    expected = float(report.total_collected or 0)
+    if expected > 0:
+        # Check if one already exists for this voyage+driver to avoid duplicates
+        existing_sub = DriverCashSubmission.query.filter_by(
+            voyage_id=report.voyage_id, driver_id=report.driver_id
+        ).first()
+        if not existing_sub:
+            sub = DriverCashSubmission(
+                driver_id=report.driver_id,
+                voyage_id=report.voyage_id,
+                trip_report_id=report.id,
+                expected_amount=expected,
+                submission_status='pending',
+            )
+            db.session.add(sub)
+
     db.session.commit()
 
     log_activity('trip_report_approved',
@@ -2344,6 +2362,223 @@ def trip_report_flag(report_id):
                  f'Flagged trip report #{report.id} from {report.driver.full_name}',
                  'trip_report', report.id)
 
+    return jsonify({'status': 'ok'})
+
+
+# ============================================================
+# DRIVER CASH ACCOUNTABILITY
+# ============================================================
+
+@admin_bp.route('/finances/drivers')
+@login_required
+def driver_cash():
+    """Driver cash accountability list — one row per driver."""
+    drivers = User.query.filter_by(role='driver', is_active_account=True).order_by(User.full_name).all()
+
+    driver_data = []
+    for driver in drivers:
+        subs = DriverCashSubmission.query.filter_by(driver_id=driver.id).all()
+        total_expected = sum(float(s.expected_amount or 0) for s in subs)
+        total_verified = sum(float(s.submitted_amount or 0) for s in subs if s.submission_status in ('verified', 'resolved'))
+        outstanding = sum(
+            float(s.expected_amount or 0) - float(s.submitted_amount or 0)
+            for s in subs
+            if s.submission_status in ('pending', 'discrepancy')
+        )
+        has_discrepancy = any(s.submission_status == 'discrepancy' for s in subs)
+        last_sub = max((s for s in subs if s.verified_at), key=lambda s: s.verified_at, default=None)
+
+        # Today's expected/received
+        today = date_type.today()
+        today_subs = [s for s in subs if s.created_at and s.created_at.date() == today]
+        today_expected = sum(float(s.expected_amount or 0) for s in today_subs)
+        today_received = sum(float(s.submitted_amount or 0) for s in today_subs if s.submission_status in ('verified', 'resolved'))
+
+        if subs:  # only include drivers with any submissions
+            driver_data.append({
+                'driver': driver,
+                'total_expected': total_expected,
+                'total_verified': total_verified,
+                'outstanding': outstanding,
+                'has_discrepancy': has_discrepancy,
+                'last_sub': last_sub,
+                'today_expected': today_expected,
+                'today_received': today_received,
+                'sub_count': len(subs),
+            })
+
+    # Today's cash position
+    today = date_type.today()
+    all_today = DriverCashSubmission.query.filter(
+        db.func.date(DriverCashSubmission.created_at) == today
+    ).all()
+    today_total_expected = sum(float(s.expected_amount or 0) for s in all_today)
+    today_total_received = sum(float(s.submitted_amount or 0) for s in all_today if s.submission_status in ('verified', 'resolved'))
+    today_outstanding = today_total_expected - today_total_received
+
+    return render_template('admin/driver_cash.html',
+                           driver_data=driver_data,
+                           today_total_expected=today_total_expected,
+                           today_total_received=today_total_received,
+                           today_outstanding=today_outstanding)
+
+
+@admin_bp.route('/finances/drivers/<int:driver_id>')
+@login_required
+def driver_cash_detail(driver_id):
+    """Per-driver cash breakdown."""
+    driver = User.query.get_or_404(driver_id)
+    subs = DriverCashSubmission.query.filter_by(driver_id=driver_id).order_by(
+        DriverCashSubmission.created_at.desc()
+    ).all()
+
+    total_expected = sum(float(s.expected_amount or 0) for s in subs)
+    total_verified = sum(float(s.submitted_amount or 0) for s in subs if s.submission_status in ('verified', 'resolved'))
+    outstanding = sum(
+        float(s.expected_amount or 0) - float(s.submitted_amount or 0)
+        for s in subs
+        if s.submission_status in ('pending', 'discrepancy')
+    )
+    discrepancy_count = sum(1 for s in subs if s.submission_status == 'discrepancy')
+
+    return render_template('admin/driver_cash_detail.html',
+                           driver=driver,
+                           submissions=subs,
+                           total_expected=total_expected,
+                           total_verified=total_verified,
+                           outstanding=outstanding,
+                           discrepancy_count=discrepancy_count)
+
+
+@admin_bp.route('/finances/drivers/submissions/<int:sub_id>/receive', methods=['POST'])
+@login_required
+def driver_cash_receive(sub_id):
+    """Admin marks cash as received from driver."""
+    sub = DriverCashSubmission.query.get_or_404(sub_id)
+    data = request.get_json() or {}
+
+    received = float(data.get('amount', 0) or 0)
+    notes = (data.get('notes') or '').strip()
+
+    sub.submitted_amount = received
+    sub.admin_notes = notes or sub.admin_notes
+    sub.verified_by_id = current_user.id
+    sub.verified_at = datetime.utcnow()
+
+    expected = float(sub.expected_amount or 0)
+    discrepancy = round(expected - received, 2)
+    sub.discrepancy = discrepancy
+
+    if abs(discrepancy) < 0.01:
+        sub.submission_status = 'verified'
+        # Auto-create income entry
+        entry = FinancialEntry(
+            entry_type='income',
+            category='Ticket Sales (Cash)',
+            amount=received,
+            description=(f"Cash from Driver {sub.driver.full_name} — "
+                         f"{sub.voyage.origin}→{sub.voyage.destination} "
+                         f"{sub.voyage.departure_at.strftime('%d %b %Y')}"),
+            entry_date=sub.voyage.departure_at.date(),
+            created_by_id=current_user.id,
+        )
+        db.session.add(entry)
+        msg = f'verified ₹{received:.0f} — matched expected'
+    else:
+        sub.submission_status = 'discrepancy'
+        msg = f'discrepancy: expected ₹{expected:.0f}, received ₹{received:.0f}, gap ₹{abs(discrepancy):.0f}'
+
+    db.session.commit()
+
+    log_activity('driver_cash_received',
+                 f'Admin {current_user.full_name} {msg} from Driver {sub.driver.full_name} '
+                 f'for voyage {sub.voyage.origin}→{sub.voyage.destination} '
+                 f'{sub.voyage.departure_at.strftime("%d %b %Y")}',
+                 'driver_cash_submission', sub.id)
+
+    return jsonify({'status': 'ok', 'submission_status': sub.submission_status, 'discrepancy': discrepancy})
+
+
+@admin_bp.route('/finances/drivers/submissions/<int:sub_id>/resolve', methods=['POST'])
+@login_required
+def driver_cash_resolve(sub_id):
+    """Resolve a discrepancy."""
+    sub = DriverCashSubmission.query.get_or_404(sub_id)
+    data = request.get_json() or {}
+
+    resolution = data.get('resolution', '')  # 'pay_later', 'write_off', 'adjusted'
+    notes = (data.get('notes') or '').strip()
+
+    sub.resolution_type = resolution
+    sub.admin_notes = notes
+
+    if resolution == 'write_off':
+        sub.submission_status = 'resolved'
+        # Create expense entry for the gap
+        gap = abs(float(sub.discrepancy or 0))
+        if gap > 0:
+            entry = FinancialEntry(
+                entry_type='expense',
+                category='Cash Discrepancy',
+                amount=gap,
+                description=(f"Cash shortage — Driver {sub.driver.full_name} "
+                             f"{sub.voyage.origin}→{sub.voyage.destination} "
+                             f"{sub.voyage.departure_at.strftime('%d %b %Y')}. Notes: {notes}"),
+                entry_date=sub.voyage.departure_at.date(),
+                created_by_id=current_user.id,
+            )
+            db.session.add(entry)
+        # Create income entry for what was submitted
+        received = float(sub.submitted_amount or 0)
+        if received > 0:
+            entry2 = FinancialEntry(
+                entry_type='income',
+                category='Ticket Sales (Cash)',
+                amount=received,
+                description=(f"Cash from Driver {sub.driver.full_name} — "
+                             f"{sub.voyage.origin}→{sub.voyage.destination} "
+                             f"{sub.voyage.departure_at.strftime('%d %b %Y')} (partial, gap written off)"),
+                entry_date=sub.voyage.departure_at.date(),
+                created_by_id=current_user.id,
+            )
+            db.session.add(entry2)
+    elif resolution == 'adjusted':
+        sub.submission_status = 'resolved'
+        sub.expected_amount = sub.submitted_amount
+        sub.discrepancy = 0
+        # Create income entry for the adjusted amount
+        received = float(sub.submitted_amount or 0)
+        if received > 0:
+            entry = FinancialEntry(
+                entry_type='income',
+                category='Ticket Sales (Cash)',
+                amount=received,
+                description=(f"Cash from Driver {sub.driver.full_name} — "
+                             f"{sub.voyage.origin}→{sub.voyage.destination} "
+                             f"{sub.voyage.departure_at.strftime('%d %b %Y')} (adjusted: {notes})"),
+                entry_date=sub.voyage.departure_at.date(),
+                created_by_id=current_user.id,
+            )
+            db.session.add(entry)
+    else:  # pay_later
+        sub.submission_status = 'discrepancy'  # stays open
+
+    db.session.commit()
+    log_activity('driver_cash_resolved',
+                 f'Discrepancy resolved ({resolution}) for Driver {sub.driver.full_name}: {notes}',
+                 'driver_cash_submission', sub.id)
+
+    return jsonify({'status': 'ok'})
+
+
+@admin_bp.route('/finances/drivers/submissions/<int:sub_id>/driver-note', methods=['POST'])
+@login_required
+def driver_cash_note(sub_id):
+    """Driver adds a note to their submission."""
+    sub = DriverCashSubmission.query.get_or_404(sub_id)
+    data = request.get_json() or {}
+    sub.driver_notes = (data.get('note') or '').strip()
+    db.session.commit()
     return jsonify({'status': 'ok'})
 
 
