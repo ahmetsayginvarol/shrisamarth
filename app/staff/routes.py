@@ -947,6 +947,7 @@ def voyage_collections(voyage_id):
     # Latest pending/submitted record (driver view — disable Submit Cash if awaiting verification)
     sub = None
     verified_amount = 0.0
+    in_transit_amount = 0.0
     if driver_id:
         sub = DriverCashSubmission.query.filter(
             DriverCashSubmission.driver_id == driver_id,
@@ -1089,19 +1090,24 @@ def submit_cash_to_admin():
 
     from collections import defaultdict
 
-    # Amount already verified/resolved per voyage — driver no longer owes this
+    # Amount already settled per voyage (verified/resolved = admin confirmed receipt)
     verified_per_voyage = defaultdict(float)
+    # Amount in transit per voyage (submitted to admin, pending verification)
+    in_transit_per_voyage = defaultdict(float)
     for s in DriverCashSubmission.query.filter(
         DriverCashSubmission.driver_id == current_user.id,
-        DriverCashSubmission.submission_status.in_(['verified', 'resolved'])
+        DriverCashSubmission.submission_status.in_(['verified', 'resolved', 'submitted'])
     ).all():
-        verified_per_voyage[s.voyage_id] += float(s.submitted_amount or 0)
+        if s.submission_status in ('verified', 'resolved'):
+            verified_per_voyage[s.voyage_id] += float(s.submitted_amount or 0)
+        else:
+            in_transit_per_voyage[s.voyage_id] += float(s.submitted_amount or 0)
 
-    # Existing pending/submitted records per voyage (to update in-place)
+    # Only pending records can be upserted — submitted records are already in admin's hands
     existing_subs = {}
     for s in DriverCashSubmission.query.filter(
         DriverCashSubmission.driver_id == current_user.id,
-        DriverCashSubmission.submission_status.in_(['pending', 'submitted'])
+        DriverCashSubmission.submission_status == 'pending'
     ).all():
         existing_subs[s.voyage_id] = s
 
@@ -1111,13 +1117,14 @@ def submit_cash_to_admin():
         if c.voyage_id:
             by_voyage[c.voyage_id].append(c)
 
-    # Only voyages with unverified outstanding cash
+    # Only voyages with cash not yet settled or in transit
     outstanding_voyages = {}
     total_outstanding = 0.0
     for voyage_id, cols in by_voyage.items():
         voyage_total = sum(float(c.amount) for c in cols)
         already_verified = verified_per_voyage.get(voyage_id, 0.0)
-        outstanding = voyage_total - already_verified
+        already_in_transit = in_transit_per_voyage.get(voyage_id, 0.0)
+        outstanding = voyage_total - already_verified - already_in_transit
         if outstanding > 0.01:
             outstanding_voyages[voyage_id] = {
                 'collections': cols,

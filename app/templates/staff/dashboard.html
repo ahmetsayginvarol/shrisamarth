@@ -1440,6 +1440,7 @@ async function doSubmitCash() {
     btn.disabled = true;
     const origText = btn.textContent;
     btn.textContent = '…';
+    let succeeded = false;
     try {
         const res = await fetch('/staff/cash/submit', {
             method: 'POST',
@@ -1448,8 +1449,9 @@ async function doSubmitCash() {
         });
         const data = await res.json();
         if (data.status === 'ok') {
+            succeeded = true;
             closeSubmitCashModal();
-            await loadCollections();
+            await loadCollections(); // renderCashSection sets the correct button state
         } else {
             errEl.textContent = data.error || 'Submission failed.';
             errEl.style.display = 'block';
@@ -1458,8 +1460,11 @@ async function doSubmitCash() {
         errEl.textContent = 'Network error. Please try again.';
         errEl.style.display = 'block';
     } finally {
-        btn.disabled = false;
-        btn.textContent = origText;
+        // Only restore button if we failed — success leaves renderCashSection in control
+        if (!succeeded) {
+            btn.disabled = false;
+            btn.textContent = origText;
+        }
     }
 }
 </script>
