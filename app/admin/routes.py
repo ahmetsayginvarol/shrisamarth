@@ -2385,25 +2385,26 @@ def driver_cash():
     for driver in drivers:
         # All cash collected by this driver
         all_collections = CashCollection.query.filter_by(driver_id=driver.id).all()
+        total_collected = sum(float(c.amount) for c in all_collections)
 
-        # Voyages that have already been settled or submitted (driver no longer holds that cash)
-        settled_voyage_ids = {
-            s.voyage_id for s in DriverCashSubmission.query.filter(
-                DriverCashSubmission.driver_id == driver.id,
-                DriverCashSubmission.submission_status.in_(['submitted', 'verified', 'resolved'])
-            ).all()
-        }
+        # Amount already verified/resolved by admin (per voyage for summaries)
+        from collections import defaultdict
+        verified_per_voyage = defaultdict(float)
+        for s in DriverCashSubmission.query.filter(
+            DriverCashSubmission.driver_id == driver.id,
+            DriverCashSubmission.submission_status.in_(['verified', 'resolved'])
+        ).all():
+            verified_per_voyage[s.voyage_id] += float(s.submitted_amount or 0)
 
-        # Live cash = collections for voyages not yet settled
-        live_collections = [c for c in all_collections if c.voyage_id not in settled_voyage_ids]
-        live_amount = sum(float(c.amount) for c in live_collections)
+        total_verified_received = sum(verified_per_voyage.values())
 
-        # Pending DriverCashSubmissions (trip report approved, cash not yet handed over physically)
-        pending_subs = DriverCashSubmission.query.filter_by(
-            driver_id=driver.id, submission_status='pending'
+        # Amount in transit (driver submitted, admin hasn't counted yet)
+        in_transit_subs = DriverCashSubmission.query.filter_by(
+            driver_id=driver.id, submission_status='submitted'
         ).all()
+        total_in_transit = sum(float(s.submitted_amount or 0) for s in in_transit_subs)
 
-        # Discrepancy submissions (short-paid)
+        # Discrepancy = outstanding short-payments from previous mismatches
         discrepancy_subs = DriverCashSubmission.query.filter_by(
             driver_id=driver.id, submission_status='discrepancy'
         ).all()
@@ -2412,12 +2413,18 @@ def driver_cash():
             for s in discrepancy_subs
         )
 
-        # Total this driver should have on hand right now
+        # True holding = collected - (verified + in_transit) + discrepancy
+        live_amount = max(0.0, total_collected - total_verified_received - total_in_transit)
         total_holding = live_amount + discrepancy_amount
 
-        # Today's live collections
+        # Pending submissions (trip report approved, cash not physically submitted yet)
+        pending_subs = DriverCashSubmission.query.filter_by(
+            driver_id=driver.id, submission_status='pending'
+        ).all()
+
+        # Today's total collected (ALL collections today, whether settled or not)
         today_live = sum(
-            float(c.amount) for c in live_collections
+            float(c.amount) for c in all_collections
             if c.collected_at and c.collected_at.date() == today
         )
 
@@ -2431,34 +2438,33 @@ def driver_cash():
             ).all()
         )
 
-        # Group live collections by voyage for display
-        from collections import defaultdict
-        voyage_groups = defaultdict(list)
-        for c in live_collections:
-            voyage_groups[c.voyage_id].append(c)
+        # Voyage summaries — show voyages where driver still has outstanding cash
+        by_voyage = defaultdict(list)
+        for c in all_collections:
+            if c.voyage_id:
+                by_voyage[c.voyage_id].append(c)
 
         voyage_summaries = []
-        for vid, cols in voyage_groups.items():
-            v = cols[0].booking.voyage if cols[0].booking and cols[0].booking.voyage else None
-            if not v:
-                from app.models import Voyage as VoyageModel
-                v = VoyageModel.query.get(vid)
-            voyage_summaries.append({
-                'voyage': v,
-                'amount': sum(float(c.amount) for c in cols),
-                'count': len(cols),
-            })
+        for vid, cols in by_voyage.items():
+            voyage_total = sum(float(c.amount) for c in cols)
+            already_verified = verified_per_voyage.get(vid, 0)
+            outstanding_for_voyage = voyage_total - already_verified
+            if outstanding_for_voyage > 0.01:
+                v = cols[0].booking.voyage if cols[0].booking and cols[0].booking.voyage else None
+                if not v:
+                    from app.models import Voyage as VoyageModel
+                    v = VoyageModel.query.get(vid)
+                voyage_summaries.append({
+                    'voyage': v,
+                    'amount': outstanding_for_voyage,
+                    'count': len(cols),
+                })
         voyage_summaries.sort(key=lambda x: x['voyage'].departure_at if x['voyage'] else datetime.min, reverse=True)
 
         today_total_live += today_live
         today_total_received += today_received_amt
 
-        # Submissions awaiting admin verification (driver has physically handed cash over)
-        submitted_subs = DriverCashSubmission.query.filter_by(
-            driver_id=driver.id, submission_status='submitted'
-        ).all()
-
-        if all_collections or pending_subs or discrepancy_subs or submitted_subs:
+        if all_collections or pending_subs or discrepancy_subs or in_transit_subs:
             driver_data.append({
                 'driver': driver,
                 'live_amount': live_amount,
@@ -2466,10 +2472,10 @@ def driver_cash():
                 'discrepancy_amount': discrepancy_amount,
                 'has_discrepancy': bool(discrepancy_subs),
                 'pending_subs': pending_subs,
-                'submitted_subs': submitted_subs,
+                'submitted_subs': in_transit_subs,
                 'voyage_summaries': voyage_summaries,
                 'today_live': today_live,
-                'collection_count': len(live_collections),
+                'collection_count': len([c for c in all_collections if c.voyage_id]),
             })
 
     today_outstanding = today_total_live - today_total_received

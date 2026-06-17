@@ -932,12 +932,27 @@ def voyage_collections(voyage_id):
 
     existing_report = TripReport.query.filter_by(voyage_id=voyage_id, driver_id=current_user.id).first()
 
-    # Latest cash submission for this voyage (driver view needs to know if already submitted)
+    # Latest pending/submitted record (driver view — disable Submit Cash if awaiting verification)
     sub = None
+    verified_amount = 0.0
     if driver_id:
-        sub = DriverCashSubmission.query.filter_by(
-            driver_id=driver_id, voyage_id=voyage_id
+        sub = DriverCashSubmission.query.filter(
+            DriverCashSubmission.driver_id == driver_id,
+            DriverCashSubmission.voyage_id == voyage_id,
+            DriverCashSubmission.submission_status.in_(['pending', 'submitted'])
         ).order_by(DriverCashSubmission.created_at.desc()).first()
+
+        # Sum of all verified/resolved amounts for this voyage
+        verified_amount = sum(
+            float(s.submitted_amount or 0)
+            for s in DriverCashSubmission.query.filter(
+                DriverCashSubmission.driver_id == driver_id,
+                DriverCashSubmission.voyage_id == voyage_id,
+                DriverCashSubmission.submission_status.in_(['verified', 'resolved'])
+            ).all()
+        )
+
+    unsubmitted_amount = max(0.0, total - verified_amount)
 
     return jsonify({
         'collections': [{
@@ -956,6 +971,8 @@ def voyage_collections(voyage_id):
         'submission_status': sub.submission_status if sub else None,
         'submitted_to': sub.submitted_to_admin.full_name if sub and sub.submitted_to_admin else None,
         'submitted_at': sub.submitted_at.strftime('%d %b · %H:%M') if sub and sub.submitted_at else None,
+        'verified_amount': verified_amount,
+        'unsubmitted_amount': unsubmitted_amount,
     })
 
 
@@ -1048,56 +1065,67 @@ def submit_cash_to_admin():
     if not admin or admin.role not in ('admin', 'super_admin'):
         return jsonify({'error': 'Invalid admin selected'}), 400
 
-    # Only exclude fully verified/resolved voyages — pending and submitted are still actionable
-    closed_voyage_ids = {
-        s.voyage_id for s in DriverCashSubmission.query.filter(
-            DriverCashSubmission.driver_id == current_user.id,
-            DriverCashSubmission.submission_status.in_(['verified', 'resolved'])
-        ).all()
-    }
+    from collections import defaultdict
+
+    # Amount already verified/resolved per voyage — driver no longer owes this
+    verified_per_voyage = defaultdict(float)
+    for s in DriverCashSubmission.query.filter(
+        DriverCashSubmission.driver_id == current_user.id,
+        DriverCashSubmission.submission_status.in_(['verified', 'resolved'])
+    ).all():
+        verified_per_voyage[s.voyage_id] += float(s.submitted_amount or 0)
+
+    # Existing pending/submitted records per voyage (to update in-place)
+    existing_subs = {}
+    for s in DriverCashSubmission.query.filter(
+        DriverCashSubmission.driver_id == current_user.id,
+        DriverCashSubmission.submission_status.in_(['pending', 'submitted'])
+    ).all():
+        existing_subs[s.voyage_id] = s
 
     all_collections = CashCollection.query.filter_by(driver_id=current_user.id).all()
-    # Only include collections with a valid voyage_id that hasn't been closed
-    live_collections = [
-        c for c in all_collections
-        if c.voyage_id and c.voyage_id not in closed_voyage_ids
-    ]
+    by_voyage = defaultdict(list)
+    for c in all_collections:
+        if c.voyage_id:
+            by_voyage[c.voyage_id].append(c)
 
-    if not live_collections:
+    # Only voyages with unverified outstanding cash
+    outstanding_voyages = {}
+    total_outstanding = 0.0
+    for voyage_id, cols in by_voyage.items():
+        voyage_total = sum(float(c.amount) for c in cols)
+        already_verified = verified_per_voyage.get(voyage_id, 0.0)
+        outstanding = voyage_total - already_verified
+        if outstanding > 0.01:
+            outstanding_voyages[voyage_id] = {
+                'collections': cols,
+                'expected': outstanding,
+                'existing_sub': existing_subs.get(voyage_id),
+            }
+            total_outstanding += outstanding
+
+    if not outstanding_voyages:
         return jsonify({'error': 'No outstanding cash to submit'}), 400
 
-    from collections import defaultdict
-    by_voyage = defaultdict(list)
-    for c in live_collections:
-        by_voyage[c.voyage_id].append(c)
-
-    total_expected = sum(float(c.amount) for c in live_collections)
-    submit_total = total_expected if mode == 'all' else custom_amount
+    submit_total = total_outstanding if mode == 'all' else custom_amount
     now = datetime.utcnow()
-
     created = 0
-    for voyage_id, cols in by_voyage.items():
-        voyage_expected = sum(float(c.amount) for c in cols)
+
+    for voyage_id, info in outstanding_voyages.items():
+        voyage_expected = info['expected']
         if mode == 'all':
             voyage_submitted = voyage_expected
         else:
-            voyage_submitted = round(voyage_expected / total_expected * submit_total, 2) if total_expected else 0
+            voyage_submitted = round(voyage_expected / total_outstanding * submit_total, 2) if total_outstanding else 0
 
-        # If a pending or submitted record already exists for this voyage, update it
-        # (avoids duplicates when trip report approval also creates a pending record)
-        existing = DriverCashSubmission.query.filter(
-            DriverCashSubmission.driver_id == current_user.id,
-            DriverCashSubmission.voyage_id == voyage_id,
-            DriverCashSubmission.submission_status.in_(['pending', 'submitted'])
-        ).first()
-
-        if existing:
-            existing.expected_amount = voyage_expected
-            existing.submitted_amount = voyage_submitted
-            existing.submission_status = 'submitted'
-            existing.submitted_to_admin_id = admin_id
-            existing.submitted_at = now
-            existing.driver_notes = notes or existing.driver_notes
+        if info['existing_sub']:
+            sub = info['existing_sub']
+            sub.expected_amount = voyage_expected
+            sub.submitted_amount = voyage_submitted
+            sub.submission_status = 'submitted'
+            sub.submitted_to_admin_id = admin_id
+            sub.submitted_at = now
+            sub.driver_notes = notes or sub.driver_notes
         else:
             sub = DriverCashSubmission(
                 driver_id=current_user.id,

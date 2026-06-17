@@ -932,7 +932,8 @@ const CSRF_DASH = document.querySelector('meta[name="csrf-token"]')?.content || 
 
 // ── Cash collection state ──────────────────────────────
 let _collections = [];
-let _cashSubmissionStatus = null;  // tracks current voyage submission status
+let _cashSubmissionStatus = null;
+let _cashUnsubmittedAmount = 0;   // amount driver still needs to hand over
 
 async function loadCollections() {
     try {
@@ -940,6 +941,7 @@ async function loadCollections() {
         const data = await res.json();
         _collections = data.collections || [];
         _cashSubmissionStatus = data.submission_status || null;
+        _cashUnsubmittedAmount = data.unsubmitted_amount || 0;
         renderCashSection(data);
     } catch(e) {}
 }
@@ -964,24 +966,31 @@ function renderCashSection(data) {
         ).join('');
     }
 
-    // Update Submit Cash button based on submission status
+    // Update Submit Cash button — based on amounts, not just status
     const status = data.submission_status;
+    const unsubmitted = data.unsubmitted_amount || 0;
     if (submitBtn) {
         if (status === 'submitted') {
+            // Driver has submitted, admin hasn't verified yet
             submitBtn.disabled = true;
             submitBtn.textContent = '⟳ Awaiting Verification';
             submitBtn.style.opacity = '0.6';
+            submitBtn.style.background = '';
             submitBtn.style.cursor = 'default';
-        } else if (status === 'verified' || status === 'resolved') {
-            submitBtn.disabled = true;
-            submitBtn.textContent = '✓ Verified';
-            submitBtn.style.background = 'var(--sage)';
-            submitBtn.style.cursor = 'default';
-        } else {
+        } else if (unsubmitted > 0) {
+            // Has cash to hand over (fresh or new cash after a previous verification)
             submitBtn.disabled = false;
-            submitBtn.textContent = submitBtn.dataset.i18n ? (window.__i18n?.[submitBtn.dataset.i18n] || 'Submit Cash') : 'Submit Cash';
+            submitBtn.textContent = 'Submit Cash';
             submitBtn.style.opacity = '';
+            submitBtn.style.background = '';
             submitBtn.style.cursor = '';
+        } else {
+            // Nothing outstanding
+            submitBtn.disabled = true;
+            submitBtn.textContent = data.total > 0 ? '✓ Verified' : 'Submit Cash';
+            submitBtn.style.background = data.total > 0 ? 'var(--sage)' : '';
+            submitBtn.style.opacity = data.total > 0 ? '' : '0.4';
+            submitBtn.style.cursor = 'default';
         }
     }
 
@@ -1384,24 +1393,10 @@ document.addEventListener('DOMContentLoaded', function() {
 function openSubmitCashModal() {
     const btn = document.getElementById('submitCashTriggerBtn');
     if (btn && btn.disabled) return;
-    if (_cashSubmissionStatus === 'submitted' || _cashSubmissionStatus === 'verified' || _cashSubmissionStatus === 'resolved') return;
+    if (_cashSubmissionStatus === 'submitted') return;
+    if (_cashUnsubmittedAmount <= 0) return;
 
-    const totalText = (document.getElementById('cashTotal')?.textContent || '0').replace(/[₹,\s,]/g, '');
-    const total = parseFloat(totalText) || 0;
-
-    if (total <= 0) {
-        // No cash to submit — show inline message briefly
-        const errBanner = document.getElementById('cashSubmitBanner') || document.getElementById('cashList');
-        if (errBanner) {
-            const tmp = document.createElement('div');
-            tmp.style.cssText = 'font-size:11px; color:var(--muted); padding:4px 0;';
-            tmp.textContent = 'No cash collected yet.';
-            errBanner.parentNode.insertBefore(tmp, errBanner.nextSibling);
-            setTimeout(() => tmp.remove(), 2000);
-        }
-        return;
-    }
-
+    const total = _cashUnsubmittedAmount;
     document.getElementById('submitCashTotal').textContent = '₹' + Math.round(total).toLocaleString('en-IN');
     document.getElementById('submitAllLabel').textContent = '(₹' + Math.round(total) + ')';
     document.getElementById('submitCashAmount').style.display = 'none';
