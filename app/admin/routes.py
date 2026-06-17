@@ -2386,54 +2386,56 @@ def driver_cash():
     drivers = User.query.filter_by(role='driver', is_active_account=True).order_by(User.full_name).all()
     today = date_type.today()
 
+    from collections import defaultdict
+
     driver_data = []
     today_total_live = 0.0
     today_total_received = 0.0
+    total_current_holding = 0.0
+
+    # Statuses in which cash has physically left the driver's hands.
+    HANDED_OVER = ['submitted', 'verified', 'discrepancy', 'resolved']
 
     for driver in drivers:
         # All cash collected by this driver
         all_collections = CashCollection.query.filter_by(driver_id=driver.id).all()
         total_collected = sum(float(c.amount) for c in all_collections)
 
-        # Amount already verified/resolved by admin (per voyage for summaries)
-        from collections import defaultdict
-        verified_per_voyage = defaultdict(float)
-        for s in DriverCashSubmission.query.filter(
-            DriverCashSubmission.driver_id == driver.id,
-            DriverCashSubmission.submission_status.in_(['verified', 'resolved'])
-        ).all():
-            verified_per_voyage[s.voyage_id] += float(s.submitted_amount or 0)
+        all_subs = DriverCashSubmission.query.filter_by(driver_id=driver.id).all()
 
-        total_verified_received = sum(verified_per_voyage.values())
+        # Per-voyage cash that has physically left the driver's hands. Keyed off
+        # expected_amount (the driver's claimed hand-over), NOT submitted_amount,
+        # because the admin overwrites submitted_amount with their own count on a
+        # discrepancy/write-off — the shortfall is a dispute, not cash still in
+        # the driver's pocket (it's surfaced separately as discrepancy_amount).
+        handed_over_per_voyage = defaultdict(float)
+        in_transit_subs = []
+        discrepancy_subs = []
+        pending_subs = []
+        for s in all_subs:
+            if s.submission_status in HANDED_OVER:
+                handed_over_per_voyage[s.voyage_id] += float(s.expected_amount or 0)
+            if s.submission_status == 'submitted':
+                in_transit_subs.append(s)
+            elif s.submission_status == 'discrepancy':
+                discrepancy_subs.append(s)
+            elif s.submission_status == 'pending':
+                pending_subs.append(s)
 
-        # Amount in transit (driver submitted, admin hasn't counted yet)
-        in_transit_subs = DriverCashSubmission.query.filter_by(
-            driver_id=driver.id, submission_status='submitted'
-        ).all()
+        total_handed_over = sum(handed_over_per_voyage.values())
         total_in_transit = sum(float(s.submitted_amount or 0) for s in in_transit_subs)
 
-        # Per-voyage in-transit amounts (for voyage_summaries)
-        in_transit_per_voyage = defaultdict(float)
-        for s in in_transit_subs:
-            in_transit_per_voyage[s.voyage_id] += float(s.submitted_amount or 0)
-
-        # Discrepancy = outstanding short-payments from previous mismatches
-        discrepancy_subs = DriverCashSubmission.query.filter_by(
-            driver_id=driver.id, submission_status='discrepancy'
-        ).all()
+        # Disputed shortage (admin counted less than expected) — a liability,
+        # shown separately, NOT part of physical cash in hand.
         discrepancy_amount = sum(
             float(s.expected_amount or 0) - float(s.submitted_amount or 0)
             for s in discrepancy_subs
         )
 
-        # True holding = collected - (verified + in_transit) + discrepancy
-        live_amount = max(0.0, total_collected - total_verified_received - total_in_transit)
-        total_holding = live_amount + discrepancy_amount
-
-        # Pending submissions (trip report approved, cash not physically submitted yet)
-        pending_subs = DriverCashSubmission.query.filter_by(
-            driver_id=driver.id, submission_status='pending'
-        ).all()
+        # Physical cash currently in the driver's hands.
+        live_amount = max(0.0, total_collected - total_handed_over)
+        # "Currently Holding" = physical cash in hand (discrepancy is its own column)
+        total_holding = live_amount
 
         # Today's total collected (ALL collections today, whether settled or not)
         today_live = sum(
@@ -2441,24 +2443,16 @@ def driver_cash():
             if c.collected_at and c.collected_at.date() == today
         )
 
-        # Today's received/in-transit amounts (money no longer physically with driver)
+        # Cash the admin actually confirmed receiving today (verified, resolved
+        # or discrepancy counts — verified_at is set when admin counts the cash).
         today_received_amt = sum(
             float(s.submitted_amount or 0)
-            for s in DriverCashSubmission.query.filter(
-                DriverCashSubmission.driver_id == driver.id,
-                DriverCashSubmission.submission_status.in_(['verified', 'resolved']),
-                db.func.date(DriverCashSubmission.verified_at) == today
-            ).all()
+            for s in all_subs
+            if s.submission_status in ('verified', 'resolved', 'discrepancy')
+            and s.verified_at and s.verified_at.date() == today
         )
-        # Add in-transit (submitted today, pending admin count) — driver no longer holds this
-        today_in_transit_amt = sum(
-            float(s.submitted_amount or 0)
-            for s in in_transit_subs
-            if s.submitted_at and s.submitted_at.date() == today
-        )
-        today_received_amt += today_in_transit_amt
 
-        # Voyage summaries — show voyages where driver still has outstanding cash
+        # Voyage summaries — voyages where the driver still physically holds cash
         by_voyage = defaultdict(list)
         for c in all_collections:
             if c.voyage_id:
@@ -2467,9 +2461,7 @@ def driver_cash():
         voyage_summaries = []
         for vid, cols in by_voyage.items():
             voyage_total = sum(float(c.amount) for c in cols)
-            already_verified = verified_per_voyage.get(vid, 0)
-            already_in_transit = in_transit_per_voyage.get(vid, 0)
-            outstanding_for_voyage = voyage_total - already_verified - already_in_transit
+            outstanding_for_voyage = voyage_total - handed_over_per_voyage.get(vid, 0)
             if outstanding_for_voyage > 0.01:
                 v = cols[0].booking.voyage if cols[0].booking and cols[0].booking.voyage else None
                 if not v:
@@ -2484,12 +2476,14 @@ def driver_cash():
 
         today_total_live += today_live
         today_total_received += today_received_amt
+        total_current_holding += live_amount
 
         if all_collections or pending_subs or discrepancy_subs or in_transit_subs:
             driver_data.append({
                 'driver': driver,
                 'live_amount': live_amount,
                 'total_holding': total_holding,
+                'in_transit': total_in_transit,
                 'discrepancy_amount': discrepancy_amount,
                 'has_discrepancy': bool(discrepancy_subs),
                 'pending_subs': pending_subs,
@@ -2499,7 +2493,10 @@ def driver_cash():
                 'collection_count': len([c for c in all_collections if c.voyage_id]),
             })
 
-    today_outstanding = today_total_live - today_total_received
+    # "Still with drivers" = the true sum of cash currently in every driver's
+    # hands right now (not a today-scoped subtraction, which breaks when cash
+    # collected on a previous day is handed over today).
+    today_outstanding = total_current_holding
 
     return render_template('admin/driver_cash.html',
                            driver_data=driver_data,
@@ -2519,11 +2516,22 @@ def driver_cash_detail(driver_id):
 
     total_expected = sum(float(s.expected_amount or 0) for s in subs)
     total_verified = sum(float(s.submitted_amount or 0) for s in subs if s.submission_status in ('verified', 'resolved'))
-    outstanding = sum(
-        float(s.expected_amount or 0) - float(s.submitted_amount or 0)
-        for s in subs
-        if s.submission_status in ('pending', 'submitted', 'discrepancy')
+
+    # Outstanding (still owed by driver) = physical cash still in hand
+    # (collected but not handed over) + any disputed shortages.
+    total_collected = sum(
+        float(c.amount) for c in CashCollection.query.filter_by(driver_id=driver_id).all()
     )
+    handed_over = sum(
+        float(s.expected_amount or 0) for s in subs
+        if s.submission_status in ('submitted', 'verified', 'discrepancy', 'resolved')
+    )
+    cash_in_hand = max(0.0, total_collected - handed_over)
+    disputed = sum(
+        float(s.expected_amount or 0) - float(s.submitted_amount or 0)
+        for s in subs if s.submission_status == 'discrepancy'
+    )
+    outstanding = cash_in_hand + disputed
     discrepancy_count = sum(1 for s in subs if s.submission_status == 'discrepancy')
 
     return render_template('admin/driver_cash_detail.html',

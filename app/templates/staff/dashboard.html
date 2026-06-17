@@ -994,12 +994,14 @@ function renderCashSection(data) {
         }
     }
 
-    // Update driver outstanding balance banner
+    // Update driver outstanding balance banner. This reminder spans ALL voyages,
+    // so use the global figure from the server (not just this voyage's amount).
     const outstandingBanner = document.getElementById('driverOutstandingBanner');
     const outstandingAmt = document.getElementById('driverOutstandingAmt');
     if (outstandingBanner) {
-        if (unsubmitted > 0 && status !== 'submitted') {
-            outstandingAmt.textContent = `₹${Math.round(unsubmitted)}`;
+        const globalOutstanding = data.driver_total_outstanding || 0;
+        if (globalOutstanding > 0) {
+            outstandingAmt.textContent = `₹${Math.round(globalOutstanding)}`;
             outstandingBanner.style.display = '';
         } else {
             outstandingBanner.style.display = 'none';

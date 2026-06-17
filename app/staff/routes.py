@@ -137,25 +137,27 @@ def dashboard():
             poc_count += 1
             poc_total += float(b.payment_on_checkin_amount or b.fare)
 
-    # Driver outstanding cash balance (total collected - verified - in_transit)
+    # Driver outstanding cash balance = cash collected that is still physically
+    # in the driver's hands = total collected - cash that has left their hands.
+    # Cash leaves their hands once a submission reaches submitted/verified/
+    # discrepancy/resolved. We key off expected_amount (what the driver claimed
+    # to hand over) rather than submitted_amount, because the admin overwrites
+    # submitted_amount with their own (possibly lower) count on a discrepancy —
+    # and that dispute must NOT make the cash look like it's back in the driver's
+    # pocket. A counted shortage is tracked separately as a discrepancy.
     driver_outstanding = 0
     if current_user.role == 'driver':
         all_driver_collections = CashCollection.query.filter_by(driver_id=current_user.id).all()
         total_driver_collected = sum(float(c.amount) for c in all_driver_collections)
-        total_driver_verified = sum(
-            float(s.submitted_amount or 0)
+        total_driver_handed_over = sum(
+            float(s.expected_amount or 0)
             for s in DriverCashSubmission.query.filter(
                 DriverCashSubmission.driver_id == current_user.id,
-                DriverCashSubmission.submission_status.in_(['verified', 'resolved'])
+                DriverCashSubmission.submission_status.in_(
+                    ['submitted', 'verified', 'discrepancy', 'resolved'])
             ).all()
         )
-        total_driver_in_transit = sum(
-            float(s.submitted_amount or 0)
-            for s in DriverCashSubmission.query.filter_by(
-                driver_id=current_user.id, submission_status='submitted'
-            ).all()
-        )
-        driver_outstanding = max(0.0, total_driver_collected - total_driver_verified - total_driver_in_transit)
+        driver_outstanding = max(0.0, total_driver_collected - total_driver_handed_over)
 
     admin_users = (
         User.query.filter(User.role.in_(['admin', 'super_admin']),
@@ -952,6 +954,7 @@ def voyage_collections(voyage_id):
     sub = None
     verified_amount = 0.0
     in_transit_amount = 0.0
+    handed_over_amount = 0.0
     if driver_id:
         sub = DriverCashSubmission.query.filter(
             DriverCashSubmission.driver_id == driver_id,
@@ -959,27 +962,43 @@ def voyage_collections(voyage_id):
             DriverCashSubmission.submission_status.in_(['pending', 'submitted'])
         ).order_by(DriverCashSubmission.created_at.desc()).first()
 
-        # Sum of all verified/resolved amounts for this voyage
-        verified_amount = sum(
-            float(s.submitted_amount or 0)
+        # All submissions for this voyage, bucketed by state
+        voyage_subs = DriverCashSubmission.query.filter(
+            DriverCashSubmission.driver_id == driver_id,
+            DriverCashSubmission.voyage_id == voyage_id,
+        ).all()
+        for s in voyage_subs:
+            if s.submission_status in ('verified', 'resolved'):
+                verified_amount += float(s.submitted_amount or 0)
+            elif s.submission_status == 'submitted':
+                in_transit_amount += float(s.submitted_amount or 0)
+            # Cash that has physically left the driver's hands (incl. discrepancy).
+            # Keyed off expected_amount (the claimed hand-over) so an admin's
+            # later short count does not make the cash reappear as outstanding.
+            if s.submission_status in ('submitted', 'verified', 'discrepancy', 'resolved'):
+                handed_over_amount += float(s.expected_amount or 0)
+
+    # What the driver still physically holds for this voyage
+    unsubmitted_amount = max(0.0, total - handed_over_amount)
+
+    # Global outstanding across ALL voyages (for the persistent reminder banner,
+    # which is not voyage-specific). Same rule: collected minus everything that
+    # has left the driver's hands (keyed off expected_amount / the claim).
+    driver_total_outstanding = 0.0
+    if driver_id:
+        all_driver_collected = sum(
+            float(c.amount)
+            for c in CashCollection.query.filter_by(driver_id=driver_id).all()
+        )
+        all_driver_handed_over = sum(
+            float(s.expected_amount or 0)
             for s in DriverCashSubmission.query.filter(
                 DriverCashSubmission.driver_id == driver_id,
-                DriverCashSubmission.voyage_id == voyage_id,
-                DriverCashSubmission.submission_status.in_(['verified', 'resolved'])
+                DriverCashSubmission.submission_status.in_(
+                    ['submitted', 'verified', 'discrepancy', 'resolved'])
             ).all()
         )
-
-        # Sum of submitted-but-not-yet-verified (in transit to admin)
-        in_transit_amount = sum(
-            float(s.submitted_amount or 0)
-            for s in DriverCashSubmission.query.filter(
-                DriverCashSubmission.driver_id == driver_id,
-                DriverCashSubmission.voyage_id == voyage_id,
-                DriverCashSubmission.submission_status == 'submitted'
-            ).all()
-        )
-
-    unsubmitted_amount = max(0.0, total - verified_amount - in_transit_amount)
+        driver_total_outstanding = max(0.0, all_driver_collected - all_driver_handed_over)
 
     return jsonify({
         'collections': [{
@@ -1000,6 +1019,7 @@ def voyage_collections(voyage_id):
         'submitted_at': sub.submitted_at.strftime('%d %b · %H:%M') if sub and sub.submitted_at else None,
         'verified_amount': verified_amount,
         'unsubmitted_amount': unsubmitted_amount,
+        'driver_total_outstanding': driver_total_outstanding,
     })
 
 
@@ -1094,18 +1114,19 @@ def submit_cash_to_admin():
 
     from collections import defaultdict
 
-    # Amount already settled per voyage (verified/resolved = admin confirmed receipt)
-    verified_per_voyage = defaultdict(float)
-    # Amount in transit per voyage (submitted to admin, pending verification)
-    in_transit_per_voyage = defaultdict(float)
+    # Amount per voyage that has already physically left the driver's hands.
+    # Covers verified/resolved (confirmed by admin), submitted (in transit,
+    # awaiting count) and discrepancy (handed over but disputed). The driver
+    # cannot re-submit any of this — only cash still in hand is submittable.
+    # Keyed off expected_amount (the claimed hand-over) so a disputed short
+    # count by the admin doesn't re-open the cash for submission.
+    handed_over_per_voyage = defaultdict(float)
     for s in DriverCashSubmission.query.filter(
         DriverCashSubmission.driver_id == current_user.id,
-        DriverCashSubmission.submission_status.in_(['verified', 'resolved', 'submitted'])
+        DriverCashSubmission.submission_status.in_(
+            ['verified', 'resolved', 'submitted', 'discrepancy'])
     ).all():
-        if s.submission_status in ('verified', 'resolved'):
-            verified_per_voyage[s.voyage_id] += float(s.submitted_amount or 0)
-        else:
-            in_transit_per_voyage[s.voyage_id] += float(s.submitted_amount or 0)
+        handed_over_per_voyage[s.voyage_id] += float(s.expected_amount or 0)
 
     # Only pending records can be upserted — submitted records are already in admin's hands
     existing_subs = {}
@@ -1121,14 +1142,13 @@ def submit_cash_to_admin():
         if c.voyage_id:
             by_voyage[c.voyage_id].append(c)
 
-    # Only voyages with cash not yet settled or in transit
+    # Only voyages with cash still physically in the driver's hands
     outstanding_voyages = {}
     total_outstanding = 0.0
     for voyage_id, cols in by_voyage.items():
         voyage_total = sum(float(c.amount) for c in cols)
-        already_verified = verified_per_voyage.get(voyage_id, 0.0)
-        already_in_transit = in_transit_per_voyage.get(voyage_id, 0.0)
-        outstanding = voyage_total - already_verified - already_in_transit
+        already_handed_over = handed_over_per_voyage.get(voyage_id, 0.0)
+        outstanding = voyage_total - already_handed_over
         if outstanding > 0.01:
             outstanding_voyages[voyage_id] = {
                 'collections': cols,
@@ -1140,20 +1160,47 @@ def submit_cash_to_admin():
     if not outstanding_voyages:
         return jsonify({'error': 'No outstanding cash to submit'}), 400
 
-    submit_total = total_outstanding if mode == 'all' else custom_amount
+    if mode == 'all':
+        submit_total = total_outstanding
+    else:
+        # Custom amount: must be positive and cannot exceed cash in hand
+        if custom_amount <= 0:
+            return jsonify({'error': 'Enter a valid amount to submit'}), 400
+        if custom_amount > total_outstanding + 0.01:
+            return jsonify({
+                'error': f'You can submit at most ₹{total_outstanding:.0f} '
+                         f'(cash currently in hand).'
+            }), 400
+        submit_total = custom_amount
     now = datetime.utcnow()
     created = 0
 
-    for voyage_id, info in outstanding_voyages.items():
+    # Allocate the submitted total across voyages proportionally. Track the
+    # running remainder so the final voyage absorbs any rounding drift and the
+    # per-voyage amounts always sum exactly to submit_total.
+    voyage_items = list(outstanding_voyages.items())
+    allocated = 0.0
+    for idx, (voyage_id, info) in enumerate(voyage_items):
         voyage_expected = info['expected']
         if mode == 'all':
             voyage_submitted = voyage_expected
+        elif idx == len(voyage_items) - 1:
+            voyage_submitted = round(submit_total - allocated, 2)
         else:
             voyage_submitted = round(voyage_expected / total_outstanding * submit_total, 2) if total_outstanding else 0
+        allocated += voyage_submitted
 
+        # expected_amount = the driver's claim for THIS hand-over (what they say
+        # they're submitting now). The admin later overwrites submitted_amount
+        # with the actual counted cash and flags a discrepancy only if their
+        # count differs from this claim. For a partial submission the remaining
+        # cash stays in hand (tracked via collections) for a later hand-over —
+        # it must NOT be treated as a shortage here.
+        if voyage_submitted <= 0.005:
+            continue
         if info['existing_sub']:
             sub = info['existing_sub']
-            sub.expected_amount = voyage_expected
+            sub.expected_amount = voyage_submitted
             sub.submitted_amount = voyage_submitted
             sub.submission_status = 'submitted'
             sub.submitted_to_admin_id = admin_id
@@ -1163,7 +1210,7 @@ def submit_cash_to_admin():
             sub = DriverCashSubmission(
                 driver_id=current_user.id,
                 voyage_id=voyage_id,
-                expected_amount=voyage_expected,
+                expected_amount=voyage_submitted,
                 submitted_amount=voyage_submitted,
                 submission_status='submitted',
                 submitted_to_admin_id=admin_id,

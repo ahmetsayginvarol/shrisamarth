@@ -121,9 +121,9 @@
             <div style="font-size:11px; color:var(--muted); margin-top:2px;">{{ d.collection_count }} collection{{ 's' if d.collection_count != 1 }}</div>
         </div>
         <div class="dcs-metric">
-            <div class="dcs-metric-label" data-i18n="dcs.live_cash">Live Cash</div>
-            <div class="dcs-metric-value">₹ {{ "%.0f"|format(d.live_amount) }}</div>
-            <div style="font-size:11px; color:var(--muted); margin-top:2px;" data-i18n="dcs.from_trips">from active trips</div>
+            <div class="dcs-metric-label" data-i18n="dcs.in_transit">In Transit</div>
+            <div class="dcs-metric-value" style="{% if d.in_transit > 0 %}color:#3c64c8;{% endif %}">₹ {{ "%.0f"|format(d.in_transit) }}</div>
+            <div style="font-size:11px; color:var(--muted); margin-top:2px;" data-i18n="dcs.awaiting_count">awaiting verification</div>
         </div>
         <div class="dcs-metric">
             <div class="dcs-metric-label" data-i18n="dcs.discrepancy_label">Discrepancy</div>
