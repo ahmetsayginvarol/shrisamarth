@@ -399,19 +399,12 @@
                 </div>
                 <div id="cashList" style="font-size:12px; color:var(--muted); margin-bottom:12px;"></div>
                 <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                    <button type="button" class="btn btn-ghost" style="font-size:12px; width:auto; flex:1;"
+                    <button type="button" class="btn btn-ghost" style="font-size:12px; width:auto;"
                             onclick="openWalkinModal()"
                             data-i18n="dash.add_walkin">
                         + Add Walk-in
                     </button>
-                    <button type="button" class="btn" id="submitReportBtn"
-                            style="font-size:12px; width:auto; flex:1; background:var(--sage); color:#fff;"
-                            onclick="openSubmitReportModal()"
-                            data-i18n="dash.submit_report">
-                        Submit Trip Report
-                    </button>
                 </div>
-                <div id="reportStatus" style="display:none; margin-top:10px; font-size:12px; font-weight:600; text-align:center;"></div>
             </div>
             {% endif %}
         </div>
@@ -786,23 +779,6 @@
     </div>
 </div>
 
-<!-- Submit Trip Report Modal -->
-<div id="reportModal" class="dz-modal-backdrop hidden">
-    <div class="dz-modal" style="max-width:420px;">
-        <div style="font-size:16px; font-weight:600; margin-bottom:8px; color:var(--ink);" data-i18n="dash.submit_report_title">Submit Trip Report</div>
-        <p style="font-size:13px; color:var(--muted); margin-bottom:16px;" data-i18n="dash.submit_report_desc">Signing off confirms all cash collected for this voyage. This cannot be undone.</p>
-        <div id="reportSummary" style="background:var(--cream-2); border-radius:8px; padding:14px; margin-bottom:16px; font-size:13px;"></div>
-        <div class="form-group">
-            <label class="form-label" style="font-size:12px;" data-i18n="dash.driver_notes">Notes (optional)</label>
-            <textarea id="reportNotes" class="form-input" rows="2" style="resize:vertical; font-size:13px;" placeholder="Any notes for the admin…"></textarea>
-        </div>
-        <div id="reportError" style="color:var(--ruby); font-size:12px; margin-bottom:10px; display:none;"></div>
-        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
-            <button class="btn btn-ghost" onclick="closeReportModal()" data-i18n="dash.cancel">Cancel</button>
-            <button id="reportSubmitBtn" class="btn" style="background:var(--sage); color:#fff; width:auto;" onclick="submitReport()" data-i18n="dash.submit_and_signoff">Submit & Sign Off</button>
-        </div>
-    </div>
-</div>
 {% endif %}
 
 <!-- QR Scanner Modal -->
@@ -890,19 +866,16 @@ function togglePocField(cb) {
 </style>
 
 <script>
-const VOYAGE_ID = {{ voyage.id }};
 const CSRF_DASH = document.querySelector('meta[name="csrf-token"]')?.content || '';
 
 // ── Cash collection state ──────────────────────────────
 let _collections = [];
-let _reportSubmitted = false;
 
 async function loadCollections() {
     try {
         const res = await fetch(`/staff/cash/voyage/${VOYAGE_ID}/collections`);
         const data = await res.json();
         _collections = data.collections || [];
-        _reportSubmitted = data.report_submitted;
         renderCashSection(data);
     } catch(e) {}
 }
@@ -910,8 +883,6 @@ async function loadCollections() {
 function renderCashSection(data) {
     const listEl = document.getElementById('cashList');
     const totalEl = document.getElementById('cashTotal');
-    const submitBtn = document.getElementById('submitReportBtn');
-    const statusEl = document.getElementById('reportStatus');
 
     if (!listEl) return;
 
@@ -926,15 +897,6 @@ function renderCashSection(data) {
                 <strong>₹${c.amount}</strong>
             </div>`
         ).join('');
-    }
-
-    if (_reportSubmitted) {
-        submitBtn.disabled = true;
-        submitBtn.textContent = '✓ Report Submitted';
-        submitBtn.style.opacity = '0.6';
-        statusEl.style.display = 'block';
-        statusEl.style.color = 'var(--sage)';
-        statusEl.textContent = 'Trip report has been submitted. Awaiting admin review.';
     }
 }
 
@@ -1049,63 +1011,9 @@ async function submitWalkin() {
     }
 }
 
-// ── Submit trip report ─────────────────────────────────
-async function openSubmitReportModal() {
-    await loadCollections();
-    const total = _collections.reduce((s, c) => s + c.amount, 0);
-    const walkin = _collections.filter(c => c.is_walkin).length;
-    document.getElementById('reportSummary').innerHTML =
-        `<div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>Cash collections</span><strong>${_collections.length}</strong></div>` +
-        `<div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span>Walk-in passengers</span><strong>${walkin}</strong></div>` +
-        `<div style="display:flex;justify-content:space-between;font-size:16px;font-weight:700;color:var(--sage);"><span>Total Collected</span><span>₹${Math.round(total)}</span></div>`;
-    document.getElementById('reportError').style.display = 'none';
-    document.getElementById('reportNotes').value = '';
-    const btn = document.getElementById('reportSubmitBtn');
-    btn.disabled = false;
-    btn.textContent = 'Submit & Sign Off';
-    document.getElementById('reportModal').classList.remove('hidden');
-}
-function closeReportModal() {
-    document.getElementById('reportModal').classList.add('hidden');
-}
-
-async function submitReport() {
-    const notes = document.getElementById('reportNotes').value.trim();
-    const errEl = document.getElementById('reportError');
-    const btn = document.getElementById('reportSubmitBtn');
-    errEl.style.display = 'none';
-    btn.disabled = true;
-    btn.textContent = 'Submitting…';
-
-    try {
-        const res = await fetch('/staff/trip-report/submit', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_DASH },
-            body: JSON.stringify({ voyage_id: VOYAGE_ID, notes: notes }),
-        });
-        const data = await res.json();
-        if (res.ok && data.status === 'ok') {
-            closeReportModal();
-            _reportSubmitted = true;
-            renderCashSection({ total: data.total_collected, collections: _collections });
-        } else {
-            errEl.textContent = data.message || 'Error submitting report.';
-            errEl.style.display = 'block';
-            btn.disabled = false;
-            btn.textContent = 'Submit & Sign Off';
-        }
-    } catch(e) {
-        errEl.textContent = 'Network error. Please try again.';
-        errEl.style.display = 'block';
-        btn.disabled = false;
-        btn.textContent = 'Submit & Sign Off';
-    }
-}
-
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
         closeWalkinModal();
-        closeReportModal();
         closeDriverPassModal();
     }
 });
