@@ -53,14 +53,14 @@ app/
 ├── auth/           # Auth blueprint (/auth) — login, register, password reset
 ├── customer/       # Customer blueprint (/) — search, booking, profile
 ├── staff/          # Staff blueprint (/staff) — driver + reservation dashboard
-├── verify/         # Email verification flow
+├── verify/         # QR boarding verification (/verify/<code>)
 ├── models.py       # All SQLAlchemy models
 ├── templates/      # Jinja2 templates (admin/, staff/, customer/, errors/)
 ├── static/         # CSS, JS, icons
 ├── abuse.py        # IP ban + abuse detection
 ├── captcha.py      # Inline math CAPTCHA (no external service)
 ├── email.py        # Resend email helpers
-└── logging.py      # Activity log helpers
+└── logging.py      # Activity log + notification helpers
 ```
 
 ---
@@ -72,7 +72,7 @@ app/
 | `super_admin` | Full system access |
 | `admin` | Admin panel, driver cash, finances, trip reports |
 | `reservation` | Staff dashboard (booking + manifest, no admin panel) |
-| `driver` | Driver-only dashboard — seat map, manifest, cash collection, check-in |
+| `driver` | Driver-only dashboard — seat map, manifest, cash collection, QR scanner |
 | `customer` | Online booking and profile |
 
 ---
@@ -81,39 +81,52 @@ app/
 
 ### Customer Booking
 - Seat map with real-time availability via WebSocket
+- Group/family bookings (multi-seat, one name)
 - Session-based seat locking (prevents double-booking)
 - Dynamic fare pricing per boarding stop
 - Online payments + advance payment tracking
-- PDF ticket with QR code for check-in
+- PDF ticket with QR code for boarding
 - Bilingual interface (English / Hindi)
 
 ### Staff & Driver Dashboard
-- Live seat map for the day's voyage
+- Live seat map with real-time SocketIO sync across all connected sessions
 - Manifest with boarding/dropping stop filters
-- Per-passenger check-in button
+- Per-passenger check-in (seat tap or manifest row)
+- Payment on Boarding (POC) — flag bookings for cash collection at the bus door
 - Walk-in booking with seat assignment and gender conflict detection
-- Cash collection per passenger (POC — Payment on Boarding support)
-- Country code dropdown for phone entry
+- **Continuous QR Scanner** — camera stays open throughout boarding:
+  - Boards the passenger automatically on scan (no manual "Mark as Boarded" tap)
+  - Inline flash card overlays the camera for 3 seconds: name, seat, balance status
+  - Audio beep feedback (Web Audio API — ascending for boarded, warning for already-boarded, low for invalid)
+  - Manual code entry also triggers the same instant-board flow
+
+### Driver Cash Workflow
+1. Driver collects cash per passenger (recorded as `CashCollection`)
+2. Driver taps **Submit Cash** — selects admin, submits all or a partial amount
+3. Multiple partial submissions are supported before full settlement
+4. Admin sees the in-transit entry and clicks **Mark Received**, enters counted amount
+5. System reconciles: `verified` if amounts match → auto-creates income ledger entry; `discrepancy` if short
+6. Discrepancies resolved as: pay later / write off / adjust
+7. All steps emit SocketIO events — both panels update in real time without refresh
 
 ### Admin Panel
-- Voyage management with route stops and fare overrides
-- Clone voyage for repeat routes
-- Trip report review (approve / flag)
-- Driver Cash Accountability Tracker — live view of cash each driver holds, submit/receive/verify flow with discrepancy resolution
-- Financial ledger with CSV export
+- Voyage management with route stops, fare overrides, and clone-voyage
+- Trip report review (approve / flag) with auto-created financial entries on approval
+- **Driver Cash Accountability** — live view of cash each driver holds, in transit, and any discrepancies
+- Financial ledger with income/expense categories, monthly breakdown, CSV export
 - Newsletter editor (4 themes, EN/HI, live preview, unsubscribe links)
 - Passenger management with activity timeline
 - Security panel — IP bans, abuse log, rate limiting
-- Danger Zone — site suspension, DB reset, data backup
+- Danger Zone — site suspension, DB reset, full data backup
+- Real-time notification bell and sidebar badge updates via SocketIO
 
-### Driver Cash Workflow
-1. Driver collects cash during voyage (recorded as `CashCollection`)
-2. Driver presses **Submit Cash** → selects admin, submits all or partial amount
-3. Admin sees "In Transit" entry in Driver Cash panel
-4. Admin clicks **Mark Received**, enters counted amount
-5. System auto-reconciles: `verified` if amounts match, `discrepancy` if not
-6. Discrepancies resolved as: pay later / write off / adjust
-7. Verified receipts auto-create `FinancialEntry(Ticket Sales — Cash)`
+---
+
+## Driver Cash Accounting Model
+
+Cash in hand = `total_collected − sum(expected_amount for submissions in [submitted, verified, discrepancy, resolved])`
+
+`expected_amount` is the driver's claimed hand-over amount and never changes after submission. The admin's counted amount (`submitted_amount`) may differ — the gap is tracked as a discrepancy, not re-added to the driver's outstanding balance. This prevents cash from "reappearing" after an admin records a shortage.
 
 ---
 
@@ -137,3 +150,4 @@ flask db upgrade
 3. Start command: `gunicorn -w 4 -b 0.0.0.0:$PORT "app:create_app()"` (or see `Procfile`)
 4. Add a Render PostgreSQL database — `DATABASE_URL` is injected automatically
 5. Set `SECRET_KEY`, `APP_DOMAIN`, and `RESEND_API_KEY` in the Render Environment tab
+
