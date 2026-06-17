@@ -863,6 +863,10 @@
                     <div class="scan-line"></div>
                 </div>
             </div>
+            <!-- Inline result flash card — appears over the camera feed -->
+            <div id="scanResultCard" style="display:none; position:absolute; inset:0; z-index:10; display:none; align-items:center; justify-content:center; padding:16px;">
+                <div id="scanResultCardInner" style="background:#fff; border-radius:14px; padding:20px 24px; width:100%; max-width:320px; box-shadow:0 8px 32px rgba(0,0,0,0.35); text-align:center; animation:scanCardIn .15s ease-out;"></div>
+            </div>
         </div>
         <div class="scanner-status" id="scanStatus">Point camera at passenger's QR code</div>
         <div class="scanner-manual" id="manualInput" style="display:flex;">
@@ -883,6 +887,10 @@
 .poc-toggle-label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; font-weight: 500; }
 .poc-toggle-label input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--marigold); cursor: pointer; }
 .form-hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+/* Scanner result card animation */
+@keyframes scanCardIn { from { transform: scale(.88); opacity:0; } to { transform: scale(1); opacity:1; } }
+#scanResultCard { display:none; }
+#scanResultCard.visible { display:flex !important; }
 </style>
 
 <script>

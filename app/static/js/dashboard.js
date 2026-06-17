@@ -1276,22 +1276,26 @@ function updateCheckinProgress(delta) {
 // QR SCANNER (driver)
 // ============================================================
 
+// ── QR Scanner — continuous boarding mode ──────────────────
 let scanStream = null;
 let scanInterval = null;
+let _scanLocked = false;       // debounce: ignore frames while processing
+let _scanCardTimer = null;     // auto-dismiss timer for the result card
+let _lastScannedCode = null;   // prevent re-triggering same code immediately
 
 function openScanner() {
     const modal = document.getElementById('scannerModal');
     if (!modal) return;
-    const manualDiv = document.getElementById('manualInput');
-    if (manualDiv) manualDiv.style.display = 'flex';
     const codeInput = document.getElementById('manualCode');
     if (codeInput) codeInput.value = '';
+    _hideScanCard();
     modal.classList.remove('hidden');
     startCamera();
 }
 
 function closeScanner() {
     stopCamera();
+    _hideScanCard();
     document.getElementById('scannerModal').classList.add('hidden');
     document.getElementById('scanStatus').textContent = 'Point camera at passenger\'s QR code';
 }
@@ -1299,7 +1303,6 @@ function closeScanner() {
 async function startCamera() {
     const video = document.getElementById('scanVideo');
     const status = document.getElementById('scanStatus');
-    const manualDiv = document.getElementById('manualInput');
     if (!video) return;
     try {
         scanStream = await navigator.mediaDevices.getUserMedia({
@@ -1307,10 +1310,11 @@ async function startCamera() {
         });
         video.srcObject = scanStream;
         await video.play();
+        _scanLocked = false;
+        _lastScannedCode = null;
         scanInterval = setInterval(scanFrame, 150);
     } catch (err) {
         status.textContent = 'Camera not available — enter code manually.';
-        if (manualDiv) manualDiv.style.display = 'flex';
     }
 }
 
@@ -1324,122 +1328,152 @@ function stopCamera() {
 }
 
 function scanFrame() {
+    if (_scanLocked) return;
     const video = document.getElementById('scanVideo');
     const canvas = document.getElementById('scanCanvas');
-    if (!video || !canvas) return;
-    if (video.readyState < video.HAVE_ENOUGH_DATA) return;
+    if (!video || !canvas || video.readyState < video.HAVE_ENOUGH_DATA) return;
 
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
     if (typeof jsQR === 'undefined') return;
-    const code = jsQR(imageData.data, imageData.width, imageData.height, {
-        inversionAttempts: 'dontInvert',
-    });
-    if (code && code.data) {
-        document.getElementById('scanStatus').textContent = 'QR Code Detected!';
-        stopCamera();
-        const match = code.data.match(/\/verify\/([A-Za-z0-9\-]+)\s*$/);
-        const bookingCode = match ? match[1] : code.data.trim();
-        setTimeout(() => {
-            closeScanner();
-            fetchAndShowVerify(bookingCode);
-        }, 300);
+
+    const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
+    if (!code || !code.data) return;
+
+    const match = code.data.match(/\/verify\/([A-Za-z0-9\-]+)\s*$/);
+    const bookingCode = match ? match[1] : code.data.trim();
+
+    // Skip if same code was just processed (within the cooldown window)
+    if (bookingCode === _lastScannedCode) return;
+
+    _scanLocked = true;
+    _lastScannedCode = bookingCode;
+    document.getElementById('scanStatus').textContent = 'Scanning…';
+    boardAndFlash(bookingCode);
+}
+
+async function boardAndFlash(code) {
+    try {
+        // First: board the passenger immediately
+        const headers = { 'X-CSRFToken': getCsrfToken() };
+        const boardRes = await fetch('/verify/' + encodeURIComponent(code) + '/board', {
+            method: 'POST', headers,
+        });
+        const boardData = await boardRes.json();
+
+        // Then: fetch full booking details to populate the card
+        const verifyRes = await fetch('/verify/' + encodeURIComponent(code) + '?format=json');
+        const verifyData = await verifyRes.json();
+
+        if (boardData.status === 'ok') {
+            _playScanBeep('ok');
+            _showScanCard('ok', verifyData, boardData.boarded_at);
+        } else if (boardData.status === 'already_boarded') {
+            _playScanBeep('warn');
+            _showScanCard('already', verifyData, boardData.boarded_at);
+        } else {
+            _playScanBeep('err');
+            _showScanCard('invalid', null, null, code);
+        }
+    } catch (err) {
+        _playScanBeep('err');
+        _showScanCard('invalid', null, null, code);
     }
+
+    // Resume scanning after 3 s (card auto-hides at same time)
+    clearTimeout(_scanCardTimer);
+    _scanCardTimer = setTimeout(() => {
+        _hideScanCard();
+        _scanLocked = false;
+        _lastScannedCode = null;
+        document.getElementById('scanStatus').textContent = 'Point camera at passenger\'s QR code';
+    }, 3000);
+}
+
+function _showScanCard(type, verifyData, boardedAt, rawCode) {
+    const card = document.getElementById('scanResultCard');
+    const inner = document.getElementById('scanResultCardInner');
+    if (!card || !inner) return;
+
+    if (type === 'ok') {
+        const balanceHtml = verifyData.has_balance
+            ? `<div style="color:#f59e0b;font-weight:700;font-size:12px;margin-top:6px;">⚠ Balance due${verifyData.balance_due ? ': ₹' + verifyData.balance_due : ''}</div>`
+            : `<div style="color:#22c55e;font-size:12px;margin-top:6px;">Fully paid ✓</div>`;
+        inner.innerHTML = `
+            <div style="width:48px;height:48px;border-radius:50%;background:#dcfce7;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-size:22px;">✓</div>
+            <div style="font-size:11px;font-weight:700;letter-spacing:.07em;color:#22c55e;margin-bottom:6px;">BOARDED</div>
+            <div style="font-size:20px;font-weight:700;color:#111;line-height:1.2;">${verifyData.passenger_name}</div>
+            <div style="display:inline-block;background:#111;color:#fff;font-size:20px;font-weight:800;padding:4px 14px;border-radius:5px;font-family:monospace;margin:8px 0 2px;">${verifyData.seat_display}</div>
+            <div style="font-size:12px;color:#555;margin-top:4px;">${verifyData.boarding_point || ''}</div>
+            ${balanceHtml}`;
+        inner.style.borderTop = '4px solid #22c55e';
+    } else if (type === 'already') {
+        inner.innerHTML = `
+            <div style="width:48px;height:48px;border-radius:50%;background:#fef3c7;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-size:22px;">⚠</div>
+            <div style="font-size:11px;font-weight:700;letter-spacing:.07em;color:#f59e0b;margin-bottom:6px;">ALREADY BOARDED</div>
+            <div style="font-size:20px;font-weight:700;color:#111;">${verifyData.passenger_name}</div>
+            <div style="display:inline-block;background:#111;color:#fff;font-size:20px;font-weight:800;padding:4px 14px;border-radius:5px;font-family:monospace;margin:8px 0 2px;">${verifyData.seat_display}</div>
+            <div style="font-size:12px;color:#777;margin-top:6px;">Boarded at ${boardedAt}</div>`;
+        inner.style.borderTop = '4px solid #f59e0b';
+    } else {
+        inner.innerHTML = `
+            <div style="width:48px;height:48px;border-radius:50%;background:#fee2e2;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-size:22px;">✕</div>
+            <div style="font-size:11px;font-weight:700;letter-spacing:.07em;color:#ef4444;margin-bottom:8px;">INVALID TICKET</div>
+            <div style="font-size:12px;color:#777;font-family:monospace;">${rawCode || ''}</div>`;
+        inner.style.borderTop = '4px solid #ef4444';
+    }
+    card.classList.add('visible');
+}
+
+function _hideScanCard() {
+    const card = document.getElementById('scanResultCard');
+    if (card) card.classList.remove('visible');
+    clearTimeout(_scanCardTimer);
+}
+
+function _playScanBeep(type) {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        if (type === 'ok') {
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            osc.frequency.setValueAtTime(1320, ctx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.3, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.25);
+        } else if (type === 'warn') {
+            osc.frequency.setValueAtTime(660, ctx.currentTime);
+            gain.gain.setValueAtTime(0.2, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.3);
+        } else {
+            osc.frequency.setValueAtTime(220, ctx.currentTime);
+            gain.gain.setValueAtTime(0.3, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.4);
+        }
+    } catch(e) {}
 }
 
 function submitManualCode() {
     const input = document.getElementById('manualCode');
     if (!input || !input.value.trim()) return;
-    closeScanner();
-    fetchAndShowVerify(input.value.trim());
-}
-
-async function fetchAndShowVerify(code) {
-    try {
-        const res = await fetch('/verify/' + encodeURIComponent(code) + '?format=json');
-        const data = await res.json();
-        showScanResult(data, code);
-    } catch (err) {
-        toast('Could not load booking details');
-    }
-}
-
-function showScanResult(data, code) {
-    const el = document.getElementById('scanResultContent');
-    if (!el) return;
-
-    if (data.state === 'valid') {
-        el.innerHTML = `
-            <div style="text-align:center;padding:12px 0 8px;">
-                <div style="width:60px;height:60px;border-radius:50%;background:#dcfce7;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:28px;">✓</div>
-                <div style="font-size:13px;font-weight:700;letter-spacing:.06em;color:#22c55e;margin-bottom:4px;">BOARDING CONFIRMED</div>
-                <div style="font-size:22px;font-weight:700;color:var(--ink);margin:10px 0 4px;">${data.passenger_name}</div>
-                <div style="display:inline-block;background:var(--ink);color:var(--cream);font-size:24px;font-weight:800;padding:6px 18px;border-radius:6px;font-family:monospace;margin:4px 0 14px;">${data.seat_display}</div>
-            </div>
-            <div class="passenger-details" style="margin-bottom:16px;">
-                <div class="detail-row"><span class="muted">Route</span><span>${data.route}</span></div>
-                <div class="detail-row"><span class="muted">Departure</span><span>${data.departure}</span></div>
-                <div class="detail-row"><span class="muted">Boarding</span><span>${data.boarding_point}</span></div>
-                <div class="detail-row"><span class="muted">Dropping</span><span>${data.dropping_point}</span></div>
-                <div class="detail-row"><span class="muted">Fare</span><span>${data.has_balance ? '<span style="color:var(--marigold);font-weight:700;">⚠ Balance Due' + (data.balance_due ? ': ₹' + data.balance_due : '') + '</span>' : '<span style="color:var(--sage);font-weight:700;">Fully Paid ✓</span>'}</span></div>
-            </div>
-            <button class="btn btn-primary" id="scanBoardBtn"
-                    style="background:#22c55e;border:none;"
-                    onclick="markBoardedFromPanel('${code}','${data.passenger_name.replace(/'/g,"\\'")}')">
-                Mark as Boarded
-            </button>`;
-    } else if (data.state === 'boarded') {
-        el.innerHTML = `
-            <div style="text-align:center;padding:12px 0 16px;">
-                <div style="width:60px;height:60px;border-radius:50%;background:#fef3c7;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:28px;">⚠</div>
-                <div style="font-size:13px;font-weight:700;letter-spacing:.06em;color:var(--marigold);margin-bottom:4px;">ALREADY BOARDED</div>
-                <div style="font-size:22px;font-weight:700;color:var(--ink);margin:10px 0 4px;">${data.passenger_name}</div>
-                <div style="display:inline-block;background:var(--ink);color:var(--cream);font-size:24px;font-weight:800;padding:6px 18px;border-radius:6px;font-family:monospace;margin:4px 0 14px;">${data.seat_display}</div>
-                <div class="passenger-details" style="margin-bottom:12px;">
-                    <div class="detail-row"><span class="muted">Route</span><span>${data.route}</span></div>
-                    <div class="detail-row"><span class="muted">Boarded at</span><span style="color:var(--marigold);font-weight:700;">${data.boarded_at}</span></div>
-                </div>
-                <p class="muted" style="font-size:13px;">This passenger has already been checked in.</p>
-            </div>`;
-    } else {
-        el.innerHTML = `
-            <div style="text-align:center;padding:20px 0;">
-                <div style="width:60px;height:60px;border-radius:50%;background:#fee2e2;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:28px;">✕</div>
-                <div style="font-size:13px;font-weight:700;letter-spacing:.06em;color:var(--ruby);">INVALID TICKET</div>
-                <p class="muted" style="margin-top:12px;font-size:13px;line-height:1.6;">Booking code not found or cancelled.<br>Please check the ticket.</p>
-                <div class="mono" style="font-size:11px;color:var(--muted);margin-top:8px;">${code}</div>
-            </div>`;
-    }
-    showPanel('scan');
-}
-
-async function markBoardedFromPanel(code, name) {
-    const btn = document.getElementById('scanBoardBtn');
-    if (btn) { btn.disabled = true; btn.textContent = 'Marking…'; }
-    try {
-        const headers = { 'X-CSRFToken': getCsrfToken() };
-        const res = await fetch('/verify/' + encodeURIComponent(code) + '/board', {
-            method: 'POST', headers,
-        });
-        const data = await res.json();
-        if (data.status === 'ok') {
-            toast('Boarded: ' + name);
-            fetchAndShowVerify(code);
-        } else if (data.status === 'already_boarded') {
-            toast('Already boarded at ' + data.boarded_at);
-            fetchAndShowVerify(code);
-        } else {
-            alert('Error marking as boarded.');
-            if (btn) { btn.disabled = false; btn.textContent = 'Mark as Boarded'; }
-        }
-    } catch (err) {
-        alert('Request failed. Please try again.');
-        if (btn) { btn.disabled = false; btn.textContent = 'Mark as Boarded'; }
-    }
+    const code = input.value.trim();
+    input.value = '';
+    if (_scanLocked) return;
+    _scanLocked = true;
+    _lastScannedCode = code;
+    document.getElementById('scanStatus').textContent = 'Scanning…';
+    boardAndFlash(code);
 }
 
 // ============================================================
