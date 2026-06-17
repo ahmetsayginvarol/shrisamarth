@@ -2372,53 +2372,103 @@ def trip_report_flag(report_id):
 @admin_bp.route('/finances/drivers')
 @login_required
 def driver_cash():
-    """Driver cash accountability list — one row per driver."""
+    """Driver cash accountability list — live view of what each driver holds."""
     drivers = User.query.filter_by(role='driver', is_active_account=True).order_by(User.full_name).all()
+    today = date_type.today()
 
     driver_data = []
+    today_total_live = 0.0
+    today_total_received = 0.0
+
     for driver in drivers:
-        subs = DriverCashSubmission.query.filter_by(driver_id=driver.id).all()
-        total_expected = sum(float(s.expected_amount or 0) for s in subs)
-        total_verified = sum(float(s.submitted_amount or 0) for s in subs if s.submission_status in ('verified', 'resolved'))
-        outstanding = sum(
+        # All cash collected by this driver
+        all_collections = CashCollection.query.filter_by(driver_id=driver.id).all()
+
+        # Voyages that have already been settled (verified or resolved DriverCashSubmission)
+        settled_voyage_ids = {
+            s.voyage_id for s in DriverCashSubmission.query.filter(
+                DriverCashSubmission.driver_id == driver.id,
+                DriverCashSubmission.submission_status.in_(['verified', 'resolved'])
+            ).all()
+        }
+
+        # Live cash = collections for voyages not yet settled
+        live_collections = [c for c in all_collections if c.voyage_id not in settled_voyage_ids]
+        live_amount = sum(float(c.amount) for c in live_collections)
+
+        # Pending DriverCashSubmissions (trip report approved, cash not yet handed over physically)
+        pending_subs = DriverCashSubmission.query.filter_by(
+            driver_id=driver.id, submission_status='pending'
+        ).all()
+
+        # Discrepancy submissions (short-paid)
+        discrepancy_subs = DriverCashSubmission.query.filter_by(
+            driver_id=driver.id, submission_status='discrepancy'
+        ).all()
+        discrepancy_amount = sum(
             float(s.expected_amount or 0) - float(s.submitted_amount or 0)
-            for s in subs
-            if s.submission_status in ('pending', 'discrepancy')
+            for s in discrepancy_subs
         )
-        has_discrepancy = any(s.submission_status == 'discrepancy' for s in subs)
-        last_sub = max((s for s in subs if s.verified_at), key=lambda s: s.verified_at, default=None)
 
-        # Today's expected/received
-        today = date_type.today()
-        today_subs = [s for s in subs if s.created_at and s.created_at.date() == today]
-        today_expected = sum(float(s.expected_amount or 0) for s in today_subs)
-        today_received = sum(float(s.submitted_amount or 0) for s in today_subs if s.submission_status in ('verified', 'resolved'))
+        # Total this driver should have on hand right now
+        total_holding = live_amount + discrepancy_amount
 
-        if subs:  # only include drivers with any submissions
+        # Today's live collections
+        today_live = sum(
+            float(c.amount) for c in live_collections
+            if c.collected_at and c.collected_at.date() == today
+        )
+
+        # Today's verified receipts
+        today_received_amt = sum(
+            float(s.submitted_amount or 0)
+            for s in DriverCashSubmission.query.filter(
+                DriverCashSubmission.driver_id == driver.id,
+                DriverCashSubmission.submission_status.in_(['verified', 'resolved']),
+                db.func.date(DriverCashSubmission.verified_at) == today
+            ).all()
+        )
+
+        # Group live collections by voyage for display
+        from collections import defaultdict
+        voyage_groups = defaultdict(list)
+        for c in live_collections:
+            voyage_groups[c.voyage_id].append(c)
+
+        voyage_summaries = []
+        for vid, cols in voyage_groups.items():
+            v = cols[0].booking.voyage if cols[0].booking and cols[0].booking.voyage else None
+            if not v:
+                from app.models import Voyage as VoyageModel
+                v = VoyageModel.query.get(vid)
+            voyage_summaries.append({
+                'voyage': v,
+                'amount': sum(float(c.amount) for c in cols),
+                'count': len(cols),
+            })
+        voyage_summaries.sort(key=lambda x: x['voyage'].departure_at if x['voyage'] else datetime.min, reverse=True)
+
+        today_total_live += today_live
+        today_total_received += today_received_amt
+
+        if all_collections or pending_subs or discrepancy_subs:
             driver_data.append({
                 'driver': driver,
-                'total_expected': total_expected,
-                'total_verified': total_verified,
-                'outstanding': outstanding,
-                'has_discrepancy': has_discrepancy,
-                'last_sub': last_sub,
-                'today_expected': today_expected,
-                'today_received': today_received,
-                'sub_count': len(subs),
+                'live_amount': live_amount,
+                'total_holding': total_holding,
+                'discrepancy_amount': discrepancy_amount,
+                'has_discrepancy': bool(discrepancy_subs),
+                'pending_subs': pending_subs,
+                'voyage_summaries': voyage_summaries,
+                'today_live': today_live,
+                'collection_count': len(live_collections),
             })
 
-    # Today's cash position
-    today = date_type.today()
-    all_today = DriverCashSubmission.query.filter(
-        db.func.date(DriverCashSubmission.created_at) == today
-    ).all()
-    today_total_expected = sum(float(s.expected_amount or 0) for s in all_today)
-    today_total_received = sum(float(s.submitted_amount or 0) for s in all_today if s.submission_status in ('verified', 'resolved'))
-    today_outstanding = today_total_expected - today_total_received
+    today_outstanding = today_total_live - today_total_received
 
     return render_template('admin/driver_cash.html',
                            driver_data=driver_data,
-                           today_total_expected=today_total_expected,
+                           today_total_live=today_total_live,
                            today_total_received=today_total_received,
                            today_outstanding=today_outstanding)
 

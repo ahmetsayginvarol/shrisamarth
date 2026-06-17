@@ -724,7 +724,10 @@
             </div>
             <div class="form-group">
                 <label class="form-label" data-i18n="dash.contact">Phone</label>
-                <input type="text" id="walkinPhone" class="form-input" placeholder="+91 XXXXX XXXXX">
+                <div class="phone-input-row">
+                    <select class="country-code-select" id="walkinCc"></select>
+                    <input type="text" class="form-input phone-number-input" id="walkinPhone" placeholder="98765 43210">
+                </div>
             </div>
         </div>
         <div class="form-row">
@@ -1043,6 +1046,7 @@ function populateWalkinSeatSelect() {
 // ── Walk-in modal ──────────────────────────────────────
 function openWalkinModal() {
     document.getElementById('walkinModal').classList.remove('hidden');
+    buildCountrySelect(document.getElementById('walkinCc'));
     populateWalkinSeatSelect();
     document.getElementById('walkinName').focus();
 }
@@ -1052,7 +1056,7 @@ function closeWalkinModal() {
 
 async function submitWalkin() {
     const name = document.getElementById('walkinName').value.trim();
-    const phone = document.getElementById('walkinPhone').value.trim();
+    const phone = getPhoneValue(document.getElementById('walkinCc'), document.getElementById('walkinPhone')).trim();
     const seat = document.getElementById('walkinSeat').value.trim();
     const gender = document.getElementById('walkinGender').value;
     const boarding = document.getElementById('walkinBoarding').value;
