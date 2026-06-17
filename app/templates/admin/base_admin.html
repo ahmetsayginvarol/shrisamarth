@@ -156,5 +156,33 @@ document.addEventListener('click', function(e) {
 });
 
 document.addEventListener('DOMContentLoaded', loadNotifications);
+
+// Real-time: update notification badge and sidebar cash badge via SocketIO
+try {
+    const _adminBaseSocket = io();
+    _adminBaseSocket.on('new_notification', (data) => {
+        const badge = document.getElementById('notifBadge');
+        if (badge && data.count > 0) {
+            badge.textContent = data.count > 99 ? '99+' : data.count;
+            badge.classList.remove('hidden');
+        }
+        if (notifOpen) loadNotifications();
+    });
+    // Update sidebar cash badge on driver_cash_submitted / driver_cash_verified
+    function _refreshCashBadge() {
+        fetch('/admin/finances/drivers/pending-count')
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+                if (!data) return;
+                const el = document.querySelector('.sidebar-cash-badge');
+                if (el) {
+                    el.textContent = data.count;
+                    el.style.display = data.count > 0 ? '' : 'none';
+                }
+            }).catch(() => {});
+    }
+    _adminBaseSocket.on('driver_cash_submitted', _refreshCashBadge);
+    _adminBaseSocket.on('driver_cash_verified', _refreshCashBadge);
+} catch(e) {}
 </script>
 {% endblock %}

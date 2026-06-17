@@ -964,7 +964,17 @@ def voyage_collections(voyage_id):
             ).all()
         )
 
-    unsubmitted_amount = max(0.0, total - verified_amount)
+        # Sum of submitted-but-not-yet-verified (in transit to admin)
+        in_transit_amount = sum(
+            float(s.submitted_amount or 0)
+            for s in DriverCashSubmission.query.filter(
+                DriverCashSubmission.driver_id == driver_id,
+                DriverCashSubmission.voyage_id == voyage_id,
+                DriverCashSubmission.submission_status == 'submitted'
+            ).all()
+        )
+
+    unsubmitted_amount = max(0.0, total - verified_amount - in_transit_amount)
 
     return jsonify({
         'collections': [{

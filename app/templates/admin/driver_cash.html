@@ -56,11 +56,14 @@
         </div>
         <div style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
             <div style="text-align:right;">
-                <div style="font-size:22px; font-weight:700; font-family:'Cormorant Garamond',serif; color:#3c64c8;">₹ {{ "%.0f"|format(sub.expected_amount) }}</div>
-                <div style="font-size:11px; color:var(--muted);">expected</div>
+                <div style="font-size:22px; font-weight:700; font-family:'Cormorant Garamond',serif; color:#3c64c8;">₹ {{ "%.0f"|format(sub.submitted_amount or 0) }}</div>
+                <div style="font-size:11px; color:var(--muted);">claimed by driver</div>
+                {% if sub.expected_amount and sub.submitted_amount and sub.expected_amount != sub.submitted_amount %}
+                <div style="font-size:10px; color:var(--muted);">(owes ₹{{ "%.0f"|format(sub.expected_amount) }} total)</div>
+                {% endif %}
             </div>
             <button class="btn btn-primary" style="width:auto; font-size:12px;"
-                    onclick="openReceiveModal({{ sub.id }}, {{ sub.expected_amount }}, '{{ sub.voyage.origin }}→{{ sub.voyage.destination }}', '{{ sub.voyage.departure_at.strftime('%d %b') }}', '{{ d.driver.full_name }}')">
+                    onclick="openReceiveModal({{ sub.id }}, {{ sub.submitted_amount or 0 }}, {{ sub.expected_amount }}, '{{ sub.voyage.origin }}→{{ sub.voyage.destination }}', '{{ sub.voyage.departure_at.strftime('%d %b') }}', '{{ d.driver.full_name }}')">
                 Mark Received
             </button>
         </div>
@@ -178,11 +181,12 @@
 <script>
 let _dcsSubId = null;
 
-function openReceiveModal(subId, expected, route, date, driverName) {
+function openReceiveModal(subId, submitted, expected, route, date, driverName) {
     _dcsSubId = subId;
     document.getElementById('dcsReceiveTitle').textContent = 'Mark Received — ' + driverName;
-    document.getElementById('dcsReceiveExpected').textContent = '₹ ' + Math.round(expected) + ' (' + route + ' · ' + date + ')';
-    document.getElementById('dcsReceiveAmount').value = Math.round(expected);
+    const expectedNote = expected !== submitted ? ' (total owed: ₹' + Math.round(expected) + ')' : '';
+    document.getElementById('dcsReceiveExpected').textContent = 'Driver submitted: ₹' + Math.round(submitted) + expectedNote + ' — ' + route + ' · ' + date;
+    document.getElementById('dcsReceiveAmount').value = Math.round(submitted);
     document.getElementById('dcsReceiveNotes').value = '';
     document.getElementById('dcsReceiveError').style.display = 'none';
     document.getElementById('dcsReceiveModal').classList.remove('hidden');

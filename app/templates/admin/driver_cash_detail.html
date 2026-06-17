@@ -108,7 +108,7 @@
             </td>
             <td>
                 {% if sub.submission_status in ('pending', 'submitted') %}
-                    <button class="dcs-action-btn" onclick="openReceiveModal({{ sub.id }}, {{ sub.expected_amount }}, '{{ sub.voyage.origin }}→{{ sub.voyage.destination }}', '{{ sub.voyage.departure_at.strftime('%d %b') }}')" data-i18n="dcs.mark_received">Mark Received</button>
+                    <button class="dcs-action-btn" onclick="openReceiveModal({{ sub.id }}, {{ sub.submitted_amount or 0 }}, {{ sub.expected_amount }}, '{{ sub.voyage.origin }}→{{ sub.voyage.destination }}', '{{ sub.voyage.departure_at.strftime('%d %b') }}')" data-i18n="dcs.mark_received">Mark Received</button>
                 {% elif sub.submission_status == 'discrepancy' %}
                     <button class="dcs-action-btn" onclick="openResolveModal({{ sub.id }}, {{ sub.expected_amount }}, {{ sub.submitted_amount or 0 }}, {{ sub.discrepancy or 0 }})" data-i18n="dcs.resolve">Resolve</button>
                 {% elif sub.submission_status in ('verified', 'resolved') %}
@@ -190,11 +190,12 @@ const CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
 let _receiveSubId = null;
 let _resolveSubId = null;
 
-function openReceiveModal(subId, expected, route, date) {
+function openReceiveModal(subId, submitted, expected, route, date) {
     _receiveSubId = subId;
     document.getElementById('receiveModalTitle').textContent = 'Cash Received — ' + route + ' · ' + date;
-    document.getElementById('receiveExpected').textContent = '₹ ' + Math.round(expected);
-    document.getElementById('receiveAmount').value = Math.round(expected);
+    const expectedNote = expected !== submitted ? ' (total owed: ₹' + Math.round(expected) + ')' : '';
+    document.getElementById('receiveExpected').textContent = 'Driver submitted: ₹' + Math.round(submitted) + expectedNote;
+    document.getElementById('receiveAmount').value = Math.round(submitted);
     document.getElementById('receiveNotes').value = '';
     document.getElementById('receiveModal').classList.remove('hidden');
 }

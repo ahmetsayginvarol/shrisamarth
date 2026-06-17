@@ -2371,6 +2371,14 @@ def trip_report_flag(report_id):
 # DRIVER CASH ACCOUNTABILITY
 # ============================================================
 
+@admin_bp.route('/finances/drivers/pending-count')
+@login_required
+def driver_cash_pending_count():
+    """Return count of submitted (awaiting verification) cash submissions."""
+    count = DriverCashSubmission.query.filter_by(submission_status='submitted').count()
+    return jsonify({'count': count})
+
+
 @admin_bp.route('/finances/drivers')
 @login_required
 def driver_cash():

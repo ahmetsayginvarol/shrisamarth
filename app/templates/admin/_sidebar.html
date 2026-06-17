@@ -33,9 +33,7 @@
            style="padding-left:32px; font-size:12px;">
             <span class="nav-icon">💵</span>
             <span data-i18n="nav.driver_cash">Driver Cash</span>
-            {% if pending_cash_submissions_count and pending_cash_submissions_count > 0 %}
-            <span style="margin-left:auto; background:#3c64c8; color:#fff; font-size:10px; font-weight:700; padding:2px 6px; border-radius:10px;">{{ pending_cash_submissions_count }}</span>
-            {% endif %}
+            <span class="sidebar-cash-badge" style="margin-left:auto; background:#3c64c8; color:#fff; font-size:10px; font-weight:700; padding:2px 6px; border-radius:10px;{% if not pending_cash_submissions_count or pending_cash_submissions_count == 0 %} display:none;{% endif %}">{{ pending_cash_submissions_count or 0 }}</span>
         </a>
         <a href="{{ url_for('admin.voyages') }}"
            class="nav-item {% if 'voyage' in request.endpoint %}active{% endif %}">
