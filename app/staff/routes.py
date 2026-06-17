@@ -932,6 +932,13 @@ def voyage_collections(voyage_id):
 
     existing_report = TripReport.query.filter_by(voyage_id=voyage_id, driver_id=current_user.id).first()
 
+    # Latest cash submission for this voyage (driver view needs to know if already submitted)
+    sub = None
+    if driver_id:
+        sub = DriverCashSubmission.query.filter_by(
+            driver_id=driver_id, voyage_id=voyage_id
+        ).order_by(DriverCashSubmission.created_at.desc()).first()
+
     return jsonify({
         'collections': [{
             'id': c.id,
@@ -946,6 +953,9 @@ def voyage_collections(voyage_id):
         'count': len(collections),
         'report_submitted': existing_report is not None,
         'report_status': existing_report.status if existing_report else None,
+        'submission_status': sub.submission_status if sub else None,
+        'submitted_to': sub.submitted_to_admin.full_name if sub and sub.submitted_to_admin else None,
+        'submitted_at': sub.submitted_at.strftime('%d %b · %H:%M') if sub and sub.submitted_at else None,
     })
 
 
@@ -1038,16 +1048,20 @@ def submit_cash_to_admin():
     if not admin or admin.role not in ('admin', 'super_admin'):
         return jsonify({'error': 'Invalid admin selected'}), 400
 
-    # Voyages already settled — driver no longer owes cash for these
-    settled_voyage_ids = {
+    # Only exclude fully verified/resolved voyages — pending and submitted are still actionable
+    closed_voyage_ids = {
         s.voyage_id for s in DriverCashSubmission.query.filter(
             DriverCashSubmission.driver_id == current_user.id,
-            DriverCashSubmission.submission_status.in_(['submitted', 'verified', 'resolved'])
+            DriverCashSubmission.submission_status.in_(['verified', 'resolved'])
         ).all()
     }
 
     all_collections = CashCollection.query.filter_by(driver_id=current_user.id).all()
-    live_collections = [c for c in all_collections if c.voyage_id not in settled_voyage_ids]
+    # Only include collections with a valid voyage_id that hasn't been closed
+    live_collections = [
+        c for c in all_collections
+        if c.voyage_id and c.voyage_id not in closed_voyage_ids
+    ]
 
     if not live_collections:
         return jsonify({'error': 'No outstanding cash to submit'}), 400
@@ -1064,23 +1078,38 @@ def submit_cash_to_admin():
     created = 0
     for voyage_id, cols in by_voyage.items():
         voyage_expected = sum(float(c.amount) for c in cols)
-        # Proportional split for custom amounts
         if mode == 'all':
             voyage_submitted = voyage_expected
         else:
             voyage_submitted = round(voyage_expected / total_expected * submit_total, 2) if total_expected else 0
 
-        sub = DriverCashSubmission(
-            driver_id=current_user.id,
-            voyage_id=voyage_id,
-            expected_amount=voyage_expected,
-            submitted_amount=voyage_submitted,
-            submission_status='submitted',
-            submitted_to_admin_id=admin_id,
-            submitted_at=now,
-            driver_notes=notes or None,
-        )
-        db.session.add(sub)
+        # If a pending or submitted record already exists for this voyage, update it
+        # (avoids duplicates when trip report approval also creates a pending record)
+        existing = DriverCashSubmission.query.filter(
+            DriverCashSubmission.driver_id == current_user.id,
+            DriverCashSubmission.voyage_id == voyage_id,
+            DriverCashSubmission.submission_status.in_(['pending', 'submitted'])
+        ).first()
+
+        if existing:
+            existing.expected_amount = voyage_expected
+            existing.submitted_amount = voyage_submitted
+            existing.submission_status = 'submitted'
+            existing.submitted_to_admin_id = admin_id
+            existing.submitted_at = now
+            existing.driver_notes = notes or existing.driver_notes
+        else:
+            sub = DriverCashSubmission(
+                driver_id=current_user.id,
+                voyage_id=voyage_id,
+                expected_amount=voyage_expected,
+                submitted_amount=voyage_submitted,
+                submission_status='submitted',
+                submitted_to_admin_id=admin_id,
+                submitted_at=now,
+                driver_notes=notes or None,
+            )
+            db.session.add(sub)
         created += 1
 
     db.session.commit()

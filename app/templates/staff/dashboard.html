@@ -405,7 +405,7 @@
                         + Add Walk-in
                     </button>
                     {% if admin_users %}
-                    <button type="button" class="btn btn-primary" style="font-size:12px; width:auto;"
+                    <button type="button" id="submitCashTriggerBtn" class="btn btn-primary" style="font-size:12px; width:auto;"
                             onclick="openSubmitCashModal()"
                             data-i18n="dash.submit_cash">
                         Submit Cash
@@ -932,12 +932,14 @@ const CSRF_DASH = document.querySelector('meta[name="csrf-token"]')?.content || 
 
 // ── Cash collection state ──────────────────────────────
 let _collections = [];
+let _cashSubmissionStatus = null;  // tracks current voyage submission status
 
 async function loadCollections() {
     try {
         const res = await fetch(`/staff/cash/voyage/${VOYAGE_ID}/collections`);
         const data = await res.json();
         _collections = data.collections || [];
+        _cashSubmissionStatus = data.submission_status || null;
         renderCashSection(data);
     } catch(e) {}
 }
@@ -945,6 +947,7 @@ async function loadCollections() {
 function renderCashSection(data) {
     const listEl = document.getElementById('cashList');
     const totalEl = document.getElementById('cashTotal');
+    const submitBtn = document.getElementById('submitCashTriggerBtn');
 
     if (!listEl) return;
 
@@ -959,6 +962,44 @@ function renderCashSection(data) {
                 <strong>₹${c.amount}</strong>
             </div>`
         ).join('');
+    }
+
+    // Update Submit Cash button based on submission status
+    const status = data.submission_status;
+    if (submitBtn) {
+        if (status === 'submitted') {
+            submitBtn.disabled = true;
+            submitBtn.textContent = '⟳ Awaiting Verification';
+            submitBtn.style.opacity = '0.6';
+            submitBtn.style.cursor = 'default';
+        } else if (status === 'verified' || status === 'resolved') {
+            submitBtn.disabled = true;
+            submitBtn.textContent = '✓ Verified';
+            submitBtn.style.background = 'var(--sage)';
+            submitBtn.style.cursor = 'default';
+        } else {
+            submitBtn.disabled = false;
+            submitBtn.textContent = submitBtn.dataset.i18n ? (window.__i18n?.[submitBtn.dataset.i18n] || 'Submit Cash') : 'Submit Cash';
+            submitBtn.style.opacity = '';
+            submitBtn.style.cursor = '';
+        }
+    }
+
+    // Show inline status banner if submitted/verified
+    const existingBanner = document.getElementById('cashSubmitBanner');
+    if (existingBanner) existingBanner.remove();
+    if (status === 'submitted' && data.submitted_to) {
+        const banner = document.createElement('div');
+        banner.id = 'cashSubmitBanner';
+        banner.style.cssText = 'font-size:11px; color:#3c64c8; background:rgba(60,100,200,0.08); border-radius:6px; padding:6px 10px; margin-bottom:8px;';
+        banner.textContent = `⟳ Submitted to ${data.submitted_to}${data.submitted_at ? ' · ' + data.submitted_at : ''} — awaiting verification`;
+        listEl.insertAdjacentElement('afterend', banner);
+    } else if ((status === 'verified' || status === 'resolved') && data.submitted_to) {
+        const banner = document.createElement('div');
+        banner.id = 'cashSubmitBanner';
+        banner.style.cssText = 'font-size:11px; color:var(--sage); background:rgba(122,154,90,0.1); border-radius:6px; padding:6px 10px; margin-bottom:8px;';
+        banner.textContent = `✓ Cash verified`;
+        listEl.insertAdjacentElement('afterend', banner);
     }
 }
 
@@ -1341,8 +1382,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // ── Submit Cash to Admin ───────────────────────────────
 function openSubmitCashModal() {
-    const totalText = (document.getElementById('cashTotal')?.textContent || '0').replace(/[₹,\s]/g, '');
+    const btn = document.getElementById('submitCashTriggerBtn');
+    if (btn && btn.disabled) return;
+    if (_cashSubmissionStatus === 'submitted' || _cashSubmissionStatus === 'verified' || _cashSubmissionStatus === 'resolved') return;
+
+    const totalText = (document.getElementById('cashTotal')?.textContent || '0').replace(/[₹,\s,]/g, '');
     const total = parseFloat(totalText) || 0;
+
+    if (total <= 0) {
+        // No cash to submit — show inline message briefly
+        const errBanner = document.getElementById('cashSubmitBanner') || document.getElementById('cashList');
+        if (errBanner) {
+            const tmp = document.createElement('div');
+            tmp.style.cssText = 'font-size:11px; color:var(--muted); padding:4px 0;';
+            tmp.textContent = 'No cash collected yet.';
+            errBanner.parentNode.insertBefore(tmp, errBanner.nextSibling);
+            setTimeout(() => tmp.remove(), 2000);
+        }
+        return;
+    }
 
     document.getElementById('submitCashTotal').textContent = '₹' + Math.round(total).toLocaleString('en-IN');
     document.getElementById('submitAllLabel').textContent = '(₹' + Math.round(total) + ')';
