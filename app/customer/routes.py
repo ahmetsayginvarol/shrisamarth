@@ -684,7 +684,26 @@ def profile():
         'total_trips': total_trips,
         'fav_route': fav_route,
         'member_since': current_user.created_at.strftime('%B %Y') if current_user.created_at else '—',
-    }, activity_log=activity_log, has_more=has_more, event_icons=EVENT_ICONS)
+    }, activity_log=activity_log, has_more=has_more, event_icons=EVENT_ICONS,
+       credit_balance=current_user.credit_balance)
+
+
+@customer_bp.route('/profile/qr.png')
+@login_required
+def profile_qr():
+    if current_user.role != 'customer':
+        abort(403)
+    if not current_user.profile_qr_token:
+        current_user.profile_qr_token = secrets.token_hex(16)
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            abort(500)
+    domain = current_app.config.get('APP_DOMAIN', '')
+    buf = generate_qr(f"{domain}/staff/walkin-profile/{current_user.profile_qr_token}")
+    buf.seek(0)
+    return send_file(buf, mimetype='image/png')
 
 
 @customer_bp.route('/profile/delete', methods=['POST'])

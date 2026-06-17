@@ -70,6 +70,7 @@ def _run_schema_migrations(db):
             "ALTER TABLE bookings ADD COLUMN IF NOT EXISTS booking_type VARCHAR(20) DEFAULT 'staff'",
             "ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_on_checkin BOOLEAN DEFAULT FALSE",
             "ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_on_checkin_amount NUMERIC(10,2) DEFAULT NULL",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_qr_token VARCHAR(32)",
         ]
     else:
         # SQLite: no IF NOT EXISTS for ALTER TABLE — catch duplicate-column errors
@@ -82,6 +83,7 @@ def _run_schema_migrations(db):
             "ALTER TABLE bookings ADD COLUMN booking_type VARCHAR(20) DEFAULT 'staff'",
             "ALTER TABLE bookings ADD COLUMN payment_on_checkin BOOLEAN DEFAULT 0",
             "ALTER TABLE bookings ADD COLUMN payment_on_checkin_amount NUMERIC(10,2) DEFAULT NULL",
+            "ALTER TABLE users ADD COLUMN profile_qr_token VARCHAR(32)",
         ]
 
     for sql in alter_stmts:

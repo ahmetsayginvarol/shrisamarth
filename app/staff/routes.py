@@ -861,10 +861,25 @@ def cash_walkin():
     gender = data.get('gender', '') or None
     boarding = data.get('boarding_point', '').strip()
     dropping = data.get('dropping_point', '').strip()
-    amount = float(data.get('amount', 0))
+    cash_amount = float(data.get('amount', 0))
+    customer_user_id = data.get('customer_user_id')
+    credit_used = float(data.get('credit_used', 0) or 0)
 
     if not name or not phone:
         return jsonify({'status': 'error', 'message': 'Name and phone are required.'}), 400
+
+    # Validate and apply account credit
+    customer_user = None
+    if credit_used > 0 and customer_user_id:
+        from decimal import Decimal
+        customer_user = User.query.get(int(customer_user_id))
+        if not customer_user or float(customer_user.credit_balance) < credit_used:
+            return jsonify({'status': 'error', 'message': 'Insufficient account balance.'}), 400
+        credit_used = min(credit_used, float(customer_user.credit_balance))
+    else:
+        credit_used = 0
+
+    total_fare = cash_amount + credit_used
 
     code = f"WALK-{voyage.departure_at.strftime('%Y%m%d')}-{seat_id}-{secrets.token_hex(3).upper()}"
     booking = Booking(
@@ -875,9 +890,9 @@ def cash_walkin():
         gender=gender,
         boarding_point=boarding,
         dropping_point=dropping,
-        fare=amount,
-        advance_paid=amount,
-        balance_due=0,
+        fare=total_fare,
+        advance_paid=credit_used,
+        balance_due=cash_amount,
         booking_code=code,
         booking_type='walkin',
         created_by_id=current_user.id,
@@ -892,7 +907,7 @@ def cash_walkin():
         seat_id=seat_id,
         boarding_point=boarding,
         dropping_point=dropping,
-        amount=amount,
+        amount=cash_amount,
         is_walkin=True,
     )
 
@@ -901,13 +916,17 @@ def cash_walkin():
         db.session.flush()
         cc.booking_id = booking.id
         db.session.add(cc)
+        if customer_user and credit_used > 0:
+            from decimal import Decimal
+            customer_user.credit_balance = customer_user.credit_balance - Decimal(str(credit_used))
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
         return jsonify({'status': 'error', 'message': f'Seat {seat_id} was just taken. Please refresh.'}), 409
 
     log_activity('booking_created',
-                 f'Walk-in booking {code}: seat {seat_id} for {name} on {voyage.origin}→{voyage.destination}',
+                 f'Walk-in booking {code}: seat {seat_id} for {name} on {voyage.origin}→{voyage.destination}'
+                 + (f' (₹{credit_used:.0f} from account credit)' if credit_used > 0 else ''),
                  'booking', booking.id)
 
     socketio.emit('seat_booked', {
@@ -917,17 +936,37 @@ def cash_walkin():
         'name': name,
     })
 
-    socketio.emit('cash_collected', {
-        'driver_id': current_user.id,
-        'voyage_id': voyage.id,
-        'amount': amount,
-    })
+    if cash_amount > 0:
+        socketio.emit('cash_collected', {
+            'driver_id': current_user.id,
+            'voyage_id': voyage.id,
+            'amount': cash_amount,
+        })
 
     return jsonify({
         'status': 'ok',
         'booking_code': code,
         'seat_id': seat_id,
         'booking_id': booking.id,
+    })
+
+
+@staff_bp.route('/walkin-profile/<token>')
+@login_required
+def walkin_profile(token):
+    """Resolve a customer profile QR token — returns passenger data for walk-in auto-fill."""
+    if not current_user.has_role('driver', 'reservation', 'admin', 'super_admin'):
+        abort(403)
+    user = User.query.filter_by(profile_qr_token=token).first()
+    if not user or user.role != 'customer':
+        return jsonify({'status': 'not_found'}), 404
+    return jsonify({
+        'status': 'ok',
+        'user_id': user.id,
+        'name': user.full_name,
+        'phone': user.phone or '',
+        'gender': user.gender or '',
+        'credit_balance': float(user.credit_balance),
     })
 
 

@@ -20,6 +20,7 @@ class User(UserMixin, db.Model):
     phone = db.Column(db.String(20), nullable=True)
     gender = db.Column(db.String(1), nullable=True)  # 'M' or 'F', optional
     credit_balance = db.Column(db.Numeric(10, 2), default=0, nullable=False)
+    profile_qr_token = db.Column(db.String(32), unique=True, nullable=True)
     is_active_account = db.Column(db.Boolean, default=True)
     email_verified = db.Column(db.Boolean, nullable=False, default=True, server_default='true')
     email_verified_at = db.Column(db.DateTime, nullable=True)

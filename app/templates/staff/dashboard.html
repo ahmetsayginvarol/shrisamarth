@@ -724,6 +724,17 @@
     <div class="dz-modal" style="max-width:480px;">
         <div style="font-size:16px; font-weight:600; margin-bottom:16px; color:var(--ink);" data-i18n="dash.walkin_title">Add Walk-in Passenger</div>
         <input type="hidden" id="walkinVoyageId" value="{{ voyage.id }}">
+        <input type="hidden" id="walkinCustomerUserId" value="">
+        <input type="hidden" id="walkinCreditToUse" value="0">
+
+        <!-- Scan Customer QR -->
+        <div style="margin-bottom:14px;">
+            <button type="button" onclick="openWalkinProfileScanner()" style="width:100%; padding:10px; background:var(--cream); border:1px dashed var(--line); border-radius:8px; font-size:13px; font-weight:500; color:var(--ink); cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;">
+                <span>&#x1F4F7;</span> <span data-i18n="dash.scan_customer_qr">Scan Customer QR to Auto-Fill</span>
+            </button>
+        </div>
+        <div id="walkinCreditInfo" style="display:none; background:rgba(92,122,62,0.08); border:1px solid rgba(92,122,62,0.3); border-radius:8px; padding:10px 14px; margin-bottom:14px; font-size:13px; color:var(--sage);"></div>
+
         <div class="form-row">
             <div class="form-group">
                 <label class="form-label" data-i18n="dash.name">Passenger Name</label>
@@ -781,7 +792,7 @@
         </div>
         <div class="form-group">
             <label class="form-label" data-i18n="dash.fare">Cash Collected (₹)</label>
-            <input type="number" id="walkinAmount" class="form-input" placeholder="{{ voyage.base_fare|int }}" value="{{ voyage.base_fare|int }}" min="0" step="1">
+            <input type="number" id="walkinAmount" class="form-input" placeholder="{{ voyage.base_fare|int }}" value="{{ voyage.base_fare|int }}" min="0" step="1" oninput="updateWalkinCreditSplit()">
         </div>
         <div id="walkinError" style="color:var(--ruby); font-size:12px; margin-bottom:10px; display:none;"></div>
         <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
@@ -1182,10 +1193,12 @@ function openWalkinModal() {
     document.getElementById('walkinModal').classList.remove('hidden');
     buildCountrySelect(document.getElementById('walkinCc'));
     populateWalkinSeatSelect();
+    if (typeof resetWalkinProfileData === 'function') resetWalkinProfileData();
     document.getElementById('walkinName').focus();
 }
 function closeWalkinModal() {
     document.getElementById('walkinModal').classList.add('hidden');
+    if (typeof resetWalkinProfileData === 'function') resetWalkinProfileData();
 }
 
 async function submitWalkin() {
@@ -1209,6 +1222,9 @@ async function submitWalkin() {
     btn.disabled = true;
     btn.textContent = 'Adding…';
 
+    const customerUserId = parseInt(document.getElementById('walkinCustomerUserId').value) || null;
+    const creditToUse = parseFloat(document.getElementById('walkinCreditToUse').value) || 0;
+
     try {
         const res = await fetch('/staff/cash/walkin', {
             method: 'POST',
@@ -1222,6 +1238,8 @@ async function submitWalkin() {
                 boarding_point: boarding,
                 dropping_point: dropping,
                 amount: amount,
+                customer_user_id: customerUserId,
+                credit_used: creditToUse,
             }),
         });
         const data = await res.json();

@@ -1294,10 +1294,15 @@ function openScanner() {
 }
 
 function closeScanner() {
+    const wasProfileMode = _scanMode === 'walkin_profile';
+    _scanMode = 'board';
     stopCamera();
     _hideScanCard();
     document.getElementById('scannerModal').classList.add('hidden');
     document.getElementById('scanStatus').textContent = 'Point camera at passenger\'s QR code';
+    if (wasProfileMode) {
+        document.getElementById('walkinModal').classList.remove('hidden');
+    }
 }
 
 async function startCamera() {
@@ -1342,6 +1347,19 @@ function scanFrame() {
 
     const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
     if (!code || !code.data) return;
+
+    // Profile QR mode: look for /staff/walkin-profile/<token>
+    if (_scanMode === 'walkin_profile') {
+        const profileMatch = code.data.match(/\/walkin-profile\/([A-Za-z0-9]+)\s*$/);
+        if (!profileMatch) return;
+        const token = profileMatch[1];
+        if (token === _lastScannedCode) return;
+        _scanLocked = true;
+        _lastScannedCode = token;
+        document.getElementById('scanStatus').textContent = 'Looking up profile…';
+        resolveWalkinProfile(token);
+        return;
+    }
 
     const match = code.data.match(/\/verify\/([A-Za-z0-9\-]+)\s*$/);
     const bookingCode = match ? match[1] : code.data.trim();
@@ -1474,6 +1492,112 @@ function submitManualCode() {
     _lastScannedCode = code;
     document.getElementById('scanStatus').textContent = 'Scanning…';
     boardAndFlash(code);
+}
+
+// ── Walk-in Profile QR Scanner ──────────────────────────────
+let _scanMode = 'board'; // 'board' | 'walkin_profile'
+let _walkinCreditBalance = 0;
+
+function openWalkinProfileScanner() {
+    _scanMode = 'walkin_profile';
+    document.getElementById('walkinModal').classList.add('hidden');
+    const modal = document.getElementById('scannerModal');
+    if (!modal) return;
+    document.getElementById('scanStatus').textContent = 'Point camera at customer\'s profile QR code';
+    const codeInput = document.getElementById('manualCode');
+    if (codeInput) codeInput.value = '';
+    _hideScanCard();
+    modal.classList.remove('hidden');
+    startCamera();
+}
+
+function closeWalkinProfileScanner() {
+    _scanMode = 'board';
+    stopCamera();
+    _hideScanCard();
+    document.getElementById('scannerModal').classList.add('hidden');
+    document.getElementById('scanStatus').textContent = 'Point camera at passenger\'s QR code';
+    document.getElementById('walkinModal').classList.remove('hidden');
+}
+
+async function resolveWalkinProfile(token) {
+    try {
+        const res = await fetch('/staff/walkin-profile/' + encodeURIComponent(token));
+        const data = await res.json();
+
+        if (data.status !== 'ok') {
+            _playScanBeep('err');
+            _showScanCard('invalid', null, null, 'Customer not found');
+            clearTimeout(_scanCardTimer);
+            _scanCardTimer = setTimeout(() => {
+                _hideScanCard();
+                _scanLocked = false;
+                _lastScannedCode = null;
+                document.getElementById('scanStatus').textContent = 'Point camera at customer\'s profile QR code';
+            }, 3000);
+            return;
+        }
+
+        _playScanBeep('ok');
+        _hideScanCard();
+        stopCamera();
+        _scanMode = 'board';
+        document.getElementById('scannerModal').classList.add('hidden');
+        document.getElementById('walkinModal').classList.remove('hidden');
+
+        // Fill form fields
+        document.getElementById('walkinName').value = data.name || '';
+        const phoneField = document.getElementById('walkinPhone');
+        if (phoneField) phoneField.value = data.phone || '';
+        const genderSel = document.getElementById('walkinGender');
+        if (genderSel && data.gender) {
+            genderSel.value = data.gender;
+            if (typeof populateWalkinSeatSelect === 'function') populateWalkinSeatSelect();
+        }
+        document.getElementById('walkinCustomerUserId').value = data.user_id || '';
+        _walkinCreditBalance = data.credit_balance || 0;
+
+        updateWalkinCreditSplit();
+
+        document.getElementById('scanStatus').textContent = 'Point camera at passenger\'s QR code';
+        _scanLocked = false;
+        _lastScannedCode = null;
+    } catch (err) {
+        _playScanBeep('err');
+        _showScanCard('invalid', null, null, 'Lookup failed');
+        clearTimeout(_scanCardTimer);
+        _scanCardTimer = setTimeout(() => {
+            _hideScanCard();
+            _scanLocked = false;
+            _lastScannedCode = null;
+        }, 3000);
+    }
+}
+
+function updateWalkinCreditSplit() {
+    const creditInfo = document.getElementById('walkinCreditInfo');
+    const creditInput = document.getElementById('walkinCreditToUse');
+    if (!creditInfo || !creditInput) return;
+    if (!_walkinCreditBalance || _walkinCreditBalance <= 0) {
+        creditInfo.style.display = 'none';
+        creditInput.value = '0';
+        return;
+    }
+    const cashField = document.getElementById('walkinAmount');
+    const cashEntered = parseFloat(cashField ? cashField.value : 0) || 0;
+    // Use the full account balance as credit (driver sets the cash portion manually)
+    const creditUsed = _walkinCreditBalance;
+    creditInput.value = creditUsed.toFixed(2);
+    creditInfo.style.display = 'block';
+    creditInfo.innerHTML = `<strong>₹${_walkinCreditBalance.toFixed(2)}</strong> in customer account &nbsp;·&nbsp; ₹${creditUsed.toFixed(2)} from account + ₹${cashEntered.toFixed(2)} cash`;
+}
+
+function resetWalkinProfileData() {
+    _walkinCreditBalance = 0;
+    document.getElementById('walkinCustomerUserId').value = '';
+    document.getElementById('walkinCreditToUse').value = '0';
+    const info = document.getElementById('walkinCreditInfo');
+    if (info) info.style.display = 'none';
 }
 
 // ============================================================

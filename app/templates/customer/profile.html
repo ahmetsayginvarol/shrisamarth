@@ -12,6 +12,24 @@
         <a href="{{ url_for('customer.my_bookings') }}" class="btn btn-ghost" data-i18n="c.my_bookings_back">← My Bookings</a>
     </div>
 
+    <!-- Account Balance + Boarding QR -->
+    <div style="background:var(--cream); border:1px solid var(--line); border-radius:12px; padding:20px 24px; margin-bottom:24px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+            <div>
+                <div style="font-size:12px; font-weight:600; letter-spacing:.06em; color:var(--muted); text-transform:uppercase; margin-bottom:4px;" data-i18n="c.account_balance">Account Balance</div>
+                <div style="font-size:28px; font-weight:700; color:var(--sage);">₹{{ '%.2f'|format(credit_balance|float) }}</div>
+                <div style="font-size:12px; color:var(--muted); margin-top:2px;" data-i18n="c.balance_hint">Usable at boarding for walk-in fares</div>
+            </div>
+            <button onclick="toggleBoardingQr(this)" style="background:none; border:1px solid var(--line); border-radius:8px; padding:8px 14px; font-size:13px; font-weight:500; color:var(--ink); cursor:pointer; white-space:nowrap;">
+                Show Boarding QR
+            </button>
+        </div>
+        <div id="boardingQrSection" style="display:none; margin-top:16px; text-align:center;">
+            <img src="{{ url_for('customer.profile_qr') }}" alt="Boarding QR" style="width:180px; height:180px; border:1px solid var(--line); border-radius:8px;">
+            <div style="font-size:12px; color:var(--muted); margin-top:10px;" data-i18n="c.qr_hint">Present this QR to the driver when boarding as a walk-in passenger</div>
+        </div>
+    </div>
+
     <!-- Stats -->
     <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:32px;">
         <div class="c-stat-card">
@@ -136,4 +154,12 @@
 .c-tl-desc { font-size: 13px; color: var(--ink); line-height: 1.4; }
 .c-tl-time { font-size: 11px; color: var(--muted); margin-top: 2px; }
 </style>
+<script>
+function toggleBoardingQr(btn) {
+    const section = document.getElementById('boardingQrSection');
+    const visible = section.style.display !== 'none';
+    section.style.display = visible ? 'none' : 'block';
+    btn.textContent = visible ? 'Show Boarding QR' : 'Hide Boarding QR';
+}
+</script>
 {% endblock %}
