@@ -1213,8 +1213,12 @@ async function submitWalkin() {
     const btn = document.getElementById('walkinSubmitBtn');
 
     errEl.style.display = 'none';
-    if (!name || !phone || !seat) {
-        errEl.textContent = 'Name, phone, and seat are required.';
+    const missing = [];
+    if (!name) missing.push('passenger name');
+    if (!phone || phone.trim() === '+91') missing.push('phone number');
+    if (!seat) missing.push('seat');
+    if (missing.length) {
+        errEl.textContent = `Required: ${missing.join(', ')}.`;
         errEl.style.display = 'block';
         return;
     }

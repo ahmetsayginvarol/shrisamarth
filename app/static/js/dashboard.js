@@ -1495,6 +1495,24 @@ function submitManualCode() {
 }
 
 // ── Walk-in Profile QR Scanner ──────────────────────────────
+
+function _fillPhoneField(ccEl, numEl, rawPhone) {
+    if (!ccEl || !numEl || !rawPhone) return;
+    if (rawPhone.startsWith('+')) {
+        // Longest-match against known country codes to avoid e.g. +9 matching before +91
+        const sorted = [...COUNTRY_CODES].sort((a, b) => b.dial.length - a.dial.length);
+        for (const c of sorted) {
+            if (rawPhone.startsWith(c.dial)) {
+                ccEl.value = c.dial;
+                numEl.value = rawPhone.slice(c.dial.length).trim();
+                return;
+            }
+        }
+    }
+    // No country prefix found — put full number in the field as-is
+    numEl.value = rawPhone;
+}
+
 let _scanMode = 'board'; // 'board' | 'walkin_profile'
 let _walkinCreditBalance = 0;
 
@@ -1547,8 +1565,11 @@ async function resolveWalkinProfile(token) {
 
         // Fill form fields
         document.getElementById('walkinName').value = data.name || '';
-        const phoneField = document.getElementById('walkinPhone');
-        if (phoneField) phoneField.value = data.phone || '';
+        _fillPhoneField(
+            document.getElementById('walkinCc'),
+            document.getElementById('walkinPhone'),
+            data.phone || ''
+        );
         const genderSel = document.getElementById('walkinGender');
         if (genderSel && data.gender) {
             genderSel.value = data.gender;
