@@ -541,12 +541,15 @@ class DriverCashSubmission(db.Model):
     # 'pay_later', 'write_off', 'adjusted'
     verified_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     verified_at = db.Column(db.DateTime, nullable=True)
+    submitted_to_admin_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    submitted_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     driver = db.relationship('User', foreign_keys=[driver_id])
     voyage = db.relationship('Voyage', foreign_keys=[voyage_id])
     trip_report = db.relationship('TripReport', foreign_keys=[trip_report_id])
     verified_by = db.relationship('User', foreign_keys=[verified_by_id])
+    submitted_to_admin = db.relationship('User', foreign_keys=[submitted_to_admin_id])
 
     def __repr__(self):
         return f'<DriverCashSubmission voyage={self.voyage_id} driver={self.driver_id} status={self.submission_status}>'

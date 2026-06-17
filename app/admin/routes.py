@@ -2384,11 +2384,11 @@ def driver_cash():
         # All cash collected by this driver
         all_collections = CashCollection.query.filter_by(driver_id=driver.id).all()
 
-        # Voyages that have already been settled (verified or resolved DriverCashSubmission)
+        # Voyages that have already been settled or submitted (driver no longer holds that cash)
         settled_voyage_ids = {
             s.voyage_id for s in DriverCashSubmission.query.filter(
                 DriverCashSubmission.driver_id == driver.id,
-                DriverCashSubmission.submission_status.in_(['verified', 'resolved'])
+                DriverCashSubmission.submission_status.in_(['submitted', 'verified', 'resolved'])
             ).all()
         }
 
@@ -2487,7 +2487,7 @@ def driver_cash_detail(driver_id):
     outstanding = sum(
         float(s.expected_amount or 0) - float(s.submitted_amount or 0)
         for s in subs
-        if s.submission_status in ('pending', 'discrepancy')
+        if s.submission_status in ('pending', 'submitted', 'discrepancy')
     )
     discrepancy_count = sum(1 for s in subs if s.submission_status == 'discrepancy')
 

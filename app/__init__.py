@@ -212,6 +212,8 @@ def _run_schema_migrations(db):
             "CREATE INDEX IF NOT EXISTS ix_dcs_driver ON driver_cash_submissions(driver_id)",
             "CREATE INDEX IF NOT EXISTS ix_dcs_voyage ON driver_cash_submissions(voyage_id)",
             "CREATE INDEX IF NOT EXISTS ix_dcs_status ON driver_cash_submissions(submission_status)",
+            "ALTER TABLE driver_cash_submissions ADD COLUMN IF NOT EXISTS submitted_to_admin_id INTEGER REFERENCES users(id)",
+            "ALTER TABLE driver_cash_submissions ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMP",
         ]
         for sql in pg_stmts:
             try:

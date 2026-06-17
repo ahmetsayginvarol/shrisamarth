@@ -404,6 +404,13 @@
                             data-i18n="dash.add_walkin">
                         + Add Walk-in
                     </button>
+                    {% if admin_users %}
+                    <button type="button" class="btn btn-primary" style="font-size:12px; width:auto;"
+                            onclick="openSubmitCashModal()"
+                            data-i18n="dash.submit_cash">
+                        Submit Cash
+                    </button>
+                    {% endif %}
                 </div>
             </div>
             {% endif %}
@@ -784,6 +791,56 @@
     </div>
 </div>
 
+<!-- Submit Cash Modal -->
+<div id="submitCashModal" class="dz-modal-backdrop hidden" onclick="if(event.target===this)closeSubmitCashModal()">
+    <div class="dz-modal" style="max-width:400px;">
+        <div style="font-size:16px; font-weight:600; margin-bottom:16px; color:var(--ink);" data-i18n="dash.submit_cash_title">Submit Cash to Admin</div>
+
+        <!-- Holding total -->
+        <div style="background:rgba(200,118,26,0.1); border-radius:8px; padding:14px 18px; margin-bottom:18px; text-align:center;">
+            <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px;" data-i18n="dash.currently_holding">Currently Holding</div>
+            <div id="submitCashTotal" style="font-size:30px; font-weight:700; font-family:'Cormorant Garamond',serif; color:var(--marigold);">₹0</div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" data-i18n="dash.submit_to_admin">Handing to</label>
+            <select id="submitCashAdmin" class="form-input">
+                <option value="" data-i18n="dash.select_admin">— Select Admin —</option>
+                {% for a in admin_users %}
+                <option value="{{ a.id }}">{{ a.full_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" data-i18n="dash.amount">Amount</label>
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:14px;">
+                    <input type="radio" name="submitCashMode" value="all" id="submitModeAll" checked onchange="toggleSubmitAmount()">
+                    <span data-i18n="dash.submit_all">Submit All</span>
+                    <span id="submitAllLabel" style="font-size:12px; color:var(--muted);"></span>
+                </label>
+                <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:14px;">
+                    <input type="radio" name="submitCashMode" value="custom" id="submitModeCustom" onchange="toggleSubmitAmount()">
+                    <span data-i18n="dash.other_amount">Other amount</span>
+                </label>
+                <input type="number" id="submitCashAmount" class="form-input" placeholder="Enter amount ₹" step="1" min="1" style="display:none;">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label" data-i18n="dash.notes_optional">Notes (optional)</label>
+            <input type="text" id="submitCashNotes" class="form-input" placeholder="Any note for admin…">
+        </div>
+
+        <div id="submitCashError" style="color:var(--ruby); font-size:12px; margin-bottom:10px; display:none;"></div>
+        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:4px;">
+            <button class="btn btn-ghost" onclick="closeSubmitCashModal()" data-i18n="dash.cancel">Cancel</button>
+            <button id="submitCashBtn" class="btn btn-primary" style="width:auto;" onclick="doSubmitCash()" data-i18n="dash.submit_cash_btn">Submit Cash</button>
+        </div>
+    </div>
+</div>
+
 {% endif %}
 
 <!-- QR Scanner Modal -->
@@ -1111,6 +1168,7 @@ async function submitWalkin() {
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
         closeWalkinModal();
+        closeSubmitCashModal();
         closeDriverPassModal();
     }
 });
@@ -1280,6 +1338,78 @@ loadCollections();
 document.addEventListener('DOMContentLoaded', function() {
     // Will be updated by loadCollections
 });
+
+// ── Submit Cash to Admin ───────────────────────────────
+function openSubmitCashModal() {
+    const totalText = (document.getElementById('cashTotal')?.textContent || '0').replace(/[₹,\s]/g, '');
+    const total = parseFloat(totalText) || 0;
+
+    document.getElementById('submitCashTotal').textContent = '₹' + Math.round(total).toLocaleString('en-IN');
+    document.getElementById('submitAllLabel').textContent = '(₹' + Math.round(total) + ')';
+    document.getElementById('submitCashAmount').style.display = 'none';
+    document.getElementById('submitModeAll').checked = true;
+    document.getElementById('submitCashAdmin').value = '';
+    document.getElementById('submitCashNotes').value = '';
+    document.getElementById('submitCashError').style.display = 'none';
+    document.getElementById('submitCashModal').dataset.total = total;
+    document.getElementById('submitCashModal').classList.remove('hidden');
+}
+function closeSubmitCashModal() {
+    document.getElementById('submitCashModal').classList.add('hidden');
+}
+function toggleSubmitAmount() {
+    const custom = document.getElementById('submitModeCustom').checked;
+    const inp = document.getElementById('submitCashAmount');
+    inp.style.display = custom ? 'block' : 'none';
+    if (custom) inp.focus();
+}
+async function doSubmitCash() {
+    const adminId = document.getElementById('submitCashAdmin').value;
+    const mode = document.querySelector('input[name="submitCashMode"]:checked').value;
+    const notes = document.getElementById('submitCashNotes').value.trim();
+    const errEl = document.getElementById('submitCashError');
+    const btn = document.getElementById('submitCashBtn');
+    errEl.style.display = 'none';
+
+    if (!adminId) {
+        errEl.textContent = window.__i18n?.['dash.select_admin_error'] || 'Please select an admin.';
+        errEl.style.display = 'block'; return;
+    }
+    let amount = parseFloat(document.getElementById('submitCashModal').dataset.total) || 0;
+    if (mode === 'custom') {
+        amount = parseFloat(document.getElementById('submitCashAmount').value) || 0;
+        if (amount <= 0) {
+            errEl.textContent = window.__i18n?.['dash.enter_valid_amount'] || 'Please enter a valid amount.';
+            errEl.style.display = 'block'; return;
+        }
+    }
+
+    btn.disabled = true;
+    const origText = btn.textContent;
+    btn.textContent = '…';
+    try {
+        const res = await fetch('/staff/cash/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_DASH },
+            body: JSON.stringify({ admin_id: parseInt(adminId), mode, amount, notes }),
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+            closeSubmitCashModal();
+            // Reload to reflect updated state
+            window.location.reload();
+        } else {
+            errEl.textContent = data.error || 'Submission failed.';
+            errEl.style.display = 'block';
+        }
+    } catch(e) {
+        errEl.textContent = 'Network error. Please try again.';
+        errEl.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = origText;
+    }
+}
 </script>
 {% endif %}
 {% endblock %}

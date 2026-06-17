@@ -4,7 +4,7 @@ from flask_login import login_required, current_user
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db, socketio, limiter
-from app.models import Voyage, Booking, RouteStop, SEAT_ADJACENCY, WINDOW_SEATS, CashCollection, TripReport, DriverCashSubmission
+from app.models import Voyage, Booking, RouteStop, SEAT_ADJACENCY, WINDOW_SEATS, CashCollection, TripReport, DriverCashSubmission, User
 from app.staff.forms import BookingForm
 from flask import send_file
 from app.staff.ticket import generate_ticket, generate_group_ticket
@@ -153,6 +153,13 @@ def dashboard():
             for s in pending_subs + discrepancy_subs
         )
 
+    admin_users = (
+        User.query.filter(User.role.in_(['admin', 'super_admin']),
+                          User.is_active_account == True)
+        .order_by(User.full_name).all()
+        if is_driver else []
+    )
+
     return render_template(
         'staff/dashboard.html',
         voyage=voyage,
@@ -171,6 +178,7 @@ def dashboard():
         poc_count=poc_count,
         poc_total=int(poc_total),
         driver_outstanding=driver_outstanding,
+        admin_users=admin_users,
     )
 
 
@@ -1007,3 +1015,81 @@ def poc_clear(booking_id):
         db.session.rollback()
         return jsonify({'status': 'error', 'message': 'Database error.'}), 500
     return jsonify({'status': 'ok'})
+
+
+# ============================================================
+# DRIVER → ADMIN CASH HANDOVER
+# ============================================================
+
+@staff_bp.route('/cash/submit', methods=['POST'])
+@login_required
+def submit_cash_to_admin():
+    """Driver physically hands cash to an admin — creates DriverCashSubmission records."""
+    if current_user.role != 'driver':
+        abort(403)
+
+    data = request.get_json() or {}
+    admin_id = int(data.get('admin_id') or 0)
+    mode = data.get('mode', 'all')       # 'all' | 'custom'
+    custom_amount = float(data.get('amount') or 0)
+    notes = (data.get('notes') or '').strip()
+
+    admin = User.query.get(admin_id)
+    if not admin or admin.role not in ('admin', 'super_admin'):
+        return jsonify({'error': 'Invalid admin selected'}), 400
+
+    # Voyages already settled — driver no longer owes cash for these
+    settled_voyage_ids = {
+        s.voyage_id for s in DriverCashSubmission.query.filter(
+            DriverCashSubmission.driver_id == current_user.id,
+            DriverCashSubmission.submission_status.in_(['submitted', 'verified', 'resolved'])
+        ).all()
+    }
+
+    all_collections = CashCollection.query.filter_by(driver_id=current_user.id).all()
+    live_collections = [c for c in all_collections if c.voyage_id not in settled_voyage_ids]
+
+    if not live_collections:
+        return jsonify({'error': 'No outstanding cash to submit'}), 400
+
+    from collections import defaultdict
+    by_voyage = defaultdict(list)
+    for c in live_collections:
+        by_voyage[c.voyage_id].append(c)
+
+    total_expected = sum(float(c.amount) for c in live_collections)
+    submit_total = total_expected if mode == 'all' else custom_amount
+    now = datetime.utcnow()
+
+    created = 0
+    for voyage_id, cols in by_voyage.items():
+        voyage_expected = sum(float(c.amount) for c in cols)
+        # Proportional split for custom amounts
+        if mode == 'all':
+            voyage_submitted = voyage_expected
+        else:
+            voyage_submitted = round(voyage_expected / total_expected * submit_total, 2) if total_expected else 0
+
+        sub = DriverCashSubmission(
+            driver_id=current_user.id,
+            voyage_id=voyage_id,
+            expected_amount=voyage_expected,
+            submitted_amount=voyage_submitted,
+            submission_status='submitted',
+            submitted_to_admin_id=admin_id,
+            submitted_at=now,
+            driver_notes=notes or None,
+        )
+        db.session.add(sub)
+        created += 1
+
+    db.session.commit()
+
+    log_activity(
+        'driver_cash_submitted',
+        f'Driver {current_user.full_name} submitted ₹{submit_total:.0f} to Admin {admin.full_name} '
+        f'({created} voyage(s))',
+        'user', current_user.id,
+    )
+
+    return jsonify({'status': 'ok', 'total': submit_total, 'voyages': created})

@@ -14,6 +14,7 @@
 .dcs-badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; padding:3px 9px; border-radius:20px; white-space:nowrap; }
 .dcs-badge.verified { background:rgba(122,154,90,0.12); color:var(--sage); }
 .dcs-badge.pending { background:rgba(0,0,0,0.06); color:var(--muted); }
+.dcs-badge.submitted { background:rgba(60,100,200,0.1); color:#3c64c8; }
 .dcs-badge.discrepancy { background:rgba(200,118,26,0.12); color:var(--marigold); }
 .dcs-badge.resolved { background:rgba(122,154,90,0.12); color:var(--sage); }
 .dcs-badge.discrepancy-red { background:rgba(168,50,50,0.1); color:var(--ruby); }
@@ -65,6 +66,7 @@
                 <th data-i18n="dcs.expected">Expected</th>
                 <th data-i18n="dcs.submitted">Submitted</th>
                 <th data-i18n="dcs.status">Status</th>
+                <th data-i18n="dcs.submitted_to">Handed To</th>
                 <th data-i18n="dcs.actions">Actions</th>
             </tr>
         </thead>
@@ -88,12 +90,24 @@
                     <span class="dcs-badge resolved" data-i18n="dcs.status_resolved">✓ Resolved</span>
                 {% elif sub.submission_status == 'discrepancy' %}
                     <span class="dcs-badge discrepancy-red">⚠ Gap ₹{{ "%.0f"|format(sub.discrepancy|abs) }}</span>
+                {% elif sub.submission_status == 'submitted' %}
+                    <span class="dcs-badge submitted" data-i18n="dcs.status_submitted">⟳ In Transit</span>
                 {% else %}
                     <span class="dcs-badge pending" data-i18n="dcs.status_pending">⏳ Pending</span>
                 {% endif %}
             </td>
+            <td style="font-size:12px;">
+                {% if sub.submitted_to_admin %}
+                    <div>{{ sub.submitted_to_admin.full_name }}</div>
+                    {% if sub.submitted_at %}
+                    <div style="color:var(--muted); font-size:11px;">{{ sub.submitted_at.strftime('%d %b · %H:%M') }}</div>
+                    {% endif %}
+                {% else %}
+                    <span style="color:var(--muted);">—</span>
+                {% endif %}
+            </td>
             <td>
-                {% if sub.submission_status == 'pending' %}
+                {% if sub.submission_status in ('pending', 'submitted') %}
                     <button class="dcs-action-btn" onclick="openReceiveModal({{ sub.id }}, {{ sub.expected_amount }}, '{{ sub.voyage.origin }}→{{ sub.voyage.destination }}', '{{ sub.voyage.departure_at.strftime('%d %b') }}')" data-i18n="dcs.mark_received">Mark Received</button>
                 {% elif sub.submission_status == 'discrepancy' %}
                     <button class="dcs-action-btn" onclick="openResolveModal({{ sub.id }}, {{ sub.expected_amount }}, {{ sub.submitted_amount or 0 }}, {{ sub.discrepancy or 0 }})" data-i18n="dcs.resolve">Resolve</button>
