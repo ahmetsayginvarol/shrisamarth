@@ -1473,7 +1473,8 @@ async function _pocConfirmBoard() {
     const btn = document.getElementById('pocCollectedBtn');
     if (btn) { btn.disabled = true; btn.textContent = '…'; }
     try {
-        const boardRes = await fetch('/verify/' + encodeURIComponent(code) + '/board', {
+        // Staff endpoint: boards + records CashCollection for the driver in one call
+        const boardRes = await fetch('/staff/poc-board/' + encodeURIComponent(code), {
             method: 'POST', headers: { 'X-CSRFToken': getCsrfToken() },
         });
         const boardData = await boardRes.json();

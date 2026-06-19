@@ -951,6 +951,87 @@ def cash_walkin():
     })
 
 
+@staff_bp.route('/poc-board/<booking_code>', methods=['POST'])
+@login_required
+def poc_board(booking_code):
+    """Board a POC passenger and record the collected cash against the driver."""
+    if not current_user.has_role('driver', 'reservation', 'admin', 'super_admin'):
+        abort(403)
+
+    from datetime import datetime
+    from decimal import Decimal
+
+    booking = Booking.query.filter_by(booking_code=booking_code, status='confirmed').first()
+    if not booking:
+        return jsonify({'status': 'error', 'message': 'Booking not found'}), 404
+
+    voyage = booking.voyage
+
+    # Determine driver: drivers must own the voyage; reservation/admin use request body
+    driver_id = current_user.id
+    if current_user.role == 'driver' and voyage.driver_id != current_user.id:
+        abort(403)
+
+    now = datetime.utcnow()
+    already_boarded = bool(booking.boarded_at)
+
+    if not already_boarded:
+        booking.boarded_at = now
+
+    # Amount collected: prefer payment_on_checkin_amount, fall back to balance_due
+    poc_amount = float(booking.payment_on_checkin_amount or booking.balance_due or 0)
+
+    if not already_boarded and poc_amount > 0:
+        # Update booking financials
+        booking.advance_paid = (booking.advance_paid or Decimal('0')) + Decimal(str(poc_amount))
+        booking.balance_due = max(Decimal('0'), (booking.balance_due or Decimal('0')) - Decimal(str(poc_amount)))
+        booking.payment_on_checkin = False
+
+        cc = CashCollection(
+            voyage_id=voyage.id,
+            booking_id=booking.id,
+            driver_id=driver_id,
+            passenger_name=booking.passenger_name,
+            passenger_phone=booking.passenger_phone,
+            seat_id=booking.seat_id,
+            boarding_point=booking.boarding_point,
+            dropping_point=booking.dropping_point,
+            amount=poc_amount,
+            is_walkin=False,
+            notes='Collected at boarding (POC)',
+        )
+        db.session.add(cc)
+
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'status': 'error', 'message': 'Database error'}), 500
+
+    if not already_boarded:
+        log_activity('passenger_boarded',
+                     f'Passenger {booking.passenger_name} boarded seat {booking.seat_id} on {voyage.origin}→{voyage.destination} (POC ₹{poc_amount:.0f} collected)',
+                     'booking', booking.id)
+        socketio.emit('passenger_boarded', {
+            'voyage_id': voyage.id,
+            'seat_id': booking.seat_id,
+            'booking_code': booking.booking_code,
+            'name': booking.passenger_name,
+            'boarded_at': now.strftime('%H:%M'),
+        })
+        if poc_amount > 0:
+            socketio.emit('cash_collected', {
+                'driver_id': driver_id,
+                'voyage_id': voyage.id,
+                'amount': poc_amount,
+            })
+
+    return jsonify({
+        'status': 'already_boarded' if already_boarded else 'ok',
+        'boarded_at': (booking.boarded_at or now).strftime('%H:%M'),
+    })
+
+
 @staff_bp.route('/walkin-profile/<token>')
 @login_required
 def walkin_profile(token):
