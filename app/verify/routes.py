@@ -37,6 +37,7 @@ def verify(booking_code):
         seat_display = booking.seat_id
 
     balance_due = float(booking.balance_due or 0)
+    poc_amount = float(booking.payment_on_checkin_amount or balance_due or 0)
 
     from flask_login import current_user
     show_amount = (current_user.is_authenticated and
@@ -58,6 +59,8 @@ def verify(booking_code):
         'bus_registration': voyage.bus.registration,
         'has_balance': balance_due > 0,
         'balance_due': balance_due if show_amount else None,
+        'payment_on_checkin': bool(booking.payment_on_checkin),
+        'payment_on_checkin_amount': poc_amount if show_amount else None,
         'boarded_at': booking.boarded_at.strftime('%H:%M') if booking.boarded_at else None,
         'gender': booking.gender,
     }

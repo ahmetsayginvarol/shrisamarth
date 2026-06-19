@@ -1373,18 +1373,53 @@ function scanFrame() {
     boardAndFlash(bookingCode);
 }
 
+function _resumeScanAfter(ms) {
+    clearTimeout(_scanCardTimer);
+    _scanCardTimer = setTimeout(() => {
+        _hideScanCard();
+        _scanLocked = false;
+        _lastScannedCode = null;
+        document.getElementById('scanStatus').textContent = 'Point camera at passenger\'s QR code';
+    }, ms);
+}
+
+function _vibrate(pattern) {
+    try { if (navigator.vibrate) navigator.vibrate(pattern); } catch(e) {}
+}
+
 async function boardAndFlash(code) {
     try {
-        // First: board the passenger immediately
-        const headers = { 'X-CSRFToken': getCsrfToken() };
-        const boardRes = await fetch('/verify/' + encodeURIComponent(code) + '/board', {
-            method: 'POST', headers,
-        });
-        const boardData = await boardRes.json();
-
-        // Then: fetch full booking details to populate the card
+        // Fetch booking details FIRST so we can check POC before boarding
         const verifyRes = await fetch('/verify/' + encodeURIComponent(code) + '?format=json');
         const verifyData = await verifyRes.json();
+
+        if (!verifyData || verifyData.state === 'invalid') {
+            _playScanBeep('err');
+            _showScanCard('invalid', null, null, code);
+            _resumeScanAfter(3000);
+            return;
+        }
+
+        if (verifyData.state === 'boarded') {
+            _playScanBeep('warn');
+            _showScanCard('already', verifyData, verifyData.boarded_at);
+            _resumeScanAfter(3000);
+            return;
+        }
+
+        // POC check — hold boarding until driver confirms cash collection
+        if (verifyData.payment_on_checkin) {
+            _playScanBeep('poc');
+            _vibrate([150, 80, 150, 80, 250]);
+            _showPocWarning(code, verifyData);
+            return; // No auto-resume — wait for driver button tap
+        }
+
+        // Normal: board immediately
+        const boardRes = await fetch('/verify/' + encodeURIComponent(code) + '/board', {
+            method: 'POST', headers: { 'X-CSRFToken': getCsrfToken() },
+        });
+        const boardData = await boardRes.json();
 
         if (boardData.status === 'ok') {
             _playScanBeep('ok');
@@ -1400,15 +1435,58 @@ async function boardAndFlash(code) {
         _playScanBeep('err');
         _showScanCard('invalid', null, null, code);
     }
+    _resumeScanAfter(3000);
+}
 
-    // Resume scanning after 3 s (card auto-hides at same time)
-    clearTimeout(_scanCardTimer);
-    _scanCardTimer = setTimeout(() => {
+function _showPocWarning(code, verifyData) {
+    _pocPendingCode = code;
+    const card = document.getElementById('scanResultCard');
+    const inner = document.getElementById('scanResultCardInner');
+    if (!card || !inner) return;
+
+    const amountHtml = verifyData.payment_on_checkin_amount
+        ? `<div style="font-size:26px;font-weight:800;color:#c8761a;margin:10px 0 16px;letter-spacing:-.5px;">₹${verifyData.payment_on_checkin_amount}</div>`
+        : `<div style="font-size:14px;color:#c8761a;font-weight:600;margin:10px 0 16px;">Collect payment due</div>`;
+
+    inner.innerHTML = `
+        <div style="width:52px;height:52px;border-radius:50%;background:#fff3cd;margin:0 auto 10px;display:flex;align-items:center;justify-content:center;font-size:26px;">💰</div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:.08em;color:#c8761a;margin-bottom:6px;">COLLECT PAYMENT FIRST</div>
+        <div style="font-size:20px;font-weight:700;color:#111;line-height:1.2;">${verifyData.passenger_name}</div>
+        <div style="display:inline-block;background:#111;color:#fff;font-size:20px;font-weight:800;padding:4px 14px;border-radius:5px;font-family:monospace;margin:8px 0 2px;">${verifyData.seat_display}</div>
+        ${amountHtml}
+        <div style="display:flex;gap:10px;justify-content:center;">
+            <button id="pocSkipBtn" onclick="_pocSkip()" style="padding:10px 20px;border:1px solid #ccc;border-radius:8px;background:#fff;font-size:13px;font-weight:600;cursor:pointer;color:#666;">Skip</button>
+            <button id="pocCollectedBtn" onclick="_pocConfirmBoard()" style="padding:10px 22px;border:none;border-radius:8px;background:#22c55e;font-size:13px;font-weight:700;cursor:pointer;color:#fff;">Collected ✓</button>
+        </div>`;
+    inner.style.borderTop = '4px solid #c8761a';
+    card.classList.add('visible');
+}
+
+function _pocSkip() {
+    _hideScanCard();
+    _resumeScanAfter(0);
+}
+
+async function _pocConfirmBoard() {
+    const code = _pocPendingCode;
+    _pocPendingCode = null;
+    const btn = document.getElementById('pocCollectedBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    try {
+        const boardRes = await fetch('/verify/' + encodeURIComponent(code) + '/board', {
+            method: 'POST', headers: { 'X-CSRFToken': getCsrfToken() },
+        });
+        const boardData = await boardRes.json();
+        const verifyRes = await fetch('/verify/' + encodeURIComponent(code) + '?format=json');
+        const verifyData = await verifyRes.json();
+        _playScanBeep('ok');
+        _vibrate([80, 40, 120]);
+        _showScanCard('ok', verifyData, boardData.boarded_at);
+    } catch(err) {
+        _playScanBeep('err');
         _hideScanCard();
-        _scanLocked = false;
-        _lastScannedCode = null;
-        document.getElementById('scanStatus').textContent = 'Point camera at passenger\'s QR code';
-    }, 3000);
+    }
+    _resumeScanAfter(3000);
 }
 
 function _showScanCard(type, verifyData, boardedAt, rawCode) {
@@ -1472,6 +1550,21 @@ function _playScanBeep(type) {
             gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
             osc.start(ctx.currentTime);
             osc.stop(ctx.currentTime + 0.3);
+        } else if (type === 'poc') {
+            // Urgent cash-register double-ding: high → descending
+            const osc2 = ctx.createOscillator();
+            osc2.connect(gain);
+            osc.type = 'sine';  osc.frequency.value = 1318;  // E6
+            osc2.type = 'sine'; osc2.frequency.value = 1047; // C6
+            gain.gain.setValueAtTime(0, ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.45, ctx.currentTime + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+            gain.gain.setValueAtTime(0, ctx.currentTime + 0.22);
+            gain.gain.linearRampToValueAtTime(0.45, ctx.currentTime + 0.24);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+            osc.start(ctx.currentTime);       osc.stop(ctx.currentTime + 0.2);
+            osc2.start(ctx.currentTime + 0.22); osc2.stop(ctx.currentTime + 0.52);
+            return; // early return — gain/osc already configured
         } else {
             osc.frequency.setValueAtTime(220, ctx.currentTime);
             gain.gain.setValueAtTime(0.3, ctx.currentTime);
@@ -1515,6 +1608,7 @@ function _fillPhoneField(ccEl, numEl, rawPhone) {
 
 let _scanMode = 'board'; // 'board' | 'walkin_profile'
 let _walkinCreditBalance = 0;
+let _pocPendingCode = null;
 
 function openWalkinProfileScanner() {
     _scanMode = 'walkin_profile';
