@@ -24,16 +24,26 @@ def log_activity(action, description, target_type=None, target_id=None):
     db.session.commit()
 
 
-def notify_staff(title, message, link=None, booking_id=None, passenger_phone=None, urgent=False):
-    """Create notification for all admin and reservation users."""
+def notify_staff(title, message, link=None, booking_id=None, passenger_phone=None, urgent=False, user_ids=None):
+    """Create a notification for staff users.
+
+    user_ids: list of specific user IDs to notify. If None, notifies all active
+              admin and reservation users (broadcast).
+    """
     from app.models import Notification, User
     from app.extensions import socketio
 
     try:
-        staff_users = User.query.filter(
-            User.role.in_(['admin', 'reservation']),
-            User.is_active_account == True
-        ).all()
+        if user_ids is not None:
+            staff_users = User.query.filter(
+                User.id.in_(user_ids),
+                User.is_active_account == True
+            ).all()
+        else:
+            staff_users = User.query.filter(
+                User.role.in_(['admin', 'reservation']),
+                User.is_active_account == True
+            ).all()
 
         for u in staff_users:
             n = Notification(
@@ -52,13 +62,15 @@ def notify_staff(title, message, link=None, booking_id=None, passenger_phone=Non
         for u in staff_users:
             count = Notification.query.filter_by(user_id=u.id, is_read=False).count()
             socketio.emit('new_notification', {'count': count, 'title': title})
+
         if urgent:
             try:
                 from flask import current_app
                 from app.push import send_push_to_admins
                 send_push_to_admins(
                     current_app._get_current_object(),
-                    title, message, link
+                    title, message, link,
+                    user_ids=user_ids,
                 )
             except Exception:
                 pass

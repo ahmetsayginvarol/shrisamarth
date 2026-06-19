@@ -48,7 +48,7 @@ def get_vapid_keys():
     return private_pem, public_b64
 
 
-def _do_send(app, title, body, url):
+def _do_send(app, title, body, url, user_ids):
     try:
         from pywebpush import webpush, WebPushException
         from app.models import PushSubscription
@@ -60,7 +60,11 @@ def _do_send(app, title, body, url):
             subject = 'mailto:admin@' + domain.replace('https://', '').replace('http://', '')
             payload = json.dumps({'title': title, 'body': body, 'url': url or '/admin'})
 
-            subs = PushSubscription.query.all()
+            q = PushSubscription.query
+            if user_ids is not None:
+                q = q.filter(PushSubscription.user_id.in_(user_ids))
+            subs = q.all()
+
             expired = []
             for sub in subs:
                 try:
@@ -87,7 +91,10 @@ def _do_send(app, title, body, url):
         pass  # Never let push failures affect the main request
 
 
-def send_push_to_admins(app, title, body, url=None):
-    """Fire-and-forget: send urgent web push on a background thread."""
-    t = threading.Thread(target=_do_send, args=(app, title, body, url), daemon=True)
+def send_push_to_admins(app, title, body, url=None, user_ids=None):
+    """Fire-and-forget: send urgent web push on a background thread.
+
+    user_ids: list of user IDs to target. None = all subscribed admins.
+    """
+    t = threading.Thread(target=_do_send, args=(app, title, body, url, user_ids), daemon=True)
     t.start()

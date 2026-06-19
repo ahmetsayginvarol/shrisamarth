@@ -1357,6 +1357,7 @@ def submit_cash_to_admin():
                  f'— {created} voyage(s) awaiting your verification.'),
         link=url_for('admin.driver_cash'),
         urgent=True,
+        user_ids=[admin.id],
     )
 
     socketio.emit('driver_cash_submitted', {
