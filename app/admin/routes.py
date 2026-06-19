@@ -2724,3 +2724,65 @@ def booking_poc(booking_id):
     ))
     db.session.commit()
     return jsonify({'status': 'ok', 'payment_on_checkin': poc, 'amount': amount})
+
+
+# ── Web Push Notifications ──────────────────────────────────
+
+@admin_bp.route('/push/vapid-public-key')
+@login_required
+def push_vapid_public_key():
+    if not current_user.has_role('admin', 'super_admin'):
+        abort(403)
+    from app.push import get_vapid_keys
+    _, public_key = get_vapid_keys()
+    return jsonify({'public_key': public_key})
+
+
+@admin_bp.route('/push/subscribe', methods=['POST'])
+@login_required
+def push_subscribe():
+    if not current_user.has_role('admin', 'super_admin'):
+        abort(403)
+    from app.models import PushSubscription
+    data = request.get_json() or {}
+    endpoint = data.get('endpoint')
+    p256dh = data.get('p256dh')
+    auth = data.get('auth')
+    if not endpoint or not p256dh or not auth:
+        return jsonify({'status': 'error', 'message': 'Missing subscription fields'}), 400
+
+    existing = PushSubscription.query.filter_by(endpoint=endpoint).first()
+    if existing:
+        existing.p256dh = p256dh
+        existing.auth = auth
+        existing.user_id = current_user.id
+    else:
+        db.session.add(PushSubscription(
+            user_id=current_user.id,
+            endpoint=endpoint,
+            p256dh=p256dh,
+            auth=auth,
+        ))
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({'status': 'error'}), 500
+    return jsonify({'status': 'ok'})
+
+
+@admin_bp.route('/push/unsubscribe', methods=['POST'])
+@login_required
+def push_unsubscribe():
+    if not current_user.has_role('admin', 'super_admin'):
+        abort(403)
+    from app.models import PushSubscription
+    data = request.get_json() or {}
+    endpoint = data.get('endpoint')
+    if endpoint:
+        sub = PushSubscription.query.filter_by(endpoint=endpoint).first()
+        if sub:
+            db.session.delete(sub)
+            db.session.commit()
+    return jsonify({'status': 'ok'})
+

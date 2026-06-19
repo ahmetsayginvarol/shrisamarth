@@ -24,7 +24,7 @@ def log_activity(action, description, target_type=None, target_id=None):
     db.session.commit()
 
 
-def notify_staff(title, message, link=None, booking_id=None, passenger_phone=None):
+def notify_staff(title, message, link=None, booking_id=None, passenger_phone=None, urgent=False):
     """Create notification for all admin and reservation users."""
     from app.models import Notification, User
     from app.extensions import socketio
@@ -52,6 +52,16 @@ def notify_staff(title, message, link=None, booking_id=None, passenger_phone=Non
         for u in staff_users:
             count = Notification.query.filter_by(user_id=u.id, is_read=False).count()
             socketio.emit('new_notification', {'count': count, 'title': title})
+        if urgent:
+            try:
+                from flask import current_app
+                from app.push import send_push_to_admins
+                send_push_to_admins(
+                    current_app._get_current_object(),
+                    title, message, link
+                )
+            except Exception:
+                pass
     except Exception as e:
         # Don't let notification failures break booking flow
         db.session.rollback()

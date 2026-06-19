@@ -1188,6 +1188,7 @@ def submit_trip_report():
                  f"{voyage.departure_at.strftime('%d %b %Y')} — "
                  f"₹{int(total_collected)} collected ({len(collections)} entries)"),
         link=url_for('admin.trip_reports'),
+        urgent=True,
     )
     log_activity('trip_report_submitted',
                  f'Driver {current_user.full_name} submitted trip report for voyage {voyage_id}',
@@ -1355,6 +1356,7 @@ def submit_cash_to_admin():
         message=(f'{current_user.full_name} handed ₹{submit_total:.0f} to {admin.full_name} '
                  f'— {created} voyage(s) awaiting your verification.'),
         link=url_for('admin.driver_cash'),
+        urgent=True,
     )
 
     socketio.emit('driver_cash_submitted', {

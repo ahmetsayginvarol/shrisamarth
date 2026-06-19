@@ -552,6 +552,30 @@ class DriverCashSubmission(db.Model):
     verified_by = db.relationship('User', foreign_keys=[verified_by_id])
     submitted_to_admin = db.relationship('User', foreign_keys=[submitted_to_admin_id])
 
+
+# ============================================================
+# PUSH NOTIFICATIONS
+# ============================================================
+
+class AppSetting(db.Model):
+    """Generic key/value settings — used to persist generated VAPID keys."""
+    __tablename__ = 'app_settings'
+    key = db.Column(db.String(64), primary_key=True)
+    value = db.Column(db.Text, nullable=False)
+
+
+class PushSubscription(db.Model):
+    """Web Push API subscription per admin user."""
+    __tablename__ = 'push_subscriptions'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    endpoint = db.Column(db.Text, nullable=False, unique=True)
+    p256dh = db.Column(db.Text, nullable=False)
+    auth = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', foreign_keys=[user_id])
+
     def __repr__(self):
         return f'<DriverCashSubmission voyage={self.voyage_id} driver={self.driver_id} status={self.submission_status}>'
 

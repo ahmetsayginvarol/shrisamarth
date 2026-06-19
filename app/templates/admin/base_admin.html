@@ -34,6 +34,9 @@
                     <button class="pill lang-btn active" data-lang="en" onclick="applyLanguage('en')">EN</button>
                     <button class="pill lang-btn" data-lang="hi" onclick="applyLanguage('hi')">हिं</button>
                 </div>
+                <button id="pushToggleBtn" title="Enable push notifications" onclick="togglePushSubscription()"
+                    style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px 6px;border-radius:6px;color:var(--muted);display:none;"
+                    aria-label="Push notifications">📲</button>
                 <div class="notif-wrapper">
                     <div class="notif-bell" id="notifBell" onclick="toggleNotifDropdown()">
                         🔔
@@ -184,5 +187,83 @@ try {
     _adminBaseSocket.on('driver_cash_submitted', _refreshCashBadge);
     _adminBaseSocket.on('driver_cash_verified', _refreshCashBadge);
 } catch(e) {}
+
+// ── Web Push ────────────────────────────────────────────────
+let _pushReg = null;
+let _pushSub = null;
+
+async function _initPush() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    const btn = document.getElementById('pushToggleBtn');
+    try {
+        _pushReg = await navigator.serviceWorker.register('/sw.js');
+        _pushSub = await _pushReg.pushManager.getSubscription();
+        if (btn) {
+            btn.style.display = '';
+            _updatePushBtn();
+        }
+    } catch (e) {}
+}
+
+function _updatePushBtn() {
+    const btn = document.getElementById('pushToggleBtn');
+    if (!btn) return;
+    if (_pushSub) {
+        btn.title = 'Push notifications ON — click to disable';
+        btn.style.opacity = '1';
+        btn.style.color = 'var(--sage)';
+    } else {
+        btn.title = 'Enable push notifications';
+        btn.style.opacity = '0.45';
+        btn.style.color = 'var(--muted)';
+    }
+}
+
+async function togglePushSubscription() {
+    if (!_pushReg) return;
+    if (_pushSub) {
+        // Unsubscribe
+        await fetch('/admin/push/unsubscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+            body: JSON.stringify({ endpoint: _pushSub.endpoint }),
+        });
+        await _pushSub.unsubscribe();
+        _pushSub = null;
+    } else {
+        // Subscribe
+        const perm = await Notification.requestPermission();
+        if (perm !== 'granted') return;
+        try {
+            const keyRes = await fetch('/admin/push/vapid-public-key');
+            const { public_key } = await keyRes.json();
+            const appServerKey = _urlB64ToUint8(public_key);
+            _pushSub = await _pushReg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: appServerKey,
+            });
+            const j = _pushSub.toJSON();
+            await fetch('/admin/push/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+                body: JSON.stringify({
+                    endpoint: j.endpoint,
+                    p256dh: j.keys.p256dh,
+                    auth: j.keys.auth,
+                }),
+            });
+        } catch (e) { _pushSub = null; }
+    }
+    _updatePushBtn();
+}
+
+function _urlB64ToUint8(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(base64);
+    return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+document.addEventListener('DOMContentLoaded', _initPush);
 </script>
 {% endblock %}

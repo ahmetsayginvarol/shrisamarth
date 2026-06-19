@@ -42,6 +42,15 @@ def create_app(config_class=Config):
         db.create_all()
         _run_schema_migrations(db)
 
+    @app.route('/sw.js')
+    def service_worker():
+        from flask import send_from_directory, make_response
+        resp = make_response(send_from_directory('static', 'sw.js'))
+        resp.headers['Content-Type'] = 'application/javascript'
+        resp.headers['Service-Worker-Allowed'] = '/'
+        resp.headers['Cache-Control'] = 'no-cache'
+        return resp
+
     @app.context_processor
     def inject_domain():
         return {'APP_DOMAIN': app.config['APP_DOMAIN']}
@@ -71,6 +80,19 @@ def _run_schema_migrations(db):
             "ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_on_checkin BOOLEAN DEFAULT FALSE",
             "ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_on_checkin_amount NUMERIC(10,2) DEFAULT NULL",
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_qr_token VARCHAR(32)",
+            """CREATE TABLE IF NOT EXISTS app_settings (
+                key VARCHAR(64) PRIMARY KEY,
+                value TEXT NOT NULL
+            )""",
+            """CREATE TABLE IF NOT EXISTS push_subscriptions (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                endpoint TEXT NOT NULL UNIQUE,
+                p256dh TEXT NOT NULL,
+                auth TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            )""",
+            "CREATE INDEX IF NOT EXISTS ix_push_subscriptions_user ON push_subscriptions(user_id)",
         ]
     else:
         # SQLite: no IF NOT EXISTS for ALTER TABLE — catch duplicate-column errors
@@ -84,6 +106,15 @@ def _run_schema_migrations(db):
             "ALTER TABLE bookings ADD COLUMN payment_on_checkin BOOLEAN DEFAULT 0",
             "ALTER TABLE bookings ADD COLUMN payment_on_checkin_amount NUMERIC(10,2) DEFAULT NULL",
             "ALTER TABLE users ADD COLUMN profile_qr_token VARCHAR(32)",
+            "CREATE TABLE IF NOT EXISTS app_settings (key VARCHAR(64) PRIMARY KEY, value TEXT NOT NULL)",
+            """CREATE TABLE IF NOT EXISTS push_subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                endpoint TEXT NOT NULL UNIQUE,
+                p256dh TEXT NOT NULL,
+                auth TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )""",
         ]
 
     for sql in alter_stmts:
