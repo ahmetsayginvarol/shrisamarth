@@ -2548,6 +2548,13 @@ def driver_cash_detail(driver_id):
 def driver_cash_receive(sub_id):
     """Admin marks cash as received from driver."""
     sub = DriverCashSubmission.query.get_or_404(sub_id)
+
+    # Only the admin the driver handed cash to can approve — super_admin can always act
+    if (current_user.role != 'super_admin'
+            and sub.submitted_to_admin_id
+            and sub.submitted_to_admin_id != current_user.id):
+        return jsonify({'status': 'error', 'message': 'This submission was handed to a different admin.'}), 403
+
     data = request.get_json() or {}
 
     received = float(data.get('amount', 0) or 0)
